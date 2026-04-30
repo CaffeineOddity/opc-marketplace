@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "opc-founder",
-      "source": "plugins/opc-founder",
+      "source": "./plugins/opc-founder",
       "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle",
       "version": "1.2.0",
       "author": { "name": "caffeine" },
@@ -16,7 +16,7 @@
     },
     {
       "name": "product-kit",
-      "source": "plugins/product-kit",
+      "source": "./plugins/product-kit",
       "description": "Product stage — /research, /requirement, /brainstorm skills + product agent + startup analyst",
       "version": "1.2.0",
       "author": { "name": "caffeine" },
@@ -25,7 +25,7 @@
     },
     {
       "name": "design-kit",
-      "source": "plugins/design-kit",
+      "source": "./plugins/design-kit",
       "description": "Design stage — /ui-design skill + UX agent + UI agent + ui-ux-designer reference",
       "version": "1.1.0",
       "author": { "name": "caffeine" },
@@ -34,7 +34,7 @@
     },
     {
       "name": "dev-kit",
-      "source": "plugins/dev-kit",
+      "source": "./plugins/dev-kit",
       "description": "Dev stage — /architect, /code-review, /openapi-spec skills + frontend/backend/security/mobile/database agents + auto-lint hook",
       "version": "1.1.0",
       "author": { "name": "caffeine" },
@@ -43,7 +43,7 @@
     },
     {
       "name": "qa-kit",
-      "source": "plugins/qa-kit",
+      "source": "./plugins/qa-kit",
       "description": "QA stage — /test-plan, /bug-report, /e2e-test, /wcag-audit skills + QA agent",
       "version": "1.1.0",
       "author": { "name": "caffeine" },
@@ -52,7 +52,7 @@
     },
     {
       "name": "ship-kit",
-      "source": "plugins/ship-kit",
+      "source": "./plugins/ship-kit",
       "description": "Ship stage — 6 skills (/deploy, /ci-pipeline, /changelog, /cost-opt, /incident-runbook, /terraform) + devops/cloud-architect/incident-responder agents + pre-deploy hook",
       "version": "1.1.0",
       "author": { "name": "caffeine" },
@@ -61,7 +61,7 @@
     },
     {
       "name": "growth-kit",
-      "source": "plugins/growth-kit",
+      "source": "./plugins/growth-kit",
       "description": "Growth stage — /marketing-plan, /content-create skills + marketing/data-analyst/SEO agents",
       "version": "1.1.0",
       "author": { "name": "caffeine" },
@@ -70,7 +70,7 @@
     },
     {
       "name": "docs-kit",
-      "source": "plugins/docs-kit",
+      "source": "./plugins/docs-kit",
       "description": "Document generation kit — /docx, /pdf, /pptx skills + docs-agent for professional document creation",
       "version": "2.1.0",
       "author": { "name": "caffeine" },
