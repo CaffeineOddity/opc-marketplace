@@ -1,92 +1,129 @@
 # design-kit
 
-设计阶段插件 —— 一人公司的 UX 设计、UI 设计、设计系统和用户研究。
+设计阶段插件 —— 一人公司的品牌设计、Web 设计、Mobile 设计和设计评审。
 
-## 组件
+## 版本 2.0.0
 
-### 技能
+重构为 4 个核心 Agent + 6 个 Reference 规范文档。
+
+## Agents
+
+| Agent | 描述 | 调用时机 |
+|-------|------|----------|
+| **brand-agent** | 品牌设计 — 品牌策略、视觉识别、Logo、品牌规范 | 新产品品牌建立 |
+| **web-agent** | Web 设计 — 响应式设计、Dashboard、Landing Page | Web 平台设计 |
+| **mobile-agent** | Mobile 设计 — iOS、Android、React Native、Flutter | 移动端设计 |
+| **design-reviewer** | 设计评审 — 一致性检查、无障碍合规、品牌合规 | 设计完成后验收 |
+
+## Skills
 
 | 技能 | 描述 |
 |------|------|
-| `/ui-design` | UI/UX 设计规范 |
+| `/ui-design` | UI/UX 设计规范生成 |
 | `/ui-ux-pro-max` | 设计系统生成器，50+ 风格、97 色板、57 字体配对 |
-| `/baoyu-imagine` | AI 图像生成（OpenAI、Azure、Google、OpenRouter、DashScope、Replicate） |
+| `/baoyu-imagine` | AI 图像生成（OpenAI、Azure、Google、DashScope、Replicate 等） |
 
-### 代理
+## References（设计规范文档）
 
-| 代理 | 模型 | 描述 |
-|------|------|------|
-| ux-agent | sonnet | 信息架构、用户流程、线框图、交互逻辑 |
-| ui-agent | sonnet | 视觉设计、设计系统、组件规范、设计令牌 |
-| ui-ux-designer | sonnet | 全栈 UI/UX 设计参考 |
-| design-system-architect | inherit | 设计系统架构、令牌系统、组件库 |
-| ux-researcher | inherit | 用户研究、访谈、可用性测试、人物画像 |
+| 规范文档 | 描述 |
+|----------|------|
+| `ux-design-guide.md` | UX 设计原则、用户流程、线框图、可用性启发式 |
+| `ui-design-guide.md` | UI 设计原则、设计令牌、色彩系统、字体排版 |
+| `design-system-guide.md` | 设计系统架构、令牌分类、组件库、主题系统 |
+| `ux-research-guide.md` | 用户研究方法、可用性测试、访谈、旅程地图 |
+| `brand-design-guide.md` | 品牌设计流程、视觉识别、品牌规范 |
+| `design-review-checklist.md` | 设计评审清单、无障碍检查、品牌合规 |
+
+## 工作流
+
+### 新产品完整设计
+```
+brand-agent → web-agent / mobile-agent → design-reviewer → dev-kit
+    │              │              │
+  品牌定义      平台设计        评审验收
+```
+
+### 仅 Web 设计
+```
+web-agent → design-reviewer → dev-kit
+```
+
+### 仅 Mobile 设计
+```
+mobile-agent → design-reviewer → dev-kit
+```
+
+### 多平台并行设计
+```
+brand-agent → web-agent + mobile-agent (并行) → design-reviewer → dev-kit
+```
 
 ## 快速开始
 
-### UI 设计
-
+### 品牌设计
 ```shell
-/ui-design <组件或功能>
+# 调用 brand-agent
+Agent(subagent_type="design-kit:brand-agent", prompt="为 SaaS 产品设计品牌")
 ```
 
-生成：
-- 组件结构
-- 视觉层次
-- 交互模式
-- 响应式行为
-
-### UI-UX-Pro-Max
-
+### Web 设计
 ```shell
+# 调用 web-agent
+Agent(subagent_type="design-kit:web-agent", prompt="设计 Dashboard 页面")
+
+# 或使用技能
 /ui-ux-pro-max
+python3 scripts/search.py "SaaS dashboard elegant" --design-system -p "MyProject"
 ```
 
-生成完整设计系统：
-- 50+ 视觉风格
-- 97 色彩方案
-- 57 字体配对
-- 设计令牌
-- 组件规范
-
-### AI 图像生成
-
+### Mobile 设计
 ```shell
-/baoyu-imagine <提示词>
+# 调用 mobile-agent
+Agent(subagent_type="design-kit:mobile-agent", prompt="设计 iOS 端个人中心页面")
 ```
 
-多后端 AI 图像生成：
-- OpenAI GPT Image
-- Azure OpenAI
-- Google (Gemini)
-- OpenRouter
-- DashScope (阿里云)
-- Z.AI GLM-Image
-- MiniMax
-- Jimeng (即梦)
-- Seedream
-- Replicate
-
-选项：
-- `--aspect <比例>` — 宽高比（1:1、16:9、9:16 等）
-- `--ref <文件>` — 参考图片用于风格引导
-- `--batch` — 批量并行生成
-
-## 工作流集成
-
-```
-product-kit (需求) → design-kit (设计) → dev-kit (实现)
+### 设计评审
+```shell
+# 调用 design-reviewer
+Agent(subagent_type="design-kit:design-reviewer", prompt="评审 Landing Page 设计")
 ```
 
-### 设计交接
+## Agent 协同
+
+### 与 opc-founder 集成
+
+opc-founder 可以调度 design-kit 的 agents：
 
 ```
-ux-agent → ui-agent → frontend-agent
-    │          │           │
-    │          │           └── 实现组件
-    │          └── 视觉规范、令牌
-    └── 用户流程、线框图
+opc-founder
+    │
+    ├── 品牌阶段 → brand-agent
+    │
+    ├── Web 设计 → web-agent
+    │
+    ├── Mobile 设计 → mobile-agent
+    │
+    └── 设计验收 → design-reviewer
 ```
+
+### 调用示例
+
+**新产品完整流程**：
+```
+1. brand-agent: "为 [产品名] 设计品牌"
+2. web-agent: "设计 [产品名] 的 Web 端，引用品牌规范"
+3. design-reviewer: "评审设计，检查品牌合规和无障碍"
+4. dev-kit: "实现设计"
+```
+
+## 路由规则
+
+| 关键词 | 路由到 |
+|--------|--------|
+| 品牌、brand、logo、VI | brand-agent |
+| web、网页、网站、dashboard、landing | web-agent |
+| mobile、app、iOS、Android、SwiftUI、Flutter | mobile-agent |
+| 评审、review、验收、检查 | design-reviewer |
 
 ## 设计系统结构
 
@@ -105,3 +142,41 @@ design-system/
     ├── light.json
     └── dark.json
 ```
+
+## 文件结构
+
+```
+plugins/design-kit/
+├── plugin.json
+├── README.md
+├── README_CN.md
+├── agents/
+│   ├── brand-agent.md
+│   ├── web-agent.md
+│   ├── mobile-agent.md
+│   └── design-reviewer.md
+├── references/
+│   ├── ux-design-guide.md
+│   ├── ui-design-guide.md
+│   ├── design-system-guide.md
+│   ├── ux-research-guide.md
+│   ├── brand-design-guide.md
+│   └── design-review-checklist.md
+└── skills/
+    ├── ui-design/
+    ├── ui-ux-pro-max/
+    └── baoyu-imagine/
+```
+
+## 更新日志
+
+### v2.0.0
+- 重构为 4 个核心 Agent：brand-agent、web-agent、mobile-agent、design-reviewer
+- 原 5 个 agent 转换为 reference 规范文档
+- 新增 brand-design-guide.md 和 design-review-checklist.md
+- 定义清晰的工作流和协同模式
+- 支持 opc-founder 调度集成
+
+### v1.x
+- ui-agent、ux-agent、ui-ux-designer、design-system-architect、ux-researcher
+- ui-design、ui-ux-pro-max、baoyu-imagine skills

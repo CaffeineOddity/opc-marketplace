@@ -9,6 +9,7 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | Skill | Description |
 |-------|-------------|
 | `/opc` | One-command entry point — auto-assess task and orchestrate agents |
+| `/install` | Install OPC plugins — full, selective, or custom selection |
 
 ### Agents
 
@@ -31,6 +32,18 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `/opc fix this bug` | Parallel: dev + qa agents |
 | `/opc security audit` | Dispatches security-auditor (opus) |
 | `/opc ship the new release` | Sequential: qa → devops → marketing |
+
+## Plugin Installation
+
+```shell
+/install              # Interactive selection
+/install all          # Install all 7 plugins
+/install web          # Web product (product + design + dev + qa + ship + growth)
+/install mobile       # Mobile app (product + design + dev + qa + ship)
+/install designer     # Product & Design focus (product + design + docs)
+/install content      # Content/Marketing (product + growth + docs)
+/install minimal      # Minimal set (product + dev)
+```
 
 ## Orchestration Modes
 
@@ -57,14 +70,14 @@ Task received
     └── Complex project, 3+ agents, ongoing coordination? ──→ Mode 4: Team
 ```
 
-## Agent Network (30 Agents)
+## Agent Network (29 Agents)
 
-The founder-agent orchestrates 30 specialized agents across 8 plugins:
+The founder-agent orchestrates 29 specialized agents across 8 plugins:
 
 | Plugin | Agents | Stage |
 |--------|--------|-------|
 | **product-kit** | product-agent, startup-analyst, business-analyst | Product |
-| **design-kit** | ux-agent, ui-agent, ui-ux-designer, design-system-architect, ux-researcher | Design |
+| **design-kit** | brand-agent, web-agent, mobile-agent, design-reviewer | Design |
 | **dev-kit** | frontend-agent, backend-agent, backend-architect, security-auditor, mobile-developer, database-architect, performance-engineer, ai-engineer, prompt-engineer, technical-writer | Development |
 | **qa-kit** | qa-agent, accessibility-expert | Quality |
 | **ship-kit** | devops-agent, cloud-architect, incident-responder | Ship |
@@ -77,7 +90,7 @@ The founder-agent orchestrates 30 specialized agents across 8 plugins:
 
 ```
 Stage 1: product-agent → research + requirements
-Stage 2: ux-agent → ui-agent → design specs
+Stage 2: brand-agent → web-agent → design-reviewer → design specs
 Stage 3: frontend-agent + backend-agent (parallel) → implementation
 Stage 4: qa-agent → security-auditor → validation
 Stage 5: devops-agent → deployment

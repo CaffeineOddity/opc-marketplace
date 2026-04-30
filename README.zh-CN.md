@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
+Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
 
 > **中文** | [English](./README.md)
 
@@ -8,6 +8,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 
 ```shell
 /opc <任务描述>    # 一键调度，自动编排 agents
+/install [选项]    # 安装插件
 ```
 
 | 命令 | 效果 |
@@ -17,6 +18,9 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | `/opc 修复这个 bug` | dev + qa 并行 |
 | `/opc 安全审查` | security-auditor |
 | `/opc 上线新版本` | qa → devops → marketing |
+| `/install all` | 安装全部 7 个插件 |
+| `/install web` | 安装 Web 产品所需插件 |
+| `/install designer` | 安装产品设计专注插件 |
 
 ## 架构
 
@@ -37,6 +41,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
+| Skill | `/install` | 安装 OPC 插件 — 全量安装、按需安装或自定义选择 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 
 ### product-kit — 产品
@@ -54,11 +59,16 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | Skill | `/ui-design` | UI/UX设计规范生成 |
 | Skill | `/ui-ux-pro-max` | 设计系统生成器，50+ 风格、97 色板、57 字体配对 |
 | Skill | `/baoyu-imagine` | AI 图像生成（OpenAI、Azure、Google、OpenRouter、DashScope、Replicate） |
-| Agent | ux-agent | UX专家：信息架构、用户流程、线框图、交互逻辑 |
-| Agent | ui-agent | UI专家：视觉设计、设计系统、组件规范、设计令牌 |
-| Agent | ui-ux-designer | 全栈UI/UX设计师参考 |
-| Agent | design-system-architect | 设计系统架构、令牌系统、组件库 |
-| Agent | ux-researcher | 用户研究、访谈、可用性测试、人物画像 |
+| Agent | brand-agent | 品牌设计：品牌策略、视觉识别、Logo、品牌规范 |
+| Agent | web-agent | Web设计：响应式设计、Dashboard、Landing Page |
+| Agent | mobile-agent | Mobile设计：iOS、Android、React Native、Flutter |
+| Agent | design-reviewer | 设计评审：一致性检查、无障碍合规、品牌合规 |
+| Reference | ux-design-guide | UX设计原则、用户流程、线框图、可用性启发式 |
+| Reference | ui-design-guide | UI设计原则、设计令牌、色彩系统、字体排版 |
+| Reference | design-system-guide | 设计系统架构、令牌分类、组件库、主题系统 |
+| Reference | ux-research-guide | 用户研究方法、可用性测试、访谈、旅程地图 |
+| Reference | brand-design-guide | 品牌设计流程、视觉识别、品牌规范 |
+| Reference | design-review-checklist | 设计评审清单、无障碍检查、品牌合规 |
 
 ### dev-kit — 开发
 | 类型 | 名称 | 描述 |
@@ -153,8 +163,8 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | 指标 | 数量 |
 |------|------|
 | 插件 | 8 |
-| Agents | 30 |
-| Skills | 49 |
+| Agents | 29 |
+| Skills | 50 |
 | Hooks | 2 |
 
 ## 安装
@@ -192,7 +202,7 @@ founder-agent 支持四种编排模式，`/opc` 自动选择：
 
 ```
 新功能（全流程）:
-  product-agent → ux-agent → ui-agent → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
+  product-agent → brand-agent → web-agent → design-reviewer → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
 
 安全审查:
   security-auditor → backend-agent → qa-agent
@@ -204,7 +214,7 @@ founder-agent 支持四种编排模式，`/opc` 自动选择：
   seo-keyword-strategist → seo-content-planner → seo-content-writer → marketing-agent → data-analyst
 
 移动应用:
-  ux-agent → ui-agent → mobile-developer → backend-agent → qa-agent
+  brand-agent → mobile-agent → design-reviewer → mobile-developer → backend-agent → qa-agent
 ```
 
 ## 参与共建

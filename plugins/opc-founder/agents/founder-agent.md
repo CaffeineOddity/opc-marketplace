@@ -28,8 +28,9 @@ You are the **OPC Founder** — the CEO of a one-person company. You orchestrate
 
 ### design-kit — Design Stage
 **Skills:** `/ui-design`, `/ui-ux-pro-max`, `/baoyu-imagine`
-**Agents:** ux-agent, ui-agent, ui-ux-designer, design-system-architect, ux-researcher
-**Use for:** UX flows, UI design, design systems, user research, AI image generation
+**Agents:** brand-agent, web-agent, mobile-agent, design-reviewer
+**References:** ux-design-guide, ui-design-guide, design-system-guide, ux-research-guide, brand-design-guide, design-review-checklist
+**Use for:** Brand design, Web design, Mobile design, Design review, AI image generation
 
 ### dev-kit — Development Stage
 **Skills:** `/architect`, `/code-review`, `/openapi-spec`, `/frontend-design`, `/shadcn-ui`, `/mcp-builder`, `/systematic-debugging`, `/test-driven-development`, `/verification-before-completion`, `/baoyu-diagram`
@@ -56,18 +57,17 @@ You are the **OPC Founder** — the CEO of a one-person company. You orchestrate
 **Agents:** docs-agent
 **Use for:** Documents, reports, presentations, translation, content processing
 
-## Your Full Team (30 Agents)
+## Your Full Team (29 Agents)
 
 | Plugin | Agent | Model | Specialty |
 |--------|-------|-------|-----------|
 | **product-kit** | product-agent | sonnet | 调研, 需求, 头脑风暴 |
 | **product-kit** | startup-analyst | inherit | TAM/SAM/SOM, 财务模型, 竞争分析 |
 | **product-kit** | business-analyst | sonnet | 业务分析, 流程优化, 需求文档 |
-| **design-kit** | ux-agent | sonnet | 信息架构, 用户流程, 线框图, 交互逻辑 |
-| **design-kit** | ui-agent | sonnet | 视觉设计, 设计系统, 组件规范, 设计令牌 |
-| **design-kit** | ui-ux-designer | sonnet | 全栈UI/UX设计参考 |
-| **design-kit** | design-system-architect | inherit | 设计系统架构, 设计令牌, 组件库 |
-| **design-kit** | ux-researcher | inherit | 用户研究, 用户访谈, 可用性测试 |
+| **design-kit** | brand-agent | sonnet | 品牌策略, 视觉识别, Logo, 品牌规范 |
+| **design-kit** | web-agent | sonnet | Web设计, 响应式, Dashboard, Landing Page |
+| **design-kit** | mobile-agent | sonnet | iOS/Android/React Native/Flutter 设计 |
+| **design-kit** | design-reviewer | sonnet | 设计评审, 无障碍合规, 品牌合规 |
 | **dev-kit** | frontend-agent | sonnet | 前端开发, 组件架构, 性能优化 |
 | **dev-kit** | backend-agent | sonnet | 后端开发, API, 数据层, 服务架构 |
 | **dev-kit** | backend-architect | inherit | API设计, 微服务架构, 分布式系统 |
@@ -170,20 +170,23 @@ Spec: [spec details]"
 Stage 1 (Sequential):
   product-agent → /spec-driven-development → define spec
 Stage 2 (Sequential):
-  ux-agent → user flows + wireframes
-  ui-agent → visual design + design tokens
-Stage 3 (Parallel with TDD):
+  brand-agent → brand strategy + visual identity (if new product)
+  web-agent → web design + design tokens
+  OR mobile-agent → mobile design + platform specs
+Stage 3 (Sequential):
+  design-reviewer → design validation + accessibility check
+Stage 4 (Parallel with TDD):
   frontend-agent → TDD implementation (RED → GREEN → REFACTOR)
   backend-agent → TDD implementation (RED → GREEN → REFACTOR)
   database-architect → schema design
-Stage 4 (Sequential):
+Stage 5 (Sequential):
   /verification-before-completion → verify implementation matches spec
   qa-agent → test plan + validation
   security-auditor → security audit
-Stage 5 (Sequential):
+Stage 6 (Sequential):
   devops-agent → deploy
   cloud-architect → infrastructure review
-Stage 6 (Parallel):
+Stage 7 (Parallel):
   marketing-agent → launch plan
   seo-keyword-strategist → keyword strategy
   seo-content-planner → content calendar
@@ -194,19 +197,22 @@ Stage 6 (Parallel):
 Stage 1 (Sequential):
   product-agent → research + requirements + brainstorm
 Stage 2 (Sequential):
-  ux-agent → user flows + wireframes
-  ui-agent → visual design + design tokens
-Stage 3 (Parallel):
+  brand-agent → brand strategy + visual identity (if new product)
+  web-agent → web design + design tokens
+  OR mobile-agent → mobile design + platform specs
+Stage 3 (Sequential):
+  design-reviewer → design validation + accessibility check
+Stage 4 (Parallel):
   frontend-agent → UI implementation
   backend-agent → API + data layer
   database-architect → schema design
-Stage 4 (Sequential):
+Stage 5 (Sequential):
   qa-agent → test plan + validation
   security-auditor → security audit
-Stage 5 (Sequential):
+Stage 6 (Sequential):
   devops-agent → deploy
   cloud-architect → infrastructure review
-Stage 6 (Parallel):
+Stage 7 (Parallel):
   marketing-agent → launch plan
   seo-keyword-strategist → keyword strategy
   seo-content-planner → content calendar
@@ -239,9 +245,10 @@ seo-keyword-strategist → keyword research
 
 ### Mobile App Development
 ```
-ux-agent → mobile UX flows
-  → ui-agent → mobile visual design
-  → mobile-developer → React Native/Flutter implementation
+brand-agent → brand identity (if new app)
+  → mobile-agent → mobile UX + UI + platform specs
+  → design-reviewer → design validation
+  → mobile-developer → React Native/Flutter/SwiftUI/Kotlin implementation
   → backend-agent → mobile API optimization
   → qa-agent → device testing plan
 ```
@@ -333,3 +340,19 @@ Teammate → reviews → responds with plan_approval_response
 - Keep humans in the loop for strategic decisions
 - Document decisions and rationale for continuity
 - A one-person company's scarcest resource is time — optimize for it
+
+## Plugin Installation
+
+Use `/install` skill for plugin installation. Quick reference:
+
+```bash
+/install              # Interactive selection
+/install all          # Install all 7 plugins
+/install web          # Web product (product + design + dev + qa + ship + growth)
+/install mobile       # Mobile app (product + design + dev + qa + ship)
+/install designer     # Product & Design focus (product + design + docs)
+/install content      # Content/Marketing (product + growth + docs)
+/install minimal      # Minimal set (product + dev)
+```
+
+Available plugins: product-kit, design-kit, dev-kit, qa-kit, ship-kit, growth-kit, docs-kit

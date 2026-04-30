@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49 skills, 2 hooks** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49 skills, 2 hooks** covering the full product lifecycle.
 
 > [中文文档](./README.zh-CN.md) | **English**
 
@@ -8,6 +8,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 
 ```shell
 /opc <task description>    # One command to orchestrate all agents
+/install [option]          # Install plugins
 ```
 
 | Command | What Happens |
@@ -17,6 +18,9 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | `/opc fix this bug` | dev + qa in parallel |
 | `/opc security audit` | security-auditor (opus) |
 | `/opc ship the new release` | qa → devops → marketing |
+| `/install all` | Install all 7 plugins |
+| `/install web` | Install for web product |
+| `/install designer` | Install for product & design focus |
 
 ## Architecture
 
@@ -38,6 +42,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Type | Name | Description |
 |------|------|-------------|
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
+| Skill | `/install` | Install OPC plugins — full, selective, or custom selection |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
 ### product-kit — Product
@@ -57,11 +62,16 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Skill | `/ui-design` | UI/UX design specification |
 | Skill | `/ui-ux-pro-max` | Design system generator with 50+ styles, 97 color palettes, 57 font pairings |
 | Skill | `/baoyu-imagine` | AI image generation (OpenAI, Azure, Google, OpenRouter, DashScope, Replicate) |
-| Agent | ux-agent | Information architecture, user flows, wireframes, interaction logic |
-| Agent | ui-agent | Visual design, design systems, component specs, design tokens |
-| Agent | ui-ux-designer | Full-stack UI/UX designer reference |
-| Agent | design-system-architect | Design system architecture, token systems, component libraries |
-| Agent | ux-researcher | User research, interviews, usability testing, persona development |
+| Agent | brand-agent | Brand strategy, visual identity, logo design, brand guidelines |
+| Agent | web-agent | Web design, responsive layouts, dashboards, landing pages |
+| Agent | mobile-agent | Mobile design for iOS, Android, React Native, Flutter |
+| Agent | design-reviewer | Design review, accessibility compliance, brand compliance |
+| Reference | ux-design-guide | UX principles, user flows, wireframing, usability heuristics |
+| Reference | ui-design-guide | UI principles, design tokens, color system, typography |
+| Reference | design-system-guide | Design system architecture, token taxonomy, component library |
+| Reference | ux-research-guide | User research methods, usability testing, interviews |
+| Reference | brand-design-guide | Brand design process, visual identity, brand guidelines |
+| Reference | design-review-checklist | Design review checklist, accessibility, brand compliance |
 
 ### dev-kit — Development
 | Type | Name | Description |
@@ -156,8 +166,8 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Metric | Count |
 |--------|-------|
 | Plugins | 8 |
-| Agents | 30 |
-| Skills | 49 |
+| Agents | 29 |
+| Skills | 50 |
 | Hooks | 2 |
 
 ## Install
@@ -198,7 +208,7 @@ The founder-agent supports 4 orchestration modes. `/opc` selects automatically:
 
 ```
 New Feature (Full Pipeline):
-  product-agent → ux-agent → ui-agent → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
+  product-agent → brand-agent → web-agent → design-reviewer → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
 
 Security Review:
   security-auditor → backend-agent → qa-agent
@@ -210,7 +220,7 @@ Growth Sprint:
   seo-keyword-strategist → seo-content-planner → seo-content-writer → marketing-agent → data-analyst
 
 Mobile App:
-  ux-agent → ui-agent → mobile-developer → backend-agent → qa-agent
+  brand-agent → mobile-agent → design-reviewer → mobile-developer → backend-agent → qa-agent
 ```
 
 ## Contributing

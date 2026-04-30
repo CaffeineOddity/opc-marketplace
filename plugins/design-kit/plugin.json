@@ -1,5 +1,86 @@
 {
   "name": "design-kit",
-  "description": "Design stage — /ui-design, /ui-ux-pro-max, /baoyu-imagine skills + UX agent + UI agent + ui-ux-designer + design-system-architect + ux-researcher agent",
-  "version": "1.4.0"
+  "description": "Design stage — brand-agent, web-agent, mobile-agent, design-reviewer + ui-design, ui-ux-pro-max, baoyu-imagine skills + comprehensive design references",
+  "version": "2.0.0",
+  "author": { "name": "caffeine" },
+  "category": "design",
+  "keywords": ["ui", "ux", "design", "brand", "web", "mobile", "prototype", "design-system", "review"],
+  "agents": [
+    {
+      "name": "brand-agent",
+      "source": "./agents/brand-agent.md",
+      "description": "Brand design specialist for brand strategy, visual identity, logo design, and brand guidelines"
+    },
+    {
+      "name": "web-agent",
+      "source": "./agents/web-agent.md",
+      "description": "Web platform design specialist for responsive web design, dashboards, landing pages"
+    },
+    {
+      "name": "mobile-agent",
+      "source": "./agents/mobile-agent.md",
+      "description": "Mobile platform design specialist for iOS, Android, React Native, and Flutter"
+    },
+    {
+      "name": "design-reviewer",
+      "source": "./agents/design-reviewer.md",
+      "description": "Design review specialist for consistency checks, accessibility compliance, and brand compliance"
+    }
+  ],
+  "skills": [
+    {
+      "name": "ui-design",
+      "source": "./skills/ui-design",
+      "description": "Generate UI/UX design specifications from product requirements"
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "source": "./skills/ui-ux-pro-max",
+      "description": "Design system generator — 50+ styles, 97 color palettes, 57 font pairings, 9 tech stacks"
+    },
+    {
+      "name": "baoyu-imagine",
+      "source": "./skills/baoyu-imagine",
+      "description": "AI image generation with OpenAI, Google, DashScope, Z.AI, MiniMax, Replicate and more"
+    }
+  ],
+  "references": [
+    {
+      "name": "ux-design-guide",
+      "source": "./references/ux-design-guide.md",
+      "description": "UX design principles, user flows, wireframing, and usability heuristics"
+    },
+    {
+      "name": "ui-design-guide",
+      "source": "./references/ui-design-guide.md",
+      "description": "UI design principles, design tokens, color system, typography, and component states"
+    },
+    {
+      "name": "design-system-guide",
+      "source": "./references/design-system-guide.md",
+      "description": "Design system architecture, token taxonomy, component library, and theming"
+    },
+    {
+      "name": "ux-research-guide",
+      "source": "./references/ux-research-guide.md",
+      "description": "User research methodologies, usability testing, interviews, and journey mapping"
+    },
+    {
+      "name": "brand-design-guide",
+      "source": "./references/brand-design-guide.md",
+      "description": "Brand design process, visual identity, brand guidelines, and brand consistency"
+    },
+    {
+      "name": "design-review-checklist",
+      "source": "./references/design-review-checklist.md",
+      "description": "Comprehensive design review checklist for accessibility, visual quality, brand compliance"
+    }
+  ],
+  "workflow": {
+    "new-product": ["brand-agent", "web-agent|mobile-agent", "design-reviewer"],
+    "web-only": ["web-agent", "design-reviewer"],
+    "mobile-only": ["mobile-agent", "design-reviewer"],
+    "multi-platform": ["brand-agent", "web-agent", "mobile-agent", "design-reviewer"],
+    "review-only": ["design-reviewer"]
+  }
 }
