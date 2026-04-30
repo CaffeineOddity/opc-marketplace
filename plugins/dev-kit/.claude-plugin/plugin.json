@@ -1,5 +1,5 @@
 {
   "name": "dev-kit",
-  "description": "Dev stage — /architect, /code-review, /openapi-spec, /frontend-design, /shadcn-ui, /mcp-builder, /systematic-debugging, /test-driven-development, /verification-before-completion skills + frontend/backend/security/mobile/database/backend-architect/performance-engineer/ai-engineer/prompt-engineer/technical-writer agents + auto-lint hook",
-  "version": "1.4.0"
+  "description": "Dev stage — /architect, /code-review, /openapi-spec, /frontend-design, /shadcn-ui, /mcp-builder, /systematic-debugging, /test-driven-development, /verification-before-completion, /baoyu-diagram skills + frontend/backend/security/mobile/database/backend-architect/performance-engineer/ai-engineer/prompt-engineer/technical-writer agents + auto-lint hook",
+  "version": "1.5.0"
 }

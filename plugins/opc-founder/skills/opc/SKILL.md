@@ -48,7 +48,7 @@ Read the user's input and classify:
 - **ui-agent** — Visual design, design tokens, component specs
 - **ux-researcher** — User research, interviews, usability testing
 
-**Skills:** `/ui-design`, `/ui-ux-pro-max`
+**Skills:** `/ui-design`, `/ui-ux-pro-max`, `/baoyu-imagine`
 
 ### Development Stage (dev-kit)
 - **frontend-agent** — UI implementation, component architecture
@@ -59,7 +59,7 @@ Read the user's input and classify:
 - **database-architect** — Schema design, migrations
 - **ai-engineer** (opus) — AI systems, MLOps
 
-**Skills:** `/architect`, `/code-review`, `/openapi-spec`, `/systematic-debugging`, `/test-driven-development`, `/verification-before-completion`
+**Skills:** `/architect`, `/code-review`, `/openapi-spec`, `/systematic-debugging`, `/test-driven-development`, `/verification-before-completion`, `/baoyu-diagram`
 
 ### Quality Stage (qa-kit)
 - **qa-agent** — Test planning, defect management
@@ -80,12 +80,12 @@ Read the user's input and classify:
 - **seo-keyword-strategist** — Keyword research
 - **seo-content-writer** — SEO content
 
-**Skills:** `/marketing-plan`, `/content-create`
+**Skills:** `/marketing-plan`, `/content-create`, `/baoyu-xhs-images`, `/baoyu-image-cards`, `/baoyu-comic`, `/baoyu-post-to-wechat`, `/baoyu-post-to-weibo`, `/baoyu-post-to-x`
 
 ### Docs Stage (docs-kit)
 - **docs-agent** — Documents, reports, presentations
 
-**Skills:** `/docx`, `/pdf`, `/pptx`
+**Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-infographic`, `/baoyu-slide-deck`, `/baoyu-cover-image`, `/baoyu-article-illustrator`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-youtube-transcript`, `/baoyu-compress-image`
 
 ## Step 3: Execute
 

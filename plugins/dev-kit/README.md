@@ -19,6 +19,7 @@ Development stage plugin — architecture, frontend, backend, security, mobile, 
 | `/systematic-debugging` | Four-phase debugging methodology |
 | `/test-driven-development` | TDD red-green-refactor cycle |
 | `/verification-before-completion` | Completion verification protocol |
+| `/baoyu-diagram` | Professional SVG diagrams (architecture, flowchart, sequence, mind map, timeline) |
 
 ### Agents
 
@@ -223,6 +224,20 @@ For each item in the specification:
    - Does implementation match spec?
 ```
 
+### Diagram Generation
+
+```shell
+/baoyu-diagram <description>
+```
+
+Creates professional SVG diagrams:
+- **Architecture** — System components & relationships
+- **Flowchart** — Decision logic, process steps
+- **Sequence** — Time-ordered interactions
+- **Mind Map** — Brainstorming, topic exploration
+- **Timeline** — Chronological events
+- **State Machine** — State transitions
+
 ### Full Development Pipeline
 
 ```
@@ -268,6 +283,7 @@ Bug Found
 | `/systematic-debugging` | 四阶段调试方法论 |
 | `/test-driven-development` | TDD 红绿重构循环 |
 | `/verification-before-completion` | 完成验证协议 |
+| `/baoyu-diagram` | 专业 SVG 图表（架构图、流程图、时序图、思维导图、时间线） |
 
 ### 代理
 

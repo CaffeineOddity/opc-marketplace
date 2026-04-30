@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24 skills, 2 hooks** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49 skills, 2 hooks** covering the full product lifecycle.
 
 > [中文文档](./README.zh-CN.md) | **English**
 
@@ -56,6 +56,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24
 |------|------|-------------|
 | Skill | `/ui-design` | UI/UX design specification |
 | Skill | `/ui-ux-pro-max` | Design system generator with 50+ styles, 97 color palettes, 57 font pairings |
+| Skill | `/baoyu-imagine` | AI image generation (OpenAI, Azure, Google, OpenRouter, DashScope, Replicate) |
 | Agent | ux-agent | Information architecture, user flows, wireframes, interaction logic |
 | Agent | ui-agent | Visual design, design systems, component specs, design tokens |
 | Agent | ui-ux-designer | Full-stack UI/UX designer reference |
@@ -74,6 +75,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24
 | Skill | `/systematic-debugging` | Four-phase debugging methodology (Root Cause → Pattern → Hypothesis → Implementation) |
 | Skill | `/test-driven-development` | TDD red-green-refactor cycle |
 | Skill | `/verification-before-completion` | Completion verification protocol |
+| Skill | `/baoyu-diagram` | Professional SVG diagrams (architecture, flowchart, sequence, mind map, timeline) |
 | Agent | frontend-agent | Frontend development, component architecture, performance |
 | Agent | backend-agent | Backend development, API, data layer, server architecture |
 | Agent | backend-architect | API design, microservices, distributed systems |
@@ -116,6 +118,12 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24
 |------|------|-------------|
 | Skill | `/marketing-plan` | Marketing strategy and channel planning |
 | Skill | `/content-create` | Content creation (blog / social / email / case study) |
+| Skill | `/baoyu-xhs-images` | Xiaohongshu (Little Red Book) image card series |
+| Skill | `/baoyu-image-cards` | Infographic image card series for social media |
+| Skill | `/baoyu-comic` | Knowledge comic creator with multiple art styles |
+| Skill | `/baoyu-post-to-wechat` | Post to WeChat Official Account (微信公众号) |
+| Skill | `/baoyu-post-to-weibo` | Post to Weibo (微博) |
+| Skill | `/baoyu-post-to-x` | Post to X/Twitter |
 | Agent | marketing-agent | Marketing agent |
 | Agent | data-analyst | BI data analysis, metrics, forecasting |
 | Agent | seo-keyword-strategist | Keyword strategy, LSI keywords |
@@ -128,6 +136,16 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24
 | Skill | `/docx` | Word document creation and editing |
 | Skill | `/pdf` | PDF processing, merging, splitting, OCR |
 | Skill | `/pptx` | PowerPoint presentation generation |
+| Skill | `/baoyu-translate` | Three-mode translation (quick/normal/refined) with glossary support |
+| Skill | `/baoyu-infographic` | Professional infographics with 21 layouts × 21 styles |
+| Skill | `/baoyu-slide-deck` | Slide deck image generation from content |
+| Skill | `/baoyu-cover-image` | Article cover images with 11 palettes × 7 rendering styles |
+| Skill | `/baoyu-article-illustrator` | Article illustration with Type × Style × Palette system |
+| Skill | `/baoyu-format-markdown` | Markdown formatting and beautification |
+| Skill | `/baoyu-markdown-to-html` | Markdown to styled HTML (WeChat-compatible) |
+| Skill | `/baoyu-url-to-markdown` | Fetch URL and convert to markdown |
+| Skill | `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
+| Skill | `/baoyu-compress-image` | Image compression to WebP/PNG |
 | Agent | docs-agent | Document generation agent |
 
 ## Stats
@@ -136,7 +154,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24
 |--------|-------|
 | Plugins | 8 |
 | Agents | 30 |
-| Skills | 24 |
+| Skills | 49 |
 | Hooks | 2 |
 
 ## Install

@@ -1,5 +1,5 @@
 {
   "name": "docs-kit",
-  "description": "Document generation kit — Word docs, PDFs, presentations for professional deliverables",
-  "version": "1.0.0"
+  "description": "Document generation kit — /docx, /pdf, /pptx, /baoyu-translate, /baoyu-infographic, /baoyu-slide-deck, /baoyu-cover-image, /baoyu-article-illustrator, /baoyu-format-markdown, /baoyu-markdown-to-html, /baoyu-url-to-markdown, /baoyu-youtube-transcript, /baoyu-compress-image skills + docs-agent",
+  "version": "2.0.0"
 }

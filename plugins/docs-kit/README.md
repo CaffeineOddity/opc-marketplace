@@ -2,7 +2,7 @@
 
 > [中文](#中文) | **English**
 
-Document generation plugin — Word docs, PDFs, presentations for professional deliverables.
+Document generation plugin — Word docs, PDFs, presentations, translation, infographics, and content processing for professional deliverables.
 
 ## Components
 
@@ -13,6 +13,16 @@ Document generation plugin — Word docs, PDFs, presentations for professional d
 | `/docx` | Word document creation and editing |
 | `/pdf` | PDF processing, merging, splitting, OCR |
 | `/pptx` | PowerPoint presentation generation |
+| `/baoyu-translate` | Three-mode translation (quick/normal/refined) with glossary support |
+| `/baoyu-infographic` | Professional infographics with 21 layouts × 21 styles |
+| `/baoyu-slide-deck` | Slide deck image generation from content |
+| `/baoyu-cover-image` | Article cover images with 11 palettes × 7 rendering styles |
+| `/baoyu-article-illustrator` | Article illustration with Type × Style × Palette system |
+| `/baoyu-format-markdown` | Markdown formatting and beautification |
+| `/baoyu-markdown-to-html` | Markdown to styled HTML (WeChat-compatible) |
+| `/baoyu-url-to-markdown` | Fetch URL and convert to markdown |
+| `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
+| `/baoyu-compress-image` | Image compression to WebP/PNG |
 
 ### Agents
 
@@ -22,52 +32,69 @@ Document generation plugin — Word docs, PDFs, presentations for professional d
 
 ## Quick Start
 
-### Word Document
+### Translation
 
 ```shell
-/docx <document description>
+/baoyu-translate <file or URL>
 ```
 
-Creates Word documents with:
-- Formatting and styles
-- Tables and images
-- Headers and footers
-- Table of contents
+Three modes:
+- **quick** — Direct translation
+- **normal** — Analyze then translate
+- **refined** — Analyze, translate, review, polish
 
-### PDF Processing
+### Infographic
 
 ```shell
-/pdf <operation> <files>
+/baoyu-infographic <content>
 ```
 
-Operations:
-- `create` — Create PDF from content
-- `merge` — Merge multiple PDFs
-- `split` — Split PDF into pages
-- `ocr` — Extract text from scanned PDF
+Options:
+- `--layout <name>` — 21 layout types (pyramid, funnel, bridge, etc.)
+- `--style <name>` — 21 visual styles (craft-handmade, technical-schematic, etc.)
+- `--aspect <ratio>` — landscape, portrait, square, or custom W:H
 
-### PowerPoint
+### Diagram
 
 ```shell
-/pptx <presentation description>
+/baoyu-diagram <description>
 ```
 
-Creates presentations with:
-- Slide layouts
-- Charts and diagrams
-- Animations
-- Speaker notes
+Creates SVG diagrams:
+- Architecture diagrams
+- Flowcharts
+- Sequence diagrams
+- Mind maps
+- Timelines
 
-## Agent Usage
+### Slide Deck
 
-### docs-agent
+```shell
+/baoyu-slide-deck <content>
+```
 
-Use for:
-- Report generation
-- Proposal documents
-- Technical documentation
-- Presentation creation
-- Document templates
+Generates slide images from content with optional PDF/PPTX merge.
+
+### Cover Image
+
+```shell
+/baoyu-cover-image <article>
+```
+
+Options:
+- `--aspect` — cinematic (2.35:1), widescreen (16:9), square (1:1)
+- `--palette` — 11 color palettes
+- `--rendering` — 7 rendering styles
+
+### Content Processing
+
+```shell
+/baoyu-url-to-markdown <URL>      # Fetch and convert webpage
+/baoyu-youtube-transcript <URL>   # Get YouTube transcript
+/baoyu-format-markdown <file>      # Format markdown
+/baoyu-markdown-to-html <file>     # Convert to HTML
+/baoyu-compress-image <file>       # Compress image
+```
 
 ## Workflow Integration
 
@@ -75,22 +102,34 @@ Use for:
 Any stage → docs-kit (document output)
 ```
 
-### Report Generation
+### Translation Workflow
 
 ```
-data-analyst (analysis) → docs-agent → /docx (report)
+/baoyu-url-to-markdown <URL>
+    ↓
+/baoyu-translate --mode refined
+    ↓
+/baoyu-format-markdown
+    ↓
+/baoyu-markdown-to-html
 ```
 
-### Presentation
+### Infographic Workflow
 
 ```
-product-agent (pitch) → docs-agent → /pptx (presentation)
+data-analyst (analysis) → /baoyu-infographic → visual summary
 ```
 
-### Documentation
+### Article Workflow
 
 ```
-technical-writer (content) → docs-agent → /pdf (documentation)
+/baoyu-translate <article>
+    ↓
+/baoyu-article-illustrator
+    ↓
+/baoyu-cover-image
+    ↓
+/baoyu-post-to-wechat (growth-kit)
 ```
 
 ## Use Cases
@@ -98,16 +137,17 @@ technical-writer (content) → docs-agent → /pdf (documentation)
 | Document Type | Source | Skill |
 |---------------|--------|-------|
 | Business Report | data-analyst | `/docx` |
-| Investor Pitch | product-agent | `/pptx` |
-| Technical Manual | technical-writer | `/pdf` |
-| Proposal | business-analyst | `/docx` |
-| Case Study | marketing-agent | `/docx` |
+| Infographic | any content | `/baoyu-infographic` |
+| Translated Article | any URL | `/baoyu-translate` |
+| Architecture Diagram | backend-architect | `/baoyu-diagram` |
+| Slide Deck | product-agent | `/baoyu-slide-deck` |
+| Cover Image | marketing-agent | `/baoyu-cover-image` |
 
 ---
 
 ## 中文
 
-文档生成插件 —— Word 文档、PDF、演示文稿，用于专业交付物。
+文档生成插件 —— Word 文档、PDF、演示文稿、翻译、信息图和内容处理，用于专业交付物。
 
 ## 组件
 
@@ -118,6 +158,16 @@ technical-writer (content) → docs-agent → /pdf (documentation)
 | `/docx` | Word 文档创建和编辑 |
 | `/pdf` | PDF 处理、合并、拆分、OCR |
 | `/pptx` | PowerPoint 演示文稿生成 |
+| `/baoyu-translate` | 三模式翻译（快翻/普通/精翻），支持术语表 |
+| `/baoyu-infographic` | 专业信息图，21 布局 × 21 风格 |
+| `/baoyu-slide-deck` | 幻灯片图片生成 |
+| `/baoyu-cover-image` | 文章封面图，11 色板 × 7 渲染风格 |
+| `/baoyu-article-illustrator` | 文章配图，类型 × 风格 × 色板系统 |
+| `/baoyu-format-markdown` | Markdown 格式化和美化 |
+| `/baoyu-markdown-to-html` | Markdown 转样式 HTML（微信兼容） |
+| `/baoyu-url-to-markdown` | 抓取 URL 转换为 Markdown |
+| `/baoyu-youtube-transcript` | 下载 YouTube 字幕和封面 |
+| `/baoyu-compress-image` | 图片压缩为 WebP/PNG |
 
 ### 代理
 
@@ -127,41 +177,69 @@ technical-writer (content) → docs-agent → /pdf (documentation)
 
 ## 快速开始
 
-### Word 文档
+### 翻译
 
 ```shell
-/docx <文档描述>
+/baoyu-translate <文件或URL>
 ```
 
-创建 Word 文档：
-- 格式和样式
-- 表格和图片
-- 页眉页脚
-- 目录
+三种模式：
+- **quick** — 直接翻译
+- **normal** — 分析后翻译
+- **refined** — 分析、翻译、审校、润色
 
-### PDF 处理
+### 信息图
 
 ```shell
-/pdf <操作> <文件>
+/baoyu-infographic <内容>
 ```
 
-操作：
-- `create` — 从内容创建 PDF
-- `merge` — 合并多个 PDF
-- `split` — 拆分 PDF 为页面
-- `ocr` — 从扫描 PDF 提取文本
+选项：
+- `--layout <名称>` — 21 种布局（金字塔、漏斗、桥梁等）
+- `--style <名称>` — 21 种视觉风格
+- `--aspect <比例>` — 横版、竖版、方形或自定义
 
-### PowerPoint
+### 图表
 
 ```shell
-/pptx <演示文稿描述>
+/baoyu-diagram <描述>
 ```
 
-创建演示文稿：
-- 幻灯片布局
-- 图表和图示
-- 动画
-- 演讲者备注
+创建 SVG 图表：
+- 架构图
+- 流程图
+- 时序图
+- 思维导图
+- 时间线
+
+### 幻灯片
+
+```shell
+/baoyu-slide-deck <内容>
+```
+
+从内容生成幻灯片图片，可选合并为 PDF/PPTX。
+
+### 封面图
+
+```shell
+/baoyu-cover-image <文章>
+```
+
+选项：
+- `--aspect` — 电影 (2.35:1)、宽屏 (16:9)、方形 (1:1)
+- `--palette` — 11 种色板
+- `--rendering` — 7 种渲染风格
+
+### 内容处理
+
+```shell
+/baoyu-url-to-markdown <URL>      # 抓取并转换网页
+/baoyu-youtube-transcript <URL>   # 获取 YouTube 字幕
+/baoyu-format-markdown <文件>      # 格式化 Markdown
+/baoyu-markdown-to-html <文件>     # 转换为 HTML
+/baoyu-compress-image <文件>       # 压缩图片
+```
 
 ## 工作流集成
 
@@ -169,30 +247,32 @@ technical-writer (content) → docs-agent → /pdf (documentation)
 任何阶段 → docs-kit (文档输出)
 ```
 
-### 报告生成
+### 翻译工作流
 
 ```
-data-analyst (分析) → docs-agent → /docx (报告)
+/baoyu-url-to-markdown <URL>
+    ↓
+/baoyu-translate --mode refined
+    ↓
+/baoyu-format-markdown
+    ↓
+/baoyu-markdown-to-html
 ```
 
-### 演示文稿
+### 信息图工作流
 
 ```
-product-agent (推介) → docs-agent → /pptx (演示文稿)
+data-analyst (分析) → /baoyu-infographic → 可视化摘要
 ```
 
-### 文档
+### 文章工作流
 
 ```
-technical-writer (内容) → docs-agent → /pdf (文档)
+/baoyu-translate <文章>
+    ↓
+/baoyu-article-illustrator
+    ↓
+/baoyu-cover-image
+    ↓
+/baoyu-post-to-wechat (growth-kit)
 ```
-
-## 使用场景
-
-| 文档类型 | 来源 | 技能 |
-|----------|------|------|
-| 商业报告 | data-analyst | `/docx` |
-| 投资人推介 | product-agent | `/pptx` |
-| 技术手册 | technical-writer | `/pdf` |
-| 提案 | business-analyst | `/docx` |
-| 案例研究 | marketing-agent | `/docx` |

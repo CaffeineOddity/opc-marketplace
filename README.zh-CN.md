@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
+Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
 
 > **中文** | [English](./README.md)
 
@@ -52,9 +52,13 @@ Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Sk
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Skill | `/ui-design` | UI/UX设计规范生成 |
+| Skill | `/ui-ux-pro-max` | 设计系统生成器，50+ 风格、97 色板、57 字体配对 |
+| Skill | `/baoyu-imagine` | AI 图像生成（OpenAI、Azure、Google、OpenRouter、DashScope、Replicate） |
 | Agent | ux-agent | UX专家：信息架构、用户流程、线框图、交互逻辑 |
 | Agent | ui-agent | UI专家：视觉设计、设计系统、组件规范、设计令牌 |
 | Agent | ui-ux-designer | 全栈UI/UX设计师参考 |
+| Agent | design-system-architect | 设计系统架构、令牌系统、组件库 |
+| Agent | ux-researcher | 用户研究、访谈、可用性测试、人物画像 |
 
 ### dev-kit — 开发
 | 类型 | 名称 | 描述 |
@@ -62,11 +66,23 @@ Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Sk
 | Skill | `/architect` | 架构设计文档 |
 | Skill | `/code-review` | 代码审查 (Bug/安全/性能/可读性) |
 | Skill | `/openapi-spec` | OpenAPI 3.1 规范生成 |
+| Skill | `/frontend-design` | 生产级前端界面 |
+| Skill | `/shadcn-ui` | shadcn/ui 组件集成和定制 |
+| Skill | `/mcp-builder` | MCP 服务器开发指南 (Python/TypeScript) |
+| Skill | `/systematic-debugging` | 四阶段调试方法论 |
+| Skill | `/test-driven-development` | TDD 红绿重构循环 |
+| Skill | `/verification-before-completion` | 完成验证协议 |
+| Skill | `/baoyu-diagram` | 专业 SVG 图表（架构图、流程图、时序图、思维导图、时间线） |
 | Agent | frontend-agent | 前端开发、组件架构、性能优化 |
 | Agent | backend-agent | 后端开发、API、数据层、服务架构 |
+| Agent | backend-architect | API 设计、微服务、分布式系统 |
 | Agent | security-auditor | DevSecOps、OWASP、安全审计 (opus) |
 | Agent | mobile-developer | React Native/Flutter/原生开发 |
 | Agent | database-architect | 数据建模、Schema设计、迁移规划 |
+| Agent | performance-engineer | 性能分析、优化、基准测试 |
+| Agent | ai-engineer | AI 系统工程、模型部署、MLOps (opus) |
+| Agent | prompt-engineer | 提示词工程、LLM 优化 |
+| Agent | technical-writer | 技术文档、API 文档、开发指南 |
 | Hook | auto-lint | 文件编辑后自动 lint (eslint/py_compile/go vet/cargo check) |
 
 ### qa-kit — 测试
@@ -97,19 +113,43 @@ Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Sk
 |------|------|------|
 | Skill | `/marketing-plan` | 营销策略与渠道规划 |
 | Skill | `/content-create` | 内容创作 (博客/社媒/邮件/案例) |
+| Skill | `/baoyu-xhs-images` | 小红书图片卡片系列 |
+| Skill | `/baoyu-image-cards` | 社交媒体信息图卡片系列 |
+| Skill | `/baoyu-comic` | 知识漫画创作，多种艺术风格 |
+| Skill | `/baoyu-post-to-wechat` | 发布到微信公众号 |
+| Skill | `/baoyu-post-to-weibo` | 发布到微博 |
+| Skill | `/baoyu-post-to-x` | 发布到 X/Twitter |
 | Agent | marketing-agent | 营销智能体 |
 | Agent | data-analyst | BI数据分析、指标体系、预测分析 |
 | Agent | seo-keyword-strategist | 关键词策略、LSI关键词 |
 | Agent | seo-content-writer | SEO优化内容写作 |
 | Agent | seo-content-planner | 内容日历、话题集群 |
 
+### docs-kit — 文档
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/docx` | Word 文档创建和编辑 |
+| Skill | `/pdf` | PDF 处理、合并、拆分、OCR |
+| Skill | `/pptx` | PowerPoint 演示文稿生成 |
+| Skill | `/baoyu-translate` | 三模式翻译（快翻/普通/精翻），支持术语表 |
+| Skill | `/baoyu-infographic` | 专业信息图，21 布局 × 21 风格 |
+| Skill | `/baoyu-slide-deck` | 幻灯片图片生成 |
+| Skill | `/baoyu-cover-image` | 文章封面图，11 色板 × 7 渲染风格 |
+| Skill | `/baoyu-article-illustrator` | 文章配图，类型 × 风格 × 色板系统 |
+| Skill | `/baoyu-format-markdown` | Markdown 格式化和美化 |
+| Skill | `/baoyu-markdown-to-html` | Markdown 转样式 HTML（微信兼容） |
+| Skill | `/baoyu-url-to-markdown` | 抓取 URL 转换为 Markdown |
+| Skill | `/baoyu-youtube-transcript` | 下载 YouTube 字幕和封面 |
+| Skill | `/baoyu-compress-image` | 图片压缩为 WebP/PNG |
+| Agent | docs-agent | 文档生成代理 |
+
 ## 统计
 
 | 指标 | 数量 |
 |------|------|
-| 插件 | 7 |
-| Agents | 20 |
-| Skills | 14 |
+| 插件 | 8 |
+| Agents | 30 |
+| Skills | 49 |
 | Hooks | 2 |
 
 ## 安装
@@ -126,6 +166,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Sk
 /plugin install qa-kit@opc-marketplace
 /plugin install ship-kit@opc-marketplace
 /plugin install growth-kit@opc-marketplace
+/plugin install docs-kit@opc-marketplace
 
 # 更新
 /plugin marketplace update opc-marketplace

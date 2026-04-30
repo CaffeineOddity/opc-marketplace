@@ -12,6 +12,7 @@ Design stage plugin — UX design, UI design, design systems, and user research 
 |-------|-------------|
 | `/ui-design` | UI/UX design specification |
 | `/ui-ux-pro-max` | Design system generator with 50+ styles, 97 color palettes, 57 font pairings |
+| `/baoyu-imagine` | AI image generation (OpenAI, Azure, Google, OpenRouter, DashScope, Replicate) |
 
 ### Agents
 
@@ -49,6 +50,29 @@ Generates complete design system:
 - 57 font pairings
 - Design tokens
 - Component specifications
+
+### AI Image Generation
+
+```shell
+/baoyu-imagine <prompt>
+```
+
+AI image generation with multiple backends:
+- OpenAI GPT Image
+- Azure OpenAI
+- Google (Gemini)
+- OpenRouter
+- DashScope (阿里云)
+- Z.AI GLM-Image
+- MiniMax
+- Jimeng (即梦)
+- Seedream
+- Replicate
+
+Options:
+- `--aspect <ratio>` — Aspect ratio (1:1, 16:9, 9:16, etc.)
+- `--ref <files>` — Reference images for style guidance
+- `--batch` — Batch parallel generation
 
 ## Agent Usage
 
@@ -139,6 +163,7 @@ design-system/
 |------|------|
 | `/ui-design` | UI/UX 设计规范 |
 | `/ui-ux-pro-max` | 设计系统生成器，50+ 风格、97 色板、57 字体配对 |
+| `/baoyu-imagine` | AI 图像生成（OpenAI、Azure、Google、OpenRouter、DashScope、Replicate） |
 
 ### 代理
 
@@ -176,6 +201,29 @@ design-system/
 - 57 字体配对
 - 设计令牌
 - 组件规范
+
+### AI 图像生成
+
+```shell
+/baoyu-imagine <提示词>
+```
+
+多后端 AI 图像生成：
+- OpenAI GPT Image
+- Azure OpenAI
+- Google (Gemini)
+- OpenRouter
+- DashScope (阿里云)
+- Z.AI GLM-Image
+- MiniMax
+- Jimeng (即梦)
+- Seedream
+- Replicate
+
+选项：
+- `--aspect <比例>` — 宽高比（1:1、16:9、9:16 等）
+- `--ref <文件>` — 参考图片用于风格引导
+- `--batch` — 批量并行生成
 
 ## 工作流集成
 
