@@ -1,13 +1,15 @@
 {
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "file=\"$CLAUDE_TOOL_INPUT_filePath\"; if [ -z \"$file\" ]; then file=\"$CLAUDE_TOOL_INPUT_file\"; fi; if [ -z \"$file\" ]; then exit 0; fi; ext=\"${file##*.}\"; case \"$ext\" in js|jsx|ts|tsx) npx eslint \"$file\" 2>/dev/null || true;; py) python -m py_compile \"$file\" 2>&1 || true;; go) go vet \"${file%/*}/...\" 2>/dev/null || true;; rs) cargo check --message-format=short 2>/dev/null || true;; *) exit 0;; esac"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_TOOL_INPUT_filePath\"; if [ -z \"$file\" ]; then file=\"$CLAUDE_TOOL_INPUT_file\"; fi; if [ -z \"$file\" ]; then exit 0; fi; ext=\"${file##*.}\"; case \"$ext\" in js|jsx|ts|tsx) npx eslint \"$file\" 2>/dev/null || true;; py) python -m py_compile \"$file\" 2>&1 || true;; go) go vet \"${file%/*}/...\" 2>/dev/null || true;; rs) cargo check --message-format=short 2>/dev/null || true;; *) exit 0;; esac"
+          }
+        ]
+      }
+    ]
+  }
 }

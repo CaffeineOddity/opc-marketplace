@@ -163,6 +163,9 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 ## Install
 
 ```shell
+# Add local marketplace
+/plugin marketplace add ./opc-marketplace
+
 # Add marketplace
 /plugin marketplace add CaffeineOddity/opc-marketplace
 
