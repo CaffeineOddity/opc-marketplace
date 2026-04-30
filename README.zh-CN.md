@@ -116,6 +116,10 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | Skill | `/baoyu-xhs-images` | 小红书图片卡片系列 |
 | Skill | `/baoyu-image-cards` | 社交媒体信息图卡片系列 |
 | Skill | `/baoyu-comic` | 知识漫画创作，多种艺术风格 |
+| Skill | `/baoyu-cover-image` | 文章封面图，11 色板 × 7 渲染风格 |
+| Skill | `/baoyu-article-illustrator` | 文章配图，类型 × 风格 × 色板系统 |
+| Skill | `/baoyu-infographic` | 专业信息图，21 布局 × 21 风格 |
+| Skill | `/baoyu-youtube-transcript` | 下载 YouTube 字幕和封面 |
 | Skill | `/baoyu-post-to-wechat` | 发布到微信公众号 |
 | Skill | `/baoyu-post-to-weibo` | 发布到微博 |
 | Skill | `/baoyu-post-to-x` | 发布到 X/Twitter |
@@ -132,14 +136,10 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | Skill | `/pdf` | PDF 处理、合并、拆分、OCR |
 | Skill | `/pptx` | PowerPoint 演示文稿生成 |
 | Skill | `/baoyu-translate` | 三模式翻译（快翻/普通/精翻），支持术语表 |
-| Skill | `/baoyu-infographic` | 专业信息图，21 布局 × 21 风格 |
 | Skill | `/baoyu-slide-deck` | 幻灯片图片生成 |
-| Skill | `/baoyu-cover-image` | 文章封面图，11 色板 × 7 渲染风格 |
-| Skill | `/baoyu-article-illustrator` | 文章配图，类型 × 风格 × 色板系统 |
 | Skill | `/baoyu-format-markdown` | Markdown 格式化和美化 |
 | Skill | `/baoyu-markdown-to-html` | Markdown 转样式 HTML（微信兼容） |
 | Skill | `/baoyu-url-to-markdown` | 抓取 URL 转换为 Markdown |
-| Skill | `/baoyu-youtube-transcript` | 下载 YouTube 字幕和封面 |
 | Skill | `/baoyu-compress-image` | 图片压缩为 WebP/PNG |
 | Agent | docs-agent | 文档生成代理 |
 
