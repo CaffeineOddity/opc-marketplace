@@ -1,42 +1,72 @@
 {
   "name": "opc-marketplace",
-  "description": "Caffeine's personal Claude Code plugin marketplace — skills, agents, and hooks for everyday development",
+  "description": "Caffeine's one-person company plugin marketplace — full product lifecycle from research to growth",
   "owner": {
     "name": "caffeine"
   },
   "plugins": [
     {
-      "name": "code-review",
-      "source": "./plugins/code-review",
-      "description": "Adds a /code-review skill for quick code reviews — bugs, security, performance, readability",
+      "name": "opc-founder",
+      "source": "./plugins/opc-founder",
+      "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle",
       "version": "1.0.0",
-      "author": {
-        "name": "caffeine"
-      },
-      "category": "code-quality",
-      "keywords": ["review", "quality", "security", "performance"]
+      "author": { "name": "caffeine" },
+      "category": "orchestration",
+      "keywords": ["founder", "orchestration", "agent-teams", "lifecycle"]
     },
     {
-      "name": "devops-agent",
-      "source": "./plugins/devops-agent",
-      "description": "Adds a devops agent for deployment, environment config, log analysis, and infrastructure troubleshooting",
+      "name": "product-kit",
+      "source": "./plugins/product-kit",
+      "description": "Product stage — /research, /requirement, /brainstorm skills + product agent",
       "version": "1.0.0",
-      "author": {
-        "name": "caffeine"
-      },
+      "author": { "name": "caffeine" },
+      "category": "product",
+      "keywords": ["research", "requirements", "brainstorm", "product"]
+    },
+    {
+      "name": "design-kit",
+      "source": "./plugins/design-kit",
+      "description": "Design stage — /ui-design skill + design agent for UI/UX specifications",
+      "version": "1.0.0",
+      "author": { "name": "caffeine" },
+      "category": "design",
+      "keywords": ["ui", "ux", "design", "prototype"]
+    },
+    {
+      "name": "dev-kit",
+      "source": "./plugins/dev-kit",
+      "description": "Dev stage — /architect, /code-review skills + frontend/backend agents + auto-lint hook",
+      "version": "1.0.0",
+      "author": { "name": "caffeine" },
+      "category": "development",
+      "keywords": ["architecture", "code-review", "frontend", "backend", "lint"]
+    },
+    {
+      "name": "qa-kit",
+      "source": "./plugins/qa-kit",
+      "description": "QA stage — /test-plan, /bug-report skills + QA agent",
+      "version": "1.0.0",
+      "author": { "name": "caffeine" },
+      "category": "testing",
+      "keywords": ["testing", "qa", "bug", "test-plan"]
+    },
+    {
+      "name": "ship-kit",
+      "source": "./plugins/ship-kit",
+      "description": "Ship stage — /deploy skill + devops agent + pre-deploy safety check hook",
+      "version": "1.0.0",
+      "author": { "name": "caffeine" },
       "category": "devops",
-      "keywords": ["devops", "deploy", "infrastructure", "logs"]
+      "keywords": ["deploy", "devops", "infrastructure", "release"]
     },
     {
-      "name": "auto-lint",
-      "source": "./plugins/auto-lint",
-      "description": "Auto-lint hook that runs lint checks after file edits via Write or Edit tools",
+      "name": "growth-kit",
+      "source": "./plugins/growth-kit",
+      "description": "Growth stage — /marketing-plan, /content-create skills + marketing agent",
       "version": "1.0.0",
-      "author": {
-        "name": "caffeine"
-      },
-      "category": "code-quality",
-      "keywords": ["lint", "hook", "auto", "quality"]
+      "author": { "name": "caffeine" },
+      "category": "marketing",
+      "keywords": ["marketing", "content", "growth", "seo"]
     }
   ]
 }

@@ -1,0 +1,13 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "cmd=\"$CLAUDE_TOOL_INPUT_command\"; if echo \"$cmd\" | grep -qiE 'deploy|publish|release|push.*prod|kubectl.*apply|terraform.*apply'; then echo '⚠️  DEPLOY SAFETY CHECK: You are about to run a deployment/publish command. Have you:'; echo '  1. Run all tests?'; echo '  2. Verified in staging?'; echo '  3. Defined a rollback plan?'; echo '  4. Informed stakeholders?'; echo ''; echo 'If unsure, cancel and run /deploy first.'; fi"
+        }
+      ]
+    }
+  ]
+}

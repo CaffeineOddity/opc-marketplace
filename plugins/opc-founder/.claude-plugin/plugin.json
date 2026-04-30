@@ -1,0 +1,5 @@
+{
+  "name": "opc-founder",
+  "description": "The founder agent that orchestrates all stage agents into collaborative teams across the entire product lifecycle",
+  "version": "1.0.0"
+}

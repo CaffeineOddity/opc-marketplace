@@ -1,56 +1,93 @@
 # caffeine/opc-marketplace
 
-Caffeine's personal Claude Code plugin marketplace — skills, agents, and hooks for everyday development.
+Caffeine's one-person company Claude Code plugin marketplace — full product lifecycle from research to growth.
+
+## Architecture
+
+```
+opc-founder (统帅) ──→ 调度全流程 agent teams
+  │
+  ├── product-kit    需求调研 / 需求撰写 / 头脑风暴
+  ├── design-kit     UI/UX 设计
+  ├── dev-kit        架构设计 / 前后端开发 / 自动 lint
+  ├── qa-kit         测试计划 / 缺陷报告
+  ├── ship-kit       部署上线 / 运维
+  └── growth-kit     市场推广 / 内容创作
+```
 
 ## Plugins
 
-| Plugin | Type | Description |
-|--------|------|-------------|
-| [code-review](./plugins/code-review) | Skill | `/code-review` — Quick code review for bugs, security, performance, readability |
-| [devops-agent](./plugins/devops-agent) | Agent | DevOps specialist for deployment, env config, log analysis, and infrastructure troubleshooting |
-| [auto-lint](./plugins/auto-lint) | Hook | Auto-lint on file edit — runs eslint/py_compile/go vet on Write/Edit |
+| Plugin | Category | Skills | Agents | Hooks |
+|--------|----------|--------|--------|-------|
+| `opc-founder` | Orchestration | — | founder-agent | — |
+| `product-kit` | Product | `/research`, `/requirement`, `/brainstorm` | product-agent | — |
+| `design-kit` | Design | `/ui-design` | design-agent | — |
+| `dev-kit` | Development | `/architect`, `/code-review` | frontend-agent, backend-agent | auto-lint |
+| `qa-kit` | Testing | `/test-plan`, `/bug-report` | qa-agent | — |
+| `ship-kit` | DevOps | `/deploy` | devops-agent | pre-deploy-check |
+| `growth-kit` | Marketing | `/marketing-plan`, `/content-create` | marketing-agent | — |
 
 ## Install
 
-Add the marketplace:
-
 ```shell
-/plugin marketplace add caffeine/opc-marketplace
-```
+# Add marketplace
+/plugin marketplace add CaffeineOddity/opc-marketplace
 
-Install a plugin:
+# Install all plugins
+/plugin install opc-founder@opc-marketplace
+/plugin install product-kit@opc-marketplace
+/plugin install design-kit@opc-marketplace
+/plugin install dev-kit@opc-marketplace
+/plugin install qa-kit@opc-marketplace
+/plugin install ship-kit@opc-marketplace
+/plugin install growth-kit@opc-marketplace
 
-```shell
-/plugin install code-review@opc-marketplace
-/plugin install devops-agent@opc-marketplace
-/plugin install auto-lint@opc-marketplace
-```
-
-Update all plugins:
-
-```shell
+# Update
 /plugin marketplace update opc-marketplace
 ```
 
-## Usage
+## Plugin Details
 
-### /code-review
+### opc-founder
+The CEO agent. Orchestrates cross-stage agent teams — dispatches product, design, dev, QA, devops, and marketing agents based on the task. Supports sequential and parallel workflows for the full product lifecycle.
 
-Select code or make changes, then run:
+### product-kit
+- `/research` — Market and user research with structured findings
+- `/requirement` — Write testable product requirements from ideas
+- `/brainstorm` — Structured ideation with SCAMPER, first principles, and inversion techniques
 
-```shell
-/code-review
+### design-kit
+- `/ui-design` — Generate UI/UX specifications from requirements (IA, interaction design, components, design tokens)
+
+### dev-kit
+- `/architect` — Architecture design documents (system, API, data model, infrastructure)
+- `/code-review` — Code review across bug/security/performance/readability dimensions
+- **frontend-agent** — UI implementation, component architecture, performance optimization
+- **backend-agent** — API development, data layer, server architecture
+- **auto-lint** — Automatically runs eslint/py_compile/go vet/cargo check on file edits
+
+### qa-kit
+- `/test-plan` — Generate test plans from requirements (functional, integration, non-functional)
+- `/bug-report` — Structured bug reports with severity, reproduction steps, and root cause
+
+### ship-kit
+- `/deploy` — Structured deployment with pre-flight checks, rollback plans, and post-deploy verification
+- **devops-agent** — Deployment, infrastructure, and operational tasks
+- **pre-deploy-check** — Hook that warns before deploy/publish/release commands
+
+### growth-kit
+- `/marketing-plan` — Marketing strategy with channel tactics, budget, and KPIs
+- `/content-create` — Create blog posts, social media, newsletters, launch copy, case studies
+
+## Agent Collaboration Flow
+
 ```
+New Feature (Full Pipeline):
+  product-agent → design-agent → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
 
-### devops-agent
+Quick Fix:
+  qa-agent → dev-agent → devops-agent
 
-The devops agent is available as a specialized agent when you need help with deployment, infrastructure, or operational tasks.
-
-### auto-lint
-
-Automatically active after installation. When you use `Write` or `Edit` tools, the hook runs lint checks based on file type:
-
-- `.js/.jsx/.ts/.tsx` — eslint
-- `.py` — py_compile
-- `.go` — go vet
-- `.rs` — cargo check
+Growth Sprint:
+  marketing-agent → product-agent (validate messaging)
+```
