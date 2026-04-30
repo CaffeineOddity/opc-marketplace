@@ -1,0 +1,210 @@
+# caffeine/opc-marketplace
+
+Caffeine 的一人公司 Claude Code 插件市场 — **20 个 Agent、14 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
+
+> **中文** | [English](./README.md)
+
+## 快速开始
+
+```shell
+/opc <任务描述>    # 一键调度，自动编排 agents
+```
+
+| 命令 | 效果 |
+|------|------|
+| `/opc 帮我做一个用户管理功能` | 全流程 pipeline |
+| `/opc 研究一下竞品市场` | product-agent 调研 |
+| `/opc 修复这个 bug` | dev + qa 并行 |
+| `/opc 安全审查` | security-auditor |
+| `/opc 上线新版本` | qa → devops → marketing |
+
+## 架构
+
+```
+/opc (一键入口) ──→ founder-agent 评估 → 自动编排
+  │
+  ├── product-kit    需求调研 / 需求撰写 / 头脑风暴 / 市场分析
+  ├── design-kit     UX设计 / UI设计 / 设计系统
+  ├── dev-kit        架构 / 前端 / 后端 / 安全 / 移动 / 数据库
+  ├── qa-kit         测试计划 / 缺陷报告 / E2E测试 / 无障碍审计
+  ├── ship-kit       部署 / CI-CD / IaC / 云架构 / 成本 / 事故响应
+  └── growth-kit     营销 / 数据分析 / SEO
+```
+
+## 插件
+
+### opc-founder — 统帅
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
+| Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
+
+### product-kit — 产品
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/research` | 市场和用户调研 |
+| Skill | `/requirement` | 产品需求文档撰写 |
+| Skill | `/brainstorm` | 结构化头脑风暴 (SCAMPER/第一性原理/逆向) |
+| Agent | product-agent | 产品经理智能体 |
+| Agent | startup-analyst | 创业分析师，TAM/SAM/SOM、财务模型、竞争分析 |
+
+### design-kit — 设计
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/ui-design` | UI/UX设计规范生成 |
+| Agent | ux-agent | UX专家：信息架构、用户流程、线框图、交互逻辑 |
+| Agent | ui-agent | UI专家：视觉设计、设计系统、组件规范、设计令牌 |
+| Agent | ui-ux-designer | 全栈UI/UX设计师参考 |
+
+### dev-kit — 开发
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/architect` | 架构设计文档 |
+| Skill | `/code-review` | 代码审查 (Bug/安全/性能/可读性) |
+| Skill | `/openapi-spec` | OpenAPI 3.1 规范生成 |
+| Agent | frontend-agent | 前端开发、组件架构、性能优化 |
+| Agent | backend-agent | 后端开发、API、数据层、服务架构 |
+| Agent | security-auditor | DevSecOps、OWASP、安全审计 (opus) |
+| Agent | mobile-developer | React Native/Flutter/原生开发 |
+| Agent | database-architect | 数据建模、Schema设计、迁移规划 |
+| Hook | auto-lint | 文件编辑后自动 lint (eslint/py_compile/go vet/cargo check) |
+
+### qa-kit — 测试
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/test-plan` | 测试计划生成 |
+| Skill | `/bug-report` | 结构化缺陷报告 |
+| Skill | `/e2e-test` | Playwright/Cypress E2E测试模式 |
+| Skill | `/wcag-audit` | WCAG 2.2 无障碍审计 |
+| Agent | qa-agent | QA测试智能体 |
+
+### ship-kit — 上线
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/deploy` | 结构化部署与回滚 |
+| Skill | `/ci-pipeline` | GitHub Actions CI/CD模板 |
+| Skill | `/changelog` | 自动变更日志 |
+| Skill | `/cost-opt` | 云成本优化 (AWS/Azure/GCP/OCI) |
+| Skill | `/incident-runbook` | 事故响应手册模板 |
+| Skill | `/terraform` | Terraform IaC模块库 |
+| Agent | devops-agent | 部署、基础设施、运维 |
+| Agent | cloud-architect | 多云架构、IaC、FinOps |
+| Agent | incident-responder | SRE事故响应、故障排查、事后复盘 |
+| Hook | pre-deploy-check | 部署命令安全检查 |
+
+### growth-kit — 增长
+| 类型 | 名称 | 描述 |
+|------|------|------|
+| Skill | `/marketing-plan` | 营销策略与渠道规划 |
+| Skill | `/content-create` | 内容创作 (博客/社媒/邮件/案例) |
+| Agent | marketing-agent | 营销智能体 |
+| Agent | data-analyst | BI数据分析、指标体系、预测分析 |
+| Agent | seo-keyword-strategist | 关键词策略、LSI关键词 |
+| Agent | seo-content-writer | SEO优化内容写作 |
+| Agent | seo-content-planner | 内容日历、话题集群 |
+
+## 统计
+
+| 指标 | 数量 |
+|------|------|
+| 插件 | 7 |
+| Agents | 20 |
+| Skills | 14 |
+| Hooks | 2 |
+
+## 安装
+
+```shell
+# 添加市场
+/plugin marketplace add CaffeineOddity/opc-marketplace
+
+# 安装所有插件
+/plugin install opc-founder@opc-marketplace
+/plugin install product-kit@opc-marketplace
+/plugin install design-kit@opc-marketplace
+/plugin install dev-kit@opc-marketplace
+/plugin install qa-kit@opc-marketplace
+/plugin install ship-kit@opc-marketplace
+/plugin install growth-kit@opc-marketplace
+
+# 更新
+/plugin marketplace update opc-marketplace
+```
+
+## 编排模式
+
+founder-agent 支持四种编排模式，`/opc` 自动选择：
+
+| 模式 | 方式 | 适用场景 |
+|------|------|----------|
+| Single | Agent tool 单次调度 | 单阶段、单 agent |
+| Pipeline | Agent tool 串行多次 | 多阶段、有依赖 |
+| Parallel | Agent tool 并行调用 | 独立任务并行 |
+| Team | TeamCreate + TaskCreate + SendMessage | 复杂项目、3+ agents |
+
+## Agent 协作流程
+
+```
+新功能（全流程）:
+  product-agent → ux-agent → ui-agent → frontend-agent + backend-agent → qa-agent → devops-agent → marketing-agent
+
+安全审查:
+  security-auditor → backend-agent → qa-agent
+
+事故响应:
+  incident-responder → devops-agent → cloud-architect
+
+增长冲刺:
+  seo-keyword-strategist → seo-content-planner → seo-content-writer → marketing-agent → data-analyst
+
+移动应用:
+  ux-agent → ui-agent → mobile-developer → backend-agent → qa-agent
+```
+
+## 参与共建
+
+欢迎贡献！这个市场设计为与社区一起成长。
+
+### 贡献方式
+
+- **新增 agent 或 skill** — 添加到现有插件或提议新插件
+- **改进现有 agent** — 更好的提示词、更多工具、更紧密的衔接
+- **新插件** — 覆盖我们没想到的阶段（如法务、融资、招聘）
+- **Bug 修复** — 修复损坏的 agent 或过时的提示词
+- **翻译** — 帮助保持文档双语（EN + ZH-CN）
+
+### 如何贡献
+
+1. Fork 本仓库
+2. 创建功能分支 (`git checkout -b feature/my-new-agent`)
+3. 在 `plugins/` 下添加或修改插件
+4. 更新插件的 `plugin.json` 版本号
+5. 如新增插件，更新 `marketplace.json`
+6. 提交 Pull Request
+
+### 插件结构
+
+```
+plugins/your-plugin/
+├── .claude-plugin/
+│   └── plugin.json          # 插件清单（必需）
+├── agents/                   # Agent 定义
+│   └── your-agent.md
+├── skills/                   # Skill 定义
+│   └── your-skill/
+│       └── SKILL.md
+└── hooks/                    # Hook 定义
+    └── hooks.json
+```
+
+### 规范
+
+- 每个插件对应一个产品生命周期阶段
+- Agent 应聚焦 — 每个 agent 一个明确职责
+- Skill 应自包含、可组合
+- 所有命名使用 kebab-case
+- 修改时递增 `plugin.json` 中的版本号
+
+## 许可证
+
+MIT

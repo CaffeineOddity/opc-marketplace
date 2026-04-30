@@ -2,104 +2,106 @@
 
 Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14 skills, 2 hooks** covering the full product lifecycle.
 
+> [中文文档](./README.zh-CN.md) | **English**
+
 ## Quick Start
 
 ```shell
-/opc <任务描述>    # 一键调度，自动编排 agents
+/opc <task description>    # One command to orchestrate all agents
 ```
 
-| 命令 | 效果 |
-|------|------|
-| `/opc 帮我做一个用户管理功能` | 全流程 pipeline |
-| `/opc 研究一下竞品市场` | product-agent 调研 |
-| `/opc 修复这个 bug` | dev + qa 并行 |
-| `/opc 安全审查` | security-auditor |
-| `/opc 上线新版本` | qa → devops → marketing |
+| Command | What Happens |
+|---------|-------------|
+| `/opc build a user management feature` | Full pipeline |
+| `/opc research the competitor landscape` | product-agent research |
+| `/opc fix this bug` | dev + qa in parallel |
+| `/opc security audit` | security-auditor (opus) |
+| `/opc ship the new release` | qa → devops → marketing |
 
 ## Architecture
 
 ```
-/opc (一键入口) ──→ founder-agent 评估 → 自动编排
+/opc (one-command entry) ──→ founder-agent assesses → auto-orchestrates
   │
-  ├── product-kit    需求调研 / 需求撰写 / 头脑风暴 / 市场分析
-  ├── design-kit     UX设计 / UI设计 / 设计系统
-  ├── dev-kit        架构 / 前端 / 后端 / 安全 / 移动 / 数据库
-  ├── qa-kit         测试计划 / 缺陷报告 / E2E测试 / 无障碍审计
-  ├── ship-kit       部署 / CI/CD / IaC / 云架构 / 成本 / 事故响应
-  └── growth-kit     营销 / 数据分析 / SEO
+  ├── product-kit    Research / Requirements / Brainstorm / Market Analysis
+  ├── design-kit     UX Design / UI Design / Design Systems
+  ├── dev-kit        Architecture / Frontend / Backend / Security / Mobile / Database
+  ├── qa-kit         Test Planning / Bug Reports / E2E Testing / Accessibility Audit
+  ├── ship-kit       Deploy / CI-CD / IaC / Cloud / Cost / Incident Response
+  └── growth-kit     Marketing / Data Analytics / SEO
 ```
 
 ## Plugins
 
-### opc-founder — 统帅
+### opc-founder — Orchestrator
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
-| Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
+| Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
+| Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
-### product-kit — 产品
+### product-kit — Product
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/research` | 市场和用户调研 |
-| Skill | `/requirement` | 产品需求文档撰写 |
-| Skill | `/brainstorm` | 结构化头脑风暴 (SCAMPER/第一性原理/逆向) |
-| Agent | product-agent | 产品经理智能体 |
-| Agent | startup-analyst | 创业分析师，TAM/SAM/SOM、财务模型、竞争分析 |
+| Skill | `/research` | Market and user research |
+| Skill | `/requirement` | Product requirements document |
+| Skill | `/brainstorm` | Structured brainstorming (SCAMPER / First Principles / Inversion) |
+| Agent | product-agent | Product manager agent |
+| Agent | startup-analyst | TAM/SAM/SOM, financial modeling, competitive analysis |
 
-### design-kit — 设计
+### design-kit — Design
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/ui-design` | UI/UX设计规范生成 |
-| Agent | ux-agent | UX专家：信息架构、用户流程、线框图、交互逻辑 |
-| Agent | ui-agent | UI专家：视觉设计、设计系统、组件规范、设计令牌 |
-| Agent | ui-ux-designer | 全栈UI/UX设计师参考 |
+| Skill | `/ui-design` | UI/UX design specification |
+| Agent | ux-agent | Information architecture, user flows, wireframes, interaction logic |
+| Agent | ui-agent | Visual design, design systems, component specs, design tokens |
+| Agent | ui-ux-designer | Full-stack UI/UX designer reference |
 
-### dev-kit — 开发
+### dev-kit — Development
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/architect` | 架构设计文档 |
-| Skill | `/code-review` | 代码审查 (Bug/安全/性能/可读性) |
-| Skill | `/openapi-spec` | OpenAPI 3.1 规范生成 |
-| Agent | frontend-agent | 前端开发、组件架构、性能优化 |
-| Agent | backend-agent | 后端开发、API、数据层、服务架构 |
-| Agent | security-auditor | DevSecOps、OWASP、安全审计 (opus) |
-| Agent | mobile-developer | React Native/Flutter/原生开发 |
-| Agent | database-architect | 数据建模、Schema设计、迁移规划 |
-| Hook | auto-lint | 文件编辑后自动 lint |
+| Skill | `/architect` | Architecture design document |
+| Skill | `/code-review` | Code review (Bug / Security / Performance / Readability) |
+| Skill | `/openapi-spec` | OpenAPI 3.1 spec generation |
+| Agent | frontend-agent | Frontend development, component architecture, performance |
+| Agent | backend-agent | Backend development, API, data layer, server architecture |
+| Agent | security-auditor | DevSecOps, OWASP, security audit (opus) |
+| Agent | mobile-developer | React Native / Flutter / Native development |
+| Agent | database-architect | Data modeling, schema design, migration planning |
+| Hook | auto-lint | Auto-lint on file edit (eslint / py_compile / go vet / cargo check) |
 
-### qa-kit — 测试
+### qa-kit — Quality Assurance
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/test-plan` | 测试计划生成 |
-| Skill | `/bug-report` | 结构化缺陷报告 |
-| Skill | `/e2e-test` | Playwright/Cypress E2E测试模式 |
-| Skill | `/wcag-audit` | WCAG 2.2 无障碍审计 |
-| Agent | qa-agent | QA测试智能体 |
+| Skill | `/test-plan` | Test plan generation |
+| Skill | `/bug-report` | Structured bug report |
+| Skill | `/e2e-test` | Playwright / Cypress E2E testing patterns |
+| Skill | `/wcag-audit` | WCAG 2.2 accessibility audit |
+| Agent | qa-agent | QA testing agent |
 
-### ship-kit — 上线
+### ship-kit — Ship
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/deploy` | 结构化部署与回滚 |
-| Skill | `/ci-pipeline` | GitHub Actions CI/CD模板 |
-| Skill | `/changelog` | 自动变更日志 |
-| Skill | `/cost-opt` | 云成本优化 (AWS/Azure/GCP/OCI) |
-| Skill | `/incident-runbook` | 事故响应手册模板 |
-| Skill | `/terraform` | Terraform IaC模块库 |
-| Agent | devops-agent | 部署、基础设施、运维 |
-| Agent | cloud-architect | 多云架构、IaC、FinOps |
-| Agent | incident-responder | SRE事故响应、故障排查 |
-| Hook | pre-deploy-check | 部署命令安全检查 |
+| Skill | `/deploy` | Structured deployment with rollback |
+| Skill | `/ci-pipeline` | GitHub Actions CI/CD templates |
+| Skill | `/changelog` | Automated changelog generation |
+| Skill | `/cost-opt` | Cloud cost optimization (AWS / Azure / GCP / OCI) |
+| Skill | `/incident-runbook` | Incident response runbook templates |
+| Skill | `/terraform` | Terraform IaC module library |
+| Agent | devops-agent | Deployment, infrastructure, operations |
+| Agent | cloud-architect | Multi-cloud architecture, IaC, FinOps |
+| Agent | incident-responder | SRE incident response, troubleshooting, post-mortem |
+| Hook | pre-deploy-check | Deploy command safety check |
 
-### growth-kit — 增长
+### growth-kit — Growth
 | Type | Name | Description |
 |------|------|-------------|
-| Skill | `/marketing-plan` | 营销策略与渠道规划 |
-| Skill | `/content-create` | 内容创作 (博客/社媒/邮件/案例) |
-| Agent | marketing-agent | 营销智能体 |
-| Agent | data-analyst | BI数据分析、指标体系、预测分析 |
-| Agent | seo-keyword-strategist | 关键词策略、LSI关键词 |
-| Agent | seo-content-writer | SEO优化内容写作 |
-| Agent | seo-content-planner | 内容日历、话题集群 |
+| Skill | `/marketing-plan` | Marketing strategy and channel planning |
+| Skill | `/content-create` | Content creation (blog / social / email / case study) |
+| Agent | marketing-agent | Marketing agent |
+| Agent | data-analyst | BI data analysis, metrics, forecasting |
+| Agent | seo-keyword-strategist | Keyword strategy, LSI keywords |
+| Agent | seo-content-writer | SEO-optimized content writing |
+| Agent | seo-content-planner | Content calendar, topic clusters |
 
 ## Stats
 
@@ -131,14 +133,14 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 
 ## Orchestration Modes
 
-founder-agent 支持四种编排模式，`/opc` 自动选择：
+The founder-agent supports 4 orchestration modes. `/opc` selects automatically:
 
-| Mode | 方式 | 适用场景 |
-|------|------|----------|
-| Single | Agent tool 单次调度 | 单阶段、单 agent |
-| Pipeline | Agent tool 串行多次 | 多阶段、有依赖 |
-| Parallel | Agent tool 并行调用 | 独立任务并行 |
-| Team | TeamCreate + Task + SendMessage | 复杂项目、3+ agents |
+| Mode | Method | Use When |
+|------|--------|----------|
+| Single | One Agent call | Single stage, single agent |
+| Pipeline | Sequential Agent calls | Multi-stage with dependencies |
+| Parallel | Multiple Agent calls at once | Independent tasks |
+| Team | TeamCreate + TaskCreate + SendMessage | Complex projects, 3+ agents |
 
 ## Agent Collaboration Flows
 
@@ -158,3 +160,51 @@ Growth Sprint:
 Mobile App:
   ux-agent → ui-agent → mobile-developer → backend-agent → qa-agent
 ```
+
+## Contributing
+
+Contributions are welcome! This marketplace is designed to grow with the community.
+
+### Ways to Contribute
+
+- **New agents or skills** — Add to an existing plugin or propose a new one
+- **Improve existing agents** — Better prompts, more tools, tighter handoffs
+- **New plugins** — Cover stages we haven't thought of (e.g., legal, fundraising, hiring)
+- **Bug fixes** — Fix broken agents or outdated prompts
+- **Translations** — Help keep docs bilingual (EN + ZH-CN)
+
+### How to Contribute
+
+1. Fork this repository
+2. Create your feature branch (`git checkout -b feature/my-new-agent`)
+3. Add or modify plugins under `plugins/`
+4. Update the plugin's `plugin.json` version
+5. Update `marketplace.json` if adding a new plugin
+6. Submit a pull request
+
+### Plugin Structure
+
+```
+plugins/your-plugin/
+├── .claude-plugin/
+│   └── plugin.json          # Plugin manifest (required)
+├── agents/                   # Agent definitions
+│   └── your-agent.md
+├── skills/                   # Skill definitions
+│   └── your-skill/
+│       └── SKILL.md
+└── hooks/                    # Hook definitions
+    └── hooks.json
+```
+
+### Guidelines
+
+- One plugin per product lifecycle stage
+- Agents should be focused — one clear responsibility per agent
+- Skills should be self-contained and composable
+- Follow kebab-case for all names
+- Bump version in `plugin.json` when making changes
+
+## License
+
+MIT
