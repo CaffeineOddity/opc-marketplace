@@ -1,0 +1,5 @@
+{
+  "name": "devops-agent",
+  "description": "Adds a devops agent for deployment, environment config, log analysis, and infrastructure troubleshooting",
+  "version": "1.0.0"
+}

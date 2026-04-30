@@ -1,0 +1,5 @@
+{
+  "name": "auto-lint",
+  "description": "Auto-lint hook that runs lint checks after file edits via Write or Edit tools",
+  "version": "1.0.0"
+}
