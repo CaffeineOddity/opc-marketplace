@@ -173,14 +173,23 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 ## Install
 
 ```shell
-# Add local marketplace
-/plugin marketplace add ./opc-marketplace
-
-# Add marketplace
+# 1. Add marketplace
 /plugin marketplace add CaffeineOddity/opc-marketplace
 
-# Install all plugins
+# 2. Install opc-founder (required)
 /plugin install opc-founder@opc-marketplace
+
+# 3. Use /install to add other plugins
+/install all        # Install all 7 plugins
+/install web        # Web product
+/install mobile     # Mobile app
+/install designer   # Product & design focus
+/install minimal    # Minimal set (product + dev)
+```
+
+### Manual Install (Alternative)
+
+```shell
 /plugin install product-kit@opc-marketplace
 /plugin install design-kit@opc-marketplace
 /plugin install dev-kit@opc-marketplace
@@ -188,8 +197,11 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 /plugin install ship-kit@opc-marketplace
 /plugin install growth-kit@opc-marketplace
 /plugin install docs-kit@opc-marketplace
+```
 
-# Update
+### Update
+
+```shell
 /plugin marketplace update opc-marketplace
 ```
 

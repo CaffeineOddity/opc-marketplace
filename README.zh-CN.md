@@ -170,11 +170,23 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 ## 安装
 
 ```shell
-# 添加市场
+# 1. 添加市场
 /plugin marketplace add CaffeineOddity/opc-marketplace
 
-# 安装所有插件
+# 2. 安装 opc-founder（必需）
 /plugin install opc-founder@opc-marketplace
+
+# 3. 使用 /install 添加其他插件
+/install all        # 安装全部 7 个插件
+/install web        # Web 产品
+/install mobile     # Mobile App
+/install designer   # 产品设计专注
+/install minimal    # 最小集 (product + dev)
+```
+
+### 手动安装（备选）
+
+```shell
 /plugin install product-kit@opc-marketplace
 /plugin install design-kit@opc-marketplace
 /plugin install dev-kit@opc-marketplace
@@ -182,8 +194,11 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 /plugin install ship-kit@opc-marketplace
 /plugin install growth-kit@opc-marketplace
 /plugin install docs-kit@opc-marketplace
+```
 
-# 更新
+### 更新
+
+```shell
 /plugin marketplace update opc-marketplace
 ```
 
