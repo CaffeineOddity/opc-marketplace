@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14 skills, 2 hooks** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 24 skills, 2 hooks** covering the full product lifecycle.
 
 > [中文文档](./README.zh-CN.md) | **English**
 
@@ -24,11 +24,12 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 /opc (one-command entry) ──→ founder-agent assesses → auto-orchestrates
   │
   ├── product-kit    Research / Requirements / Brainstorm / Market Analysis
-  ├── design-kit     UX Design / UI Design / Design Systems
-  ├── dev-kit        Architecture / Frontend / Backend / Security / Mobile / Database
-  ├── qa-kit         Test Planning / Bug Reports / E2E Testing / Accessibility Audit
+  ├── design-kit     UX Design / UI Design / Design Systems / UI-UX-Pro-Max
+  ├── dev-kit        Architecture / Frontend / Backend / Security / Mobile / Database / Performance / MCP
+  ├── qa-kit         Test Planning / Bug Reports / E2E Testing / Accessibility Audit / Webapp Testing
   ├── ship-kit       Deploy / CI-CD / IaC / Cloud / Cost / Incident Response
-  └── growth-kit     Marketing / Data Analytics / SEO
+  ├── growth-kit     Marketing / Data Analytics / SEO
+  └── docs-kit       Documents / Reports / Presentations / PDFs
 ```
 
 ## Plugins
@@ -45,16 +46,21 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 | Skill | `/research` | Market and user research |
 | Skill | `/requirement` | Product requirements document |
 | Skill | `/brainstorm` | Structured brainstorming (SCAMPER / First Principles / Inversion) |
+| Skill | `/spec-driven-development` | Define specifications before implementation (SDD + TDD integration) |
 | Agent | product-agent | Product manager agent |
 | Agent | startup-analyst | TAM/SAM/SOM, financial modeling, competitive analysis |
+| Agent | business-analyst | Business process analysis, requirements elicitation, stakeholder management |
 
 ### design-kit — Design
 | Type | Name | Description |
 |------|------|-------------|
 | Skill | `/ui-design` | UI/UX design specification |
+| Skill | `/ui-ux-pro-max` | Design system generator with 50+ styles, 97 color palettes, 57 font pairings |
 | Agent | ux-agent | Information architecture, user flows, wireframes, interaction logic |
 | Agent | ui-agent | Visual design, design systems, component specs, design tokens |
 | Agent | ui-ux-designer | Full-stack UI/UX designer reference |
+| Agent | design-system-architect | Design system architecture, token systems, component libraries |
+| Agent | ux-researcher | User research, interviews, usability testing, persona development |
 
 ### dev-kit — Development
 | Type | Name | Description |
@@ -62,11 +68,22 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 | Skill | `/architect` | Architecture design document |
 | Skill | `/code-review` | Code review (Bug / Security / Performance / Readability) |
 | Skill | `/openapi-spec` | OpenAPI 3.1 spec generation |
+| Skill | `/frontend-design` | Production-grade frontend interfaces with distinctive aesthetics |
+| Skill | `/shadcn-ui` | shadcn/ui component integration and customization |
+| Skill | `/mcp-builder` | MCP server development guide (Python/TypeScript) |
+| Skill | `/systematic-debugging` | Four-phase debugging methodology (Root Cause → Pattern → Hypothesis → Implementation) |
+| Skill | `/test-driven-development` | TDD red-green-refactor cycle |
+| Skill | `/verification-before-completion` | Completion verification protocol |
 | Agent | frontend-agent | Frontend development, component architecture, performance |
 | Agent | backend-agent | Backend development, API, data layer, server architecture |
+| Agent | backend-architect | API design, microservices, distributed systems |
 | Agent | security-auditor | DevSecOps, OWASP, security audit (opus) |
 | Agent | mobile-developer | React Native / Flutter / Native development |
 | Agent | database-architect | Data modeling, schema design, migration planning |
+| Agent | performance-engineer | Performance profiling, optimization, benchmarking |
+| Agent | ai-engineer | AI systems engineering, model deployment, MLOps (opus) |
+| Agent | prompt-engineer | Prompt engineering, LLM optimization |
+| Agent | technical-writer | Technical documentation, API docs, developer guides |
 | Hook | auto-lint | Auto-lint on file edit (eslint / py_compile / go vet / cargo check) |
 
 ### qa-kit — Quality Assurance
@@ -76,7 +93,9 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 | Skill | `/bug-report` | Structured bug report |
 | Skill | `/e2e-test` | Playwright / Cypress E2E testing patterns |
 | Skill | `/wcag-audit` | WCAG 2.2 accessibility audit |
+| Skill | `/webapp-testing` | Playwright web application testing toolkit |
 | Agent | qa-agent | QA testing agent |
+| Agent | accessibility-expert | WCAG compliance, assistive technology, a11y testing |
 
 ### ship-kit — Ship
 | Type | Name | Description |
@@ -103,13 +122,21 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 | Agent | seo-content-writer | SEO-optimized content writing |
 | Agent | seo-content-planner | Content calendar, topic clusters |
 
+### docs-kit — Documents
+| Type | Name | Description |
+|------|------|-------------|
+| Skill | `/docx` | Word document creation and editing |
+| Skill | `/pdf` | PDF processing, merging, splitting, OCR |
+| Skill | `/pptx` | PowerPoint presentation generation |
+| Agent | docs-agent | Document generation agent |
+
 ## Stats
 
 | Metric | Count |
 |--------|-------|
-| Plugins | 7 |
-| Agents | 20 |
-| Skills | 14 |
+| Plugins | 8 |
+| Agents | 30 |
+| Skills | 24 |
 | Hooks | 2 |
 
 ## Install
@@ -126,6 +153,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14
 /plugin install qa-kit@opc-marketplace
 /plugin install ship-kit@opc-marketplace
 /plugin install growth-kit@opc-marketplace
+/plugin install docs-kit@opc-marketplace
 
 # Update
 /plugin marketplace update opc-marketplace

@@ -1,5 +1,5 @@
 {
   "name": "opc-founder",
-  "description": "Founder agent + /opc skill — one-command entry point to orchestrate agents across the full product lifecycle",
-  "version": "1.3.0"
+  "description": "Founder agent + /opc skill — one-command entry point to orchestrate agents across the full product lifecycle with subagent-driven development and agent-teams cooperation",
+  "version": "1.6.0"
 }

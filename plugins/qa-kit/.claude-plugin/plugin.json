@@ -1,5 +1,5 @@
 {
   "name": "qa-kit",
-  "description": "QA stage — /test-plan, /bug-report, /e2e-test, /wcag-audit skills + QA agent",
-  "version": "1.1.0"
+  "description": "QA stage — /test-plan, /bug-report, /e2e-test, /wcag-audit, /webapp-testing skills + QA agent + accessibility-expert agent",
+  "version": "1.2.0"
 }
