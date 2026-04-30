@@ -1,6 +1,6 @@
 {
   "name": "opc-marketplace",
-  "description": "Caffeine's one-person company plugin marketplace — full product lifecycle from research to growth",
+  "description": "Caffeine's one-person company plugin marketplace — 18 agents, 13 skills, 2 hooks covering the full product lifecycle",
   "owner": {
     "name": "caffeine"
   },
@@ -8,11 +8,11 @@
     {
       "name": "opc-founder",
       "source": "./plugins/opc-founder",
-      "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle",
-      "version": "1.0.0",
+      "description": "Founder + startup analyst agents that orchestrate cross-stage agent teams for the entire product lifecycle",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "orchestration",
-      "keywords": ["founder", "orchestration", "agent-teams", "lifecycle"]
+      "keywords": ["founder", "orchestration", "agent-teams", "lifecycle", "startup"]
     },
     {
       "name": "product-kit",
@@ -26,47 +26,47 @@
     {
       "name": "design-kit",
       "source": "./plugins/design-kit",
-      "description": "Design stage — /ui-design skill + design agent for UI/UX specifications",
-      "version": "1.0.0",
+      "description": "Design stage — /ui-design skill + UX agent + UI agent + ui-ux-designer reference",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "design",
-      "keywords": ["ui", "ux", "design", "prototype"]
+      "keywords": ["ui", "ux", "design", "prototype", "design-system"]
     },
     {
       "name": "dev-kit",
       "source": "./plugins/dev-kit",
-      "description": "Dev stage — /architect, /code-review skills + frontend/backend agents + auto-lint hook",
-      "version": "1.0.0",
+      "description": "Dev stage — /architect, /code-review, /openapi-spec skills + frontend/backend/security/mobile/database agents + auto-lint hook",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "development",
-      "keywords": ["architecture", "code-review", "frontend", "backend", "lint"]
+      "keywords": ["architecture", "code-review", "frontend", "backend", "security", "mobile", "database", "lint"]
     },
     {
       "name": "qa-kit",
       "source": "./plugins/qa-kit",
-      "description": "QA stage — /test-plan, /bug-report skills + QA agent",
-      "version": "1.0.0",
+      "description": "QA stage — /test-plan, /bug-report, /e2e-test, /wcag-audit skills + QA agent",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "testing",
-      "keywords": ["testing", "qa", "bug", "test-plan"]
+      "keywords": ["testing", "qa", "bug", "test-plan", "e2e", "accessibility", "wcag"]
     },
     {
       "name": "ship-kit",
       "source": "./plugins/ship-kit",
-      "description": "Ship stage — /deploy skill + devops agent + pre-deploy safety check hook",
-      "version": "1.0.0",
+      "description": "Ship stage — 6 skills (/deploy, /ci-pipeline, /changelog, /cost-opt, /incident-runbook, /terraform) + devops/cloud-architect/incident-responder agents + pre-deploy hook",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "devops",
-      "keywords": ["deploy", "devops", "infrastructure", "release"]
+      "keywords": ["deploy", "devops", "infrastructure", "ci-cd", "terraform", "incident", "cost"]
     },
     {
       "name": "growth-kit",
       "source": "./plugins/growth-kit",
-      "description": "Growth stage — /marketing-plan, /content-create skills + marketing agent",
-      "version": "1.0.0",
+      "description": "Growth stage — /marketing-plan, /content-create skills + marketing/data-analyst/SEO agents",
+      "version": "1.1.0",
       "author": { "name": "caffeine" },
       "category": "marketing",
-      "keywords": ["marketing", "content", "growth", "seo"]
+      "keywords": ["marketing", "content", "growth", "seo", "analytics", "data"]
     }
   ]
 }

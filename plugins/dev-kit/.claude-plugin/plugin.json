@@ -1,5 +1,5 @@
 {
   "name": "dev-kit",
-  "description": "Development toolkit — architecture, code review skills, frontend/backend agents, and auto-lint hook",
-  "version": "1.0.0"
+  "description": "Dev stage — /architect, /code-review, /openapi-spec skills + frontend/backend/security/mobile/database agents + auto-lint hook",
+  "version": "1.1.0"
 }

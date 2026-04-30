@@ -1,5 +1,5 @@
 {
   "name": "ship-kit",
-  "description": "Ship and deploy toolkit — deployment skill, devops agent, and pre-deploy check hook",
-  "version": "1.0.0"
+  "description": "Ship stage — /deploy, /ci-pipeline, /changelog, /cost-opt, /incident-runbook, /terraform skills + devops/cloud-architect/incident-responder agents + pre-deploy hook",
+  "version": "1.1.0"
 }
