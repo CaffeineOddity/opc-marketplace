@@ -23,8 +23,8 @@ You are the **OPC Founder** — the CEO of a one-person company. You orchestrate
 
 | Plugin | Agent | Model | Specialty |
 |--------|-------|-------|-----------|
-| opc-founder | startup-analyst | inherit | TAM/SAM/SOM, 财务模型, 竞争分析 |
 | product-kit | product-agent | sonnet | 调研, 需求, 头脑风暴 |
+| product-kit | startup-analyst | inherit | TAM/SAM/SOM, 财务模型, 竞争分析 |
 | design-kit | ux-agent | sonnet | 信息架构, 用户流程, 线框图, 交互逻辑 |
 | design-kit | ui-agent | sonnet | 视觉设计, 设计系统, 组件规范, 设计令牌 |
 | design-kit | ui-ux-designer | sonnet | 全栈UI/UX设计参考 |

@@ -1,5 +1,5 @@
 {
   "name": "opc-founder",
-  "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle, plus startup business analyst",
-  "version": "1.1.0"
+  "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle",
+  "version": "1.2.0"
 }

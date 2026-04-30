@@ -8,20 +8,20 @@
     {
       "name": "opc-founder",
       "source": "./plugins/opc-founder",
-      "description": "Founder + startup analyst agents that orchestrate cross-stage agent teams for the entire product lifecycle",
-      "version": "1.1.0",
+      "description": "Founder agent that orchestrates cross-stage agent teams for the entire product lifecycle",
+      "version": "1.2.0",
       "author": { "name": "caffeine" },
       "category": "orchestration",
-      "keywords": ["founder", "orchestration", "agent-teams", "lifecycle", "startup"]
+      "keywords": ["founder", "orchestration", "agent-teams", "lifecycle"]
     },
     {
       "name": "product-kit",
       "source": "./plugins/product-kit",
-      "description": "Product stage — /research, /requirement, /brainstorm skills + product agent",
-      "version": "1.0.0",
+      "description": "Product stage — /research, /requirement, /brainstorm skills + product agent + startup analyst",
+      "version": "1.2.0",
       "author": { "name": "caffeine" },
       "category": "product",
-      "keywords": ["research", "requirements", "brainstorm", "product"]
+      "keywords": ["research", "requirements", "brainstorm", "product", "startup", "market-analysis"]
     },
     {
       "name": "design-kit",
