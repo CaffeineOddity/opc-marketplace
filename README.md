@@ -1,13 +1,27 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **18 agents, 13 skills, 2 hooks** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **20 agents, 14 skills, 2 hooks** covering the full product lifecycle.
+
+## Quick Start
+
+```shell
+/opc <任务描述>    # 一键调度，自动编排 agents
+```
+
+| 命令 | 效果 |
+|------|------|
+| `/opc 帮我做一个用户管理功能` | 全流程 pipeline |
+| `/opc 研究一下竞品市场` | product-agent 调研 |
+| `/opc 修复这个 bug` | dev + qa 并行 |
+| `/opc 安全审查` | security-auditor |
+| `/opc 上线新版本` | qa → devops → marketing |
 
 ## Architecture
 
 ```
-opc-founder (统帅) ──→ 调度全流程 agent teams
+/opc (一键入口) ──→ founder-agent 评估 → 自动编排
   │
-  ├── product-kit    需求调研 / 需求撰写 / 头脑风暴
+  ├── product-kit    需求调研 / 需求撰写 / 头脑风暴 / 市场分析
   ├── design-kit     UX设计 / UI设计 / 设计系统
   ├── dev-kit        架构 / 前端 / 后端 / 安全 / 移动 / 数据库
   ├── qa-kit         测试计划 / 缺陷报告 / E2E测试 / 无障碍审计
@@ -20,8 +34,8 @@ opc-founder (统帅) ──→ 调度全流程 agent teams
 ### opc-founder — 统帅
 | Type | Name | Description |
 |------|------|-------------|
-| Agent | founder-agent | CEO agent，调度全流程 agent teams |
-| Agent | startup-analyst | 创业分析师，TAM/SAM/SOM、财务模型、竞争分析 |
+| Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
+| Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 
 ### product-kit — 产品
 | Type | Name | Description |
@@ -30,6 +44,7 @@ opc-founder (统帅) ──→ 调度全流程 agent teams
 | Skill | `/requirement` | 产品需求文档撰写 |
 | Skill | `/brainstorm` | 结构化头脑风暴 (SCAMPER/第一性原理/逆向) |
 | Agent | product-agent | 产品经理智能体 |
+| Agent | startup-analyst | 创业分析师，TAM/SAM/SOM、财务模型、竞争分析 |
 
 ### design-kit — 设计
 | Type | Name | Description |
@@ -91,8 +106,8 @@ opc-founder (统帅) ──→ 调度全流程 agent teams
 | Metric | Count |
 |--------|-------|
 | Plugins | 7 |
-| Agents | 18 |
-| Skills | 13 |
+| Agents | 20 |
+| Skills | 14 |
 | Hooks | 2 |
 
 ## Install
@@ -114,7 +129,18 @@ opc-founder (统帅) ──→ 调度全流程 agent teams
 /plugin marketplace update opc-marketplace
 ```
 
-## Agent Collaboration Flow
+## Orchestration Modes
+
+founder-agent 支持四种编排模式，`/opc` 自动选择：
+
+| Mode | 方式 | 适用场景 |
+|------|------|----------|
+| Single | Agent tool 单次调度 | 单阶段、单 agent |
+| Pipeline | Agent tool 串行多次 | 多阶段、有依赖 |
+| Parallel | Agent tool 并行调用 | 独立任务并行 |
+| Team | TeamCreate + Task + SendMessage | 复杂项目、3+ agents |
+
+## Agent Collaboration Flows
 
 ```
 New Feature (Full Pipeline):
@@ -127,5 +153,8 @@ Incident Response:
   incident-responder → devops-agent → cloud-architect
 
 Growth Sprint:
-  seo-keyword-strategist → seo-content-writer → marketing-agent → data-analyst
+  seo-keyword-strategist → seo-content-planner → seo-content-writer → marketing-agent → data-analyst
+
+Mobile App:
+  ux-agent → ui-agent → mobile-developer → backend-agent → qa-agent
 ```
