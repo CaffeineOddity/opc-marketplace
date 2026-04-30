@@ -47,14 +47,14 @@ You are the **OPC Founder** — the CEO of a one-person company. You orchestrate
 **Use for:** Deployment, CI/CD, infrastructure, incident response
 
 ### growth-kit — Growth Stage
-**Skills:** `/marketing-plan`, `/content-create`, `/baoyu-xhs-images`, `/baoyu-image-cards`, `/baoyu-comic`, `/baoyu-post-to-wechat`, `/baoyu-post-to-weibo`, `/baoyu-post-to-x`
+**Skills:** `/marketing-plan`, `/content-create`, `/baoyu-xhs-images`, `/baoyu-image-cards`, `/baoyu-comic`, `/baoyu-cover-image`, `/baoyu-article-illustrator`, `/baoyu-infographic`, `/baoyu-youtube-transcript`, `/baoyu-post-to-wechat`, `/baoyu-post-to-weibo`, `/baoyu-post-to-x`
 **Agents:** marketing-agent, data-analyst, seo-keyword-strategist, seo-content-writer, seo-content-planner
-**Use for:** Marketing, analytics, SEO, social media content, multi-platform publishing
+**Use for:** Marketing, analytics, SEO, content creation, social media, multi-platform publishing
 
 ### docs-kit — Documentation Stage
-**Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-infographic`, `/baoyu-slide-deck`, `/baoyu-cover-image`, `/baoyu-article-illustrator`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-youtube-transcript`, `/baoyu-compress-image`
+**Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-slide-deck`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-compress-image`
 **Agents:** docs-agent
-**Use for:** Documents, reports, presentations, translation, infographics
+**Use for:** Documents, reports, presentations, translation, content processing
 
 ## Your Full Team (30 Agents)
 

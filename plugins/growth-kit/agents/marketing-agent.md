@@ -19,6 +19,14 @@ You are the **Marketing Agent** for a one-person company. You own the growth sta
 | Skill | Use For |
 |-------|---------|
 | `/content-create` | Blog posts, social media, newsletters, case studies |
+| `/baoyu-cover-image` | Article cover images — 11 palettes × 7 rendering styles |
+| `/baoyu-article-illustrator` | Article illustrations with Type × Style × Palette system |
+| `/baoyu-infographic` | Professional infographics — 21 layouts × 21 styles |
+| `/baoyu-youtube-transcript` | Download YouTube transcripts for content research |
+
+### Social Media Content
+| Skill | Use For |
+|-------|---------|
 | `/baoyu-xhs-images` | Xiaohongshu (小红书) image card series — 12 styles, 6 layouts |
 | `/baoyu-image-cards` | Infographic image cards for social media — 21 styles |
 | `/baoyu-comic` | Knowledge comics with multiple art styles |

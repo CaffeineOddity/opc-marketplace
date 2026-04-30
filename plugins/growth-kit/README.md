@@ -2,7 +2,7 @@
 
 > [中文](#中文) | **English**
 
-Growth stage plugin — marketing, data analytics, SEO, social media content, and multi-platform publishing for the one-person company.
+Growth stage plugin — marketing, data analytics, SEO, social media content, content creation, and multi-platform publishing for the one-person company.
 
 ## Components
 
@@ -15,6 +15,10 @@ Growth stage plugin — marketing, data analytics, SEO, social media content, an
 | `/baoyu-xhs-images` | Xiaohongshu (Little Red Book) image card series |
 | `/baoyu-image-cards` | Infographic image card series for social media |
 | `/baoyu-comic` | Knowledge comic creator with multiple art styles |
+| `/baoyu-cover-image` | Article cover images with 11 palettes × 7 rendering styles |
+| `/baoyu-article-illustrator` | Article illustration with Type × Style × Palette system |
+| `/baoyu-infographic` | Professional infographics with 21 layouts × 21 styles |
+| `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
 | `/baoyu-post-to-wechat` | Post to WeChat Official Account (微信公众号) |
 | `/baoyu-post-to-weibo` | Post to Weibo (微博) |
 | `/baoyu-post-to-x` | Post to X/Twitter |
@@ -30,6 +34,22 @@ Growth stage plugin — marketing, data analytics, SEO, social media content, an
 | seo-content-planner | haiku | Content calendar, topic clusters |
 
 ## Quick Start
+
+### Content Creation
+
+```shell
+# Article cover image
+/baoyu-cover-image <article>
+
+# Article illustrations
+/baoyu-article-illustrator <article>
+
+# Infographics
+/baoyu-infographic <content> --layout pyramid --style technical-schematic
+
+# YouTube transcript (for content research)
+/baoyu-youtube-transcript <URL>
+```
 
 ### Social Media Content
 
@@ -101,6 +121,23 @@ Use for:
 ship-kit (launch) → growth-kit (marketing) → data-analyst (measure)
 ```
 
+### Content Creation Workflow
+
+```
+/baoyu-youtube-transcript <URL>  # Research
+    ↓
+/content-create blog <topic>
+    ↓
+/baoyu-cover-image <article>
+/baoyu-article-illustrator <article>
+    ↓
+/baoyu-post-to-wechat → publish to WeChat
+/baoyu-post-to-weibo → publish to Weibo
+/baoyu-post-to-x → publish to X
+    ↓
+data-analyst → measure engagement
+```
+
 ### Social Media Content Workflow
 
 ```
@@ -136,7 +173,8 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 ```
 marketing-agent → /content-create (multiple types)
     ↓
-/baoyu-image-cards → visual content
+/baoyu-cover-image → cover images
+/baoyu-infographic → infographics
     ↓
 /baoyu-post-to-wechat / baoyu-post-to-weibo / baoyu-post-to-x
     ↓
@@ -162,7 +200,7 @@ data-analyst → track metrics
 
 ## 中文
 
-增长阶段插件 —— 一人公司的营销、数据分析、SEO、社交媒体内容和多平台发布。
+增长阶段插件 —— 一人公司的营销、数据分析、SEO、社交媒体内容、内容创作和多平台发布。
 
 ## 组件
 
@@ -175,6 +213,10 @@ data-analyst → track metrics
 | `/baoyu-xhs-images` | 小红书图片卡片系列 |
 | `/baoyu-image-cards` | 社交媒体信息图卡片系列 |
 | `/baoyu-comic` | 知识漫画创作，多种艺术风格 |
+| `/baoyu-cover-image` | 文章封面图，11 色板 × 7 渲染风格 |
+| `/baoyu-article-illustrator` | 文章配图，类型 × 风格 × 色板系统 |
+| `/baoyu-infographic` | 专业信息图，21 布局 × 21 风格 |
+| `/baoyu-youtube-transcript` | 下载 YouTube 字幕和封面 |
 | `/baoyu-post-to-wechat` | 发布到微信公众号 |
 | `/baoyu-post-to-weibo` | 发布到微博 |
 | `/baoyu-post-to-x` | 发布到 X/Twitter |
@@ -190,6 +232,22 @@ data-analyst → track metrics
 | seo-content-planner | haiku | 内容日历、话题集群 |
 
 ## 快速开始
+
+### 内容创作
+
+```shell
+# 文章封面图
+/baoyu-cover-image <文章>
+
+# 文章配图
+/baoyu-article-illustrator <文章>
+
+# 信息图
+/baoyu-infographic <内容> --layout pyramid --style technical-schematic
+
+# YouTube 字幕（内容研究）
+/baoyu-youtube-transcript <URL>
+```
 
 ### 社交媒体内容
 
@@ -227,6 +285,23 @@ data-analyst → track metrics
 ship-kit (发布) → growth-kit (营销) → data-analyst (衡量)
 ```
 
+### 内容创作工作流
+
+```
+/baoyu-youtube-transcript <URL>  # 研究
+    ↓
+/content-create blog <主题>
+    ↓
+/baoyu-cover-image <文章>
+/baoyu-article-illustrator <文章>
+    ↓
+/baoyu-post-to-wechat → 发布到微信
+/baoyu-post-to-weibo → 发布到微博
+/baoyu-post-to-x → 发布到 X
+    ↓
+data-analyst → 衡量互动数据
+```
+
 ### 社交媒体内容工作流
 
 ```
@@ -256,7 +331,8 @@ data-analyst → 衡量互动数据
 ```
 marketing-agent → /content-create (多种类型)
     ↓
-/baoyu-image-cards → 视觉内容
+/baoyu-cover-image → 封面图
+/baoyu-infographic → 信息图
     ↓
 /baoyu-post-to-wechat / baoyu-post-to-weibo / baoyu-post-to-x
     ↓

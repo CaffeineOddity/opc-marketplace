@@ -26,21 +26,13 @@ You are the **Docs Agent** for a one-person company. You own document generation
 |-------|---------|
 | `/baoyu-translate` | Three-mode translation (quick/normal/refined) with glossary support |
 
-### Visual Content
-| Skill | Use For |
-|-------|---------|
-| `/baoyu-infographic` | Professional infographics — 21 layouts × 21 styles |
-| `/baoyu-slide-deck` | Slide deck image generation from content |
-| `/baoyu-cover-image` | Article cover images — 11 palettes × 7 rendering styles |
-| `/baoyu-article-illustrator` | Article illustrations with Type × Style × Palette system |
-
 ### Content Processing
 | Skill | Use For |
 |-------|---------|
+| `/baoyu-slide-deck` | Slide deck image generation from content |
 | `/baoyu-format-markdown` | Markdown formatting and beautification |
 | `/baoyu-markdown-to-html` | Markdown to styled HTML (WeChat-compatible) |
 | `/baoyu-url-to-markdown` | Fetch URL and convert to markdown |
-| `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
 | `/baoyu-compress-image` | Image compression to WebP/PNG |
 
 ## Core Responsibilities

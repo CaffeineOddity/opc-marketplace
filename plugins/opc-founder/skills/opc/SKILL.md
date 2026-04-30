@@ -80,12 +80,12 @@ Read the user's input and classify:
 - **seo-keyword-strategist** — Keyword research
 - **seo-content-writer** — SEO content
 
-**Skills:** `/marketing-plan`, `/content-create`, `/baoyu-xhs-images`, `/baoyu-image-cards`, `/baoyu-comic`, `/baoyu-post-to-wechat`, `/baoyu-post-to-weibo`, `/baoyu-post-to-x`
+**Skills:** `/marketing-plan`, `/content-create`, `/baoyu-xhs-images`, `/baoyu-image-cards`, `/baoyu-comic`, `/baoyu-cover-image`, `/baoyu-article-illustrator`, `/baoyu-infographic`, `/baoyu-youtube-transcript`, `/baoyu-post-to-wechat`, `/baoyu-post-to-weibo`, `/baoyu-post-to-x`
 
 ### Docs Stage (docs-kit)
 - **docs-agent** — Documents, reports, presentations
 
-**Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-infographic`, `/baoyu-slide-deck`, `/baoyu-cover-image`, `/baoyu-article-illustrator`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-youtube-transcript`, `/baoyu-compress-image`
+**Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-slide-deck`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-compress-image`
 
 ## Step 3: Execute
 

@@ -121,6 +121,10 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Skill | `/baoyu-xhs-images` | Xiaohongshu (Little Red Book) image card series |
 | Skill | `/baoyu-image-cards` | Infographic image card series for social media |
 | Skill | `/baoyu-comic` | Knowledge comic creator with multiple art styles |
+| Skill | `/baoyu-cover-image` | Article cover images with 11 palettes × 7 rendering styles |
+| Skill | `/baoyu-article-illustrator` | Article illustration with Type × Style × Palette system |
+| Skill | `/baoyu-infographic` | Professional infographics with 21 layouts × 21 styles |
+| Skill | `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
 | Skill | `/baoyu-post-to-wechat` | Post to WeChat Official Account (微信公众号) |
 | Skill | `/baoyu-post-to-weibo` | Post to Weibo (微博) |
 | Skill | `/baoyu-post-to-x` | Post to X/Twitter |
@@ -137,14 +141,10 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Skill | `/pdf` | PDF processing, merging, splitting, OCR |
 | Skill | `/pptx` | PowerPoint presentation generation |
 | Skill | `/baoyu-translate` | Three-mode translation (quick/normal/refined) with glossary support |
-| Skill | `/baoyu-infographic` | Professional infographics with 21 layouts × 21 styles |
 | Skill | `/baoyu-slide-deck` | Slide deck image generation from content |
-| Skill | `/baoyu-cover-image` | Article cover images with 11 palettes × 7 rendering styles |
-| Skill | `/baoyu-article-illustrator` | Article illustration with Type × Style × Palette system |
 | Skill | `/baoyu-format-markdown` | Markdown formatting and beautification |
 | Skill | `/baoyu-markdown-to-html` | Markdown to styled HTML (WeChat-compatible) |
 | Skill | `/baoyu-url-to-markdown` | Fetch URL and convert to markdown |
-| Skill | `/baoyu-youtube-transcript` | Download YouTube transcripts and cover images |
 | Skill | `/baoyu-compress-image` | Image compression to WebP/PNG |
 | Agent | docs-agent | Document generation agent |
 
