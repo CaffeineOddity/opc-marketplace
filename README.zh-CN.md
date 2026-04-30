@@ -92,7 +92,11 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | Skill | `/bug-report` | 结构化缺陷报告 |
 | Skill | `/e2e-test` | Playwright/Cypress E2E测试模式 |
 | Skill | `/wcag-audit` | WCAG 2.2 无障碍审计 |
+| Skill | `/webapp-testing` | Playwright Web 应用测试工具包 |
+| Skill | `/a11y-debugging` | 无障碍调试工作流 |
+| Skill | `/chrome-devtools` | Chrome DevTools 测试自动化 |
 | Agent | qa-agent | QA测试智能体 |
+| Agent | accessibility-expert | WCAG 合规、辅助技术、无障碍测试 |
 
 ### ship-kit — 上线
 | 类型 | 名称 | 描述 |
@@ -103,6 +107,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **30 个 Agent、49 个 Sk
 | Skill | `/cost-opt` | 云成本优化 (AWS/Azure/GCP/OCI) |
 | Skill | `/incident-runbook` | 事故响应手册模板 |
 | Skill | `/terraform` | Terraform IaC模块库 |
+| Skill | `/troubleshooting` | 系统化故障排查方法论 |
 | Agent | devops-agent | 部署、基础设施、运维 |
 | Agent | cloud-architect | 多云架构、IaC、FinOps |
 | Agent | incident-responder | SRE事故响应、故障排查、事后复盘 |

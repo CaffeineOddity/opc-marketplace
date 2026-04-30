@@ -96,6 +96,8 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Skill | `/e2e-test` | Playwright / Cypress E2E testing patterns |
 | Skill | `/wcag-audit` | WCAG 2.2 accessibility audit |
 | Skill | `/webapp-testing` | Playwright web application testing toolkit |
+| Skill | `/a11y-debugging` | Accessibility debugging workflow |
+| Skill | `/chrome-devtools` | Chrome DevTools automation for testing |
 | Agent | qa-agent | QA testing agent |
 | Agent | accessibility-expert | WCAG compliance, assistive technology, a11y testing |
 
@@ -108,6 +110,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **30 agents, 49
 | Skill | `/cost-opt` | Cloud cost optimization (AWS / Azure / GCP / OCI) |
 | Skill | `/incident-runbook` | Incident response runbook templates |
 | Skill | `/terraform` | Terraform IaC module library |
+| Skill | `/troubleshooting` | Systematic troubleshooting methodology |
 | Agent | devops-agent | Deployment, infrastructure, operations |
 | Agent | cloud-architect | Multi-cloud architecture, IaC, FinOps |
 | Agent | incident-responder | SRE incident response, troubleshooting, post-mortem |
