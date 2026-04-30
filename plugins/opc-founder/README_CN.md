@@ -9,7 +9,7 @@
 | 技能 | 描述 |
 |------|------|
 | `/opc` | 一键入口 —— 自动评估任务并编排代理 |
-| `/install` | 安装 OPC 插件 —— 全量安装、按需安装或自定义选择 |
+| `/plugin` | 管理插件 —— 安装、更新、列表、状态 |
 
 ### 代理
 
@@ -33,16 +33,16 @@
 | `/opc security audit` | 派遣 security-auditor (opus) |
 | `/opc ship the new release` | 顺序：测试 → 运维 → 营销 |
 
-## 插件安装
+## 插件管理
 
 ```shell
-/install              # 交互式选择
-/install all          # 安装全部 7 个插件
-/install web          # Web 产品 (product + design + dev + qa + ship + growth)
-/install mobile       # Mobile App (product + design + dev + qa + ship)
-/install designer     # 产品设计专注 (product + design + docs)
-/install content      # 内容/营销 (product + growth + docs)
-/install minimal      # 最小集 (product + dev)
+/plugin install          # 交互式安装
+/plugin install all      # 安装全部 7 个插件
+/plugin install web      # Web 产品 (product + design + dev + qa + ship + growth)
+/plugin install mobile   # Mobile App (product + design + dev + qa + ship)
+/plugin install designer # 产品设计专注 (product + design + docs)
+/plugin update           # 更新市场 + 所有插件
+/plugin list             # 列出已安装插件
 ```
 
 ## 编排模式

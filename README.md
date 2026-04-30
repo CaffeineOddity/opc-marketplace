@@ -8,7 +8,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 
 ```shell
 /opc <task description>    # One command to orchestrate all agents
-/install [option]          # Install plugins
+/plugin [command]          # Manage plugins
 ```
 
 | Command | What Happens |
@@ -18,9 +18,10 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | `/opc fix this bug` | dev + qa in parallel |
 | `/opc security audit` | security-auditor (opus) |
 | `/opc ship the new release` | qa → devops → marketing |
-| `/install all` | Install all 7 plugins |
-| `/install web` | Install for web product |
-| `/install designer` | Install for product & design focus |
+| `/plugin install all` | Install all 7 plugins |
+| `/plugin install web` | Install for web product |
+| `/plugin install designer` | Install for product & design focus |
+| `/plugin update` | Update marketplace + all plugins |
 
 ## Architecture
 
@@ -42,7 +43,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Type | Name | Description |
 |------|------|-------------|
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
-| Skill | `/install` | Install OPC plugins — full, selective, or custom selection |
+| Skill | `/plugin` | Manage plugins — install, update, list, status |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
 ### product-kit — Product
@@ -179,12 +180,12 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 # 2. Install opc-founder (required)
 /plugin install opc-founder@opc-marketplace
 
-# 3. Use /install to add other plugins
-/install all        # Install all 7 plugins
-/install web        # Web product
-/install mobile     # Mobile app
-/install designer   # Product & design focus
-/install minimal    # Minimal set (product + dev)
+# 3. Use /plugin to manage other plugins
+/plugin install all        # Install all 7 plugins
+/plugin install web        # Web product
+/plugin install designer   # Product & design focus
+/plugin update             # Update all plugins
+/plugin list               # List installed plugins
 ```
 
 ### Manual Install (Alternative)
@@ -202,7 +203,8 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 ### Update
 
 ```shell
-/plugin marketplace update opc-marketplace
+/plugin update              # Update marketplace + all plugins
+/plugin update design-kit   # Update specific plugin
 ```
 
 ## Orchestration Modes

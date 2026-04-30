@@ -8,7 +8,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 
 ```shell
 /opc <任务描述>    # 一键调度，自动编排 agents
-/install [选项]    # 安装插件
+/plugin [命令]     # 管理插件
 ```
 
 | 命令 | 效果 |
@@ -18,9 +18,10 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | `/opc 修复这个 bug` | dev + qa 并行 |
 | `/opc 安全审查` | security-auditor |
 | `/opc 上线新版本` | qa → devops → marketing |
-| `/install all` | 安装全部 7 个插件 |
-| `/install web` | 安装 Web 产品所需插件 |
-| `/install designer` | 安装产品设计专注插件 |
+| `/plugin install all` | 安装全部 7 个插件 |
+| `/plugin install web` | 安装 Web 产品所需插件 |
+| `/plugin install designer` | 安装产品设计专注插件 |
+| `/plugin update` | 更新所有插件 |
 
 ## 架构
 
@@ -41,7 +42,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
-| Skill | `/install` | 安装 OPC 插件 — 全量安装、按需安装或自定义选择 |
+| Skill | `/plugin` | 管理插件 —— 安装、更新、列表、状态 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 
 ### product-kit — 产品
@@ -176,12 +177,12 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 # 2. 安装 opc-founder（必需）
 /plugin install opc-founder@opc-marketplace
 
-# 3. 使用 /install 添加其他插件
-/install all        # 安装全部 7 个插件
-/install web        # Web 产品
-/install mobile     # Mobile App
-/install designer   # 产品设计专注
-/install minimal    # 最小集 (product + dev)
+# 3. 使用 /plugin 管理其他插件
+/plugin install all        # 安装全部 7 个插件
+/plugin install web        # Web 产品
+/plugin install designer   # 产品设计专注
+/plugin update             # 更新所有插件
+/plugin list               # 列出已安装插件
 ```
 
 ### 手动安装（备选）
@@ -199,7 +200,8 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 ### 更新
 
 ```shell
-/plugin marketplace update opc-marketplace
+/plugin update              # 更新市场 + 所有插件
+/plugin update design-kit   # 更新指定插件
 ```
 
 ## 编排模式

@@ -341,18 +341,17 @@ Teammate → reviews → responds with plan_approval_response
 - Document decisions and rationale for continuity
 - A one-person company's scarcest resource is time — optimize for it
 
-## Plugin Installation
+## Plugin Management
 
-Use `/install` skill for plugin installation. Quick reference:
+Use `/plugin` skill to manage plugins. Quick reference:
 
 ```bash
-/install              # Interactive selection
-/install all          # Install all 7 plugins
-/install web          # Web product (product + design + dev + qa + ship + growth)
-/install mobile       # Mobile app (product + design + dev + qa + ship)
-/install designer     # Product & Design focus (product + design + docs)
-/install content      # Content/Marketing (product + growth + docs)
-/install minimal      # Minimal set (product + dev)
+/plugin install          # Interactive install
+/plugin install all      # Install all 7 plugins
+/plugin install web      # Web product preset
+/plugin install designer # Product & design preset
+/plugin update           # Update marketplace + all plugins
+/plugin list             # List installed plugins
 ```
 
 Available plugins: product-kit, design-kit, dev-kit, qa-kit, ship-kit, growth-kit, docs-kit

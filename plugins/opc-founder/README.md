@@ -9,7 +9,7 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | Skill | Description |
 |-------|-------------|
 | `/opc` | One-command entry point — auto-assess task and orchestrate agents |
-| `/install` | Install OPC plugins — full, selective, or custom selection |
+| `/plugin` | Manage plugins — install, update, list, status |
 
 ### Agents
 
@@ -33,16 +33,16 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `/opc security audit` | Dispatches security-auditor (opus) |
 | `/opc ship the new release` | Sequential: qa → devops → marketing |
 
-## Plugin Installation
+## Plugin Management
 
 ```shell
-/install              # Interactive selection
-/install all          # Install all 7 plugins
-/install web          # Web product (product + design + dev + qa + ship + growth)
-/install mobile       # Mobile app (product + design + dev + qa + ship)
-/install designer     # Product & Design focus (product + design + docs)
-/install content      # Content/Marketing (product + growth + docs)
-/install minimal      # Minimal set (product + dev)
+/plugin install          # Interactive install
+/plugin install all      # Install all 7 plugins
+/plugin install web      # Web product (product + design + dev + qa + ship + growth)
+/plugin install mobile   # Mobile app (product + design + dev + qa + ship)
+/plugin install designer # Product & Design focus (product + design + docs)
+/plugin update           # Update marketplace + all plugins
+/plugin list             # List installed plugins
 ```
 
 ## Orchestration Modes

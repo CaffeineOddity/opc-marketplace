@@ -1,19 +1,29 @@
 ---
-name: install
-description: Install OPC plugins from marketplace. Supports full install, selective install by stage, or custom selection. Use when user wants to setup or add plugins.
+name: plugin
+description: Manage OPC plugins — install, update, or list. Use when user wants to setup, add, or update plugins.
 ---
 
-# OPC Plugin Installer
+# OPC Plugin Manager
 
-Install plugins from opc-marketplace with one command.
+Install, update, and manage plugins from opc-marketplace.
 
 ## Usage
 
 ```shell
-/install [option]
+/plugin [command] [option]
 ```
 
-## Options
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `install [option]` | Install plugins |
+| `update` | Update marketplace and all installed plugins |
+| `update <plugin>` | Update specific plugin |
+| `list` | List installed plugins |
+| `status` | Show marketplace and plugin status |
+
+## Install Options
 
 | Option | Description |
 |--------|-------------|
@@ -28,9 +38,34 @@ Install plugins from opc-marketplace with one command.
 | `docs` | Install docs-kit only |
 | `web` | Install for web product (product + design + dev + qa + ship + growth) |
 | `mobile` | Install for mobile app (product + design + dev + qa + ship) |
-| `content` | Install for content/marketing (product + growth + docs) |
 | `designer` | Install for product & design focus (product + design + docs) |
+| `content` | Install for content/marketing (product + growth + docs) |
 | `minimal` | Install minimal set (product + dev) |
+
+## Examples
+
+### Install
+
+```shell
+/plugin install              # Interactive selection
+/plugin install all          # Install all 7 plugins
+/plugin install web          # Web product
+/plugin install designer     # Product & design focus
+```
+
+### Update
+
+```shell
+/plugin update               # Update marketplace + all plugins
+/plugin update design-kit    # Update specific plugin
+```
+
+### Status
+
+```shell
+/plugin list                 # List installed plugins
+/plugin status               # Show detailed status
+```
 
 ## Available Plugins
 
@@ -57,26 +92,6 @@ Install plugins from opc-marketplace with one command.
 /plugin install ship-kit@opc-marketplace && \
 /plugin install growth-kit@opc-marketplace && \
 /plugin install docs-kit@opc-marketplace
-```
-
-### By Stage
-
-**Product + Design (Early Stage):**
-```bash
-/plugin install product-kit@opc-marketplace && \
-/plugin install design-kit@opc-marketplace
-```
-
-**Dev + QA (Implementation):**
-```bash
-/plugin install dev-kit@opc-marketplace && \
-/plugin install qa-kit@opc-marketplace
-```
-
-**Ship + Growth (Launch):**
-```bash
-/plugin install ship-kit@opc-marketplace && \
-/plugin install growth-kit@opc-marketplace
 ```
 
 ### By Use Case
@@ -120,36 +135,41 @@ Install plugins from opc-marketplace with one command.
 /plugin install dev-kit@opc-marketplace
 ```
 
+## Update Commands
+
+### Update All
+```bash
+/plugin marketplace update opc-marketplace
+
+# Then update each installed plugin
+/plugin update product-kit@opc-marketplace
+/plugin update design-kit@opc-marketplace
+# ... etc
+```
+
+### Update Specific Plugin
+```bash
+/plugin update design-kit@opc-marketplace
+```
+
 ## Interactive Mode
 
 When called without arguments, present options:
 
 ```
-/install
+/plugin
 
-🚀 OPC Plugin Installer
+🚀 OPC Plugin Manager
 
-What would you like to install?
+What would you like to do?
 
-1. All plugins (7 plugins, 28 agents, 52 skills)
-2. Web product (product + design + dev + qa + ship + growth)
-3. Mobile app (product + design + dev + qa + ship)
-4. Product & Design focus (product + design + docs)
-5. Content/Marketing (product + growth + docs)
-6. Minimal (product + dev)
-7. Custom selection...
+1. Install plugins
+2. Update all plugins
+3. List installed plugins
+4. Show status
 
-Enter your choice [1-7]:
+Enter your choice [1-4]:
 ```
-
-## Verify Installation
-
-After installation:
-```bash
-/plugin list
-```
-
-Should show installed plugins with their agents and skills.
 
 ## Troubleshooting
 
@@ -160,10 +180,11 @@ Should show installed plugins with their agents and skills.
 
 **Plugin already installed:**
 ```bash
-/plugin update product-kit@opc-marketplace
+/plugin update <plugin-name>@opc-marketplace
 ```
 
-**Update all:**
+**Reinstall plugin:**
 ```bash
-/plugin marketplace update opc-marketplace
+/plugin uninstall <plugin-name>
+/plugin install <plugin-name>@opc-marketplace
 ```

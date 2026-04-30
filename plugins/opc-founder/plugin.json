@@ -1,7 +1,7 @@
 {
   "name": "opc-founder",
-  "description": "Founder agent + /opc + /install skills — one-command entry point to orchestrate agents across the full product lifecycle with plugin installation support",
-  "version": "1.8.0",
+  "description": "Founder agent + /opc + /plugin skills — one-command entry point to orchestrate agents across the full product lifecycle with plugin management",
+  "version": "1.9.0",
   "skills": [
     {
       "name": "opc",
@@ -9,9 +9,9 @@
       "description": "One-command entry point — auto-assess and orchestrate agents"
     },
     {
-      "name": "install",
-      "source": "./skills/install",
-      "description": "Install OPC plugins from marketplace — full, selective, or custom"
+      "name": "plugin",
+      "source": "./skills/plugin",
+      "description": "Manage OPC plugins — install, update, list, status"
     }
   ]
 }
