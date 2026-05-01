@@ -77,3 +77,14 @@
 ```
 规范定义 → 规范评审 → 测试推导 → 实现 → 验证
 ```
+
+## 交接协议
+
+### 交接给 design-kit
+- 需求文档 → web-agent 进行 Web 设计
+- 需求文档 → mobile-agent 进行移动端设计
+- 品牌需求 → brand-agent 进行品牌设计
+
+### 交接给 dev-kit
+- 规格说明 → /architect 进行架构设计
+- API 契约 → backend-agent 进行实现

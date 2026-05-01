@@ -111,7 +111,7 @@ When user runs `/opc-plugin install all`:
 | Plugin | Agents | Skills | Description |
 |--------|--------|--------|-------------|
 | product-kit | 3 | 4 | Research, requirements, brainstorm |
-| design-kit | 4 | 3 | Brand, web, mobile design |
+| design-kit | 4 | 3 | Brand, web, mobile, design review |
 | dev-kit | 10 | 10 | Frontend, backend, security |
 | qa-kit | 2 | 7 | Testing, accessibility |
 | ship-kit | 3 | 7 | Deploy, CI/CD, infrastructure |

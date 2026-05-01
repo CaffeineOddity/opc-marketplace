@@ -106,7 +106,7 @@ Use **Agent tool** multiple times in sequence. Output from one feeds into the ne
 
 ```
 Agent(product-agent, "research X") → result1
-Agent(ux-agent, "design from: " + result1) → result2
+Agent(web-agent, "design from: " + result1) → result2
 Agent(frontend-agent, "implement from: " + result2) → result3
 ```
 

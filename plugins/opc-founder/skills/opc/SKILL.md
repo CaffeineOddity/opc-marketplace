@@ -44,9 +44,10 @@ Read the user's input and classify:
 **Skills:** `/research`, `/requirement`, `/brainstorm`, `/spec-driven-development`
 
 ### Design Stage (design-kit)
-- **ux-agent** — User flows, wireframes, interaction logic
-- **ui-agent** — Visual design, design tokens, component specs
-- **ux-researcher** — User research, interviews, usability testing
+- **brand-agent** — Brand identity, visual language, design tokens
+- **web-agent** — Web design, responsive layouts, web components
+- **mobile-agent** — Mobile design, app UI, platform conventions
+- **design-reviewer** — Design review, consistency checks, quality assurance
 
 **Skills:** `/ui-design`, `/ui-ux-pro-max`, `/baoyu-imagine`
 

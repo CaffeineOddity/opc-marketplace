@@ -107,8 +107,9 @@ Use for:
 ## Handoff Protocol
 
 ### To design-kit
-- Requirements → ux-agent for user flows
-- User stories → ui-agent for UI specs
+- Requirements → web-agent for web design
+- Requirements → mobile-agent for mobile design
+- Brand requirements → brand-agent for brand design
 
 ### To dev-kit
 - Specifications → /architect for architecture
