@@ -1,5 +1,6 @@
 {
   "name": "docs-kit",
   "description": "Document generation kit — /docx, /pdf, /pptx, /baoyu-translate, /baoyu-slide-deck, /baoyu-format-markdown, /baoyu-markdown-to-html, /baoyu-url-to-markdown, /baoyu-compress-image skills + docs-agent",
-  "version": "2.1.0"
+  "version": "2.1.0",
+  "author": { "name": "caffeine" }
 }

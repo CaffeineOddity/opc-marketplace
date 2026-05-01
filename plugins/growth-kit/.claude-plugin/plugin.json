@@ -1,5 +1,6 @@
 {
   "name": "growth-kit",
   "description": "Growth stage — /marketing-plan, /content-create, /baoyu-xhs-images, /baoyu-image-cards, /baoyu-comic, /baoyu-cover-image, /baoyu-article-illustrator, /baoyu-infographic, /baoyu-youtube-transcript, /baoyu-post-to-wechat, /baoyu-post-to-weibo, /baoyu-post-to-x skills + marketing/data-analyst/SEO agents",
-  "version": "2.1.0"
+  "version": "2.1.0",
+  "author": { "name": "caffeine" }
 }

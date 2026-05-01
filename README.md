@@ -8,7 +8,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 
 ```shell
 /opc <task description>    # One command to orchestrate all agents
-/plugin [command]          # Manage plugins
+/opc-plugin [command]      # Manage plugins
 ```
 
 | Command | What Happens |
@@ -18,10 +18,10 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | `/opc fix this bug` | dev + qa in parallel |
 | `/opc security audit` | security-auditor (opus) |
 | `/opc ship the new release` | qa → devops → marketing |
-| `/plugin install all` | Install all 7 plugins |
-| `/plugin install web` | Install for web product |
-| `/plugin install designer` | Install for product & design focus |
-| `/plugin update` | Update marketplace + all plugins |
+| `/opc-plugin install all` | Install all 7 plugins |
+| `/opc-plugin install web` | Install for web product |
+| `/opc-plugin install designer` | Install for product & design focus |
+| `/opc-plugin update` | Update marketplace + all plugins |
 
 ## Architecture
 
@@ -43,7 +43,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Type | Name | Description |
 |------|------|-------------|
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
-| Skill | `/plugin` | Manage plugins — install, update, list, status |
+| Skill | `/opc-plugin` | Manage plugins — install, update, list, status |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
 ### product-kit — Product
@@ -180,12 +180,12 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 # 2. Install opc-founder (required)
 /plugin install opc-founder@opc-marketplace
 
-# 3. Use /plugin to manage other plugins
-/plugin install all        # Install all 7 plugins
-/plugin install web        # Web product
-/plugin install designer   # Product & design focus
-/plugin update             # Update all plugins
-/plugin list               # List installed plugins
+# 3. Use /opc-plugin to manage other plugins
+/opc-plugin install all        # Install all 7 plugins
+/opc-plugin install web        # Web product
+/opc-plugin install designer   # Product & design focus
+/opc-plugin update             # Update all plugins
+/opc-plugin list               # List installed plugins
 ```
 
 ### Manual Install (Alternative)

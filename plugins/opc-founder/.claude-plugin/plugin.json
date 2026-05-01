@@ -1,0 +1,8 @@
+{
+  "name": "opc-founder",
+  "description": "Founder agent + /opc + /opc-plugin skills — one-command entry point to orchestrate agents across the full product lifecycle with plugin management",
+  "version": "1.2.0",
+  "author": {
+    "name": "caffeine"
+  }
+}

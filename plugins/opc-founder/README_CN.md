@@ -9,7 +9,7 @@
 | 技能 | 描述 |
 |------|------|
 | `/opc` | 一键入口 —— 自动评估任务并编排代理 |
-| `/plugin` | 管理插件 —— 安装、更新、列表、状态 |
+| `/opc-plugin` | 管理插件 —— 安装、更新、列表、状态 |
 
 ### 代理
 
@@ -36,13 +36,13 @@
 ## 插件管理
 
 ```shell
-/plugin install          # 交互式安装
-/plugin install all      # 安装全部 7 个插件
-/plugin install web      # Web 产品 (product + design + dev + qa + ship + growth)
-/plugin install mobile   # Mobile App (product + design + dev + qa + ship)
-/plugin install designer # 产品设计专注 (product + design + docs)
-/plugin update           # 更新市场 + 所有插件
-/plugin list             # 列出已安装插件
+/opc-plugin install          # 交互式安装
+/opc-plugin install all      # 安装全部 7 个插件
+/opc-plugin install web      # Web 产品 (product + design + dev + qa + ship + growth)
+/opc-plugin install mobile   # Mobile App (product + design + dev + qa + ship)
+/opc-plugin install designer # 产品设计专注 (product + design + docs)
+/opc-plugin update           # 更新市场 + 所有插件
+/opc-plugin list             # 列出已安装插件
 ```
 
 ## 编排模式
