@@ -21,6 +21,8 @@ Install, update, and manage plugins from opc-marketplace.
 | `install [option]` | Install plugins |
 | `update` | Update marketplace and all installed plugins |
 | `update <plugin>` | Update specific plugin |
+| `uninstall` | Uninstall all OPC plugins |
+| `uninstall <plugin>` | Uninstall specific plugin |
 | `list` | List installed plugins |
 | `status` | Show marketplace and plugin status |
 
@@ -54,6 +56,8 @@ When this skill is invoked, execute the appropriate action based on arguments:
 - If `install <option>`: Install the specified plugin set
 - If `update`: Update all installed plugins
 - If `update <plugin>`: Update specific plugin
+- If `uninstall`: Uninstall all OPC plugins
+- If `uninstall <plugin>`: Uninstall specific plugin
 - If `list` or `status`: Show plugin status
 
 ### Step 2: Define Plugin Sets
@@ -86,6 +90,32 @@ For each plugin to install:
 4. **Copy/symlink plugin files**: Copy `.claude-plugin/`, `agents/`, `skills/`, and optionally `hooks/`
 5. **Update installed_plugins.json**: Add entry for the plugin
 6. **Update settings.json**: Enable the plugin in `enabledPlugins`
+
+### Step 3.5: Install OPC HUD
+
+After installing plugins, also install the OPC HUD statusline:
+
+1. **Create HUD directory**: `mkdir -p ~/.claude/plugins/cache/opc-marketplace/hud/`
+2. **Copy HUD script**: Copy `opc-hud.mjs` to `~/.claude/plugins/cache/opc-marketplace/hud/`
+3. **Make executable**: `chmod +x ~/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs` (Unix only)
+4. **Update settings.json**: Configure `statusLine` to use OPC HUD
+
+**Why cache directory?** Placing HUD under `~/.claude/plugins/cache/opc-marketplace/` ensures it gets automatically cleaned up when running `/plugin remove opc-marketplace`.
+
+**HUD settings.json configuration:**
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node $HOME/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs"
+  }
+}
+```
+
+**Important:**
+- Use `$HOME` on Unix for portability
+- Use forward slashes on all platforms
+- If user already has a statusLine configured, ask before overwriting
 
 ### Step 4: File Paths
 
@@ -125,11 +155,52 @@ When called without arguments, use AskUserQuestion to present options:
 
 1. Install plugins
 2. Update all plugins
-3. List installed plugins
-4. Show status
+3. Uninstall plugins
+4. List installed plugins
+5. Show status
+
+## Uninstall Logic
+
+When user runs `/opc-plugin uninstall`:
+
+### Remove Plugin Cache
+
+For each installed OPC plugin:
+1. Remove cache directory: `~/.claude/plugins/cache/opc-marketplace/{plugin}/`
+2. Update `installed_plugins.json`: Remove the plugin entry
+3. Update `settings.json`: Disable in `enabledPlugins`
+
+### Verify Cleanup
+
+After uninstall:
+1. Verify no OPC plugins remain in `installed_plugins.json`
+2. Verify no OPC entries in `enabledPlugins`
+3. Show summary of what was removed
+
+**Note:** `/opc-plugin uninstall` only removes plugins. To also remove HUD, run `/opc-hud uninstall` or use the `uninstall.sh` script.
 
 ## Troubleshooting
 
 - If marketplace not found: Add it first via settings.json extraKnownMarketplaces
 - If plugin already installed: Skip or update depending on context
 - If version mismatch: Read actual version from source plugin.json
+
+## Full Uninstall (Manual)
+
+To completely remove OPC Marketplace (plugins + HUD):
+
+```bash
+# Run the uninstall script (removes plugins + HUD)
+~/YYInc/Me/opc-marketplace/scripts/uninstall.sh
+
+# Then remove the marketplace via Claude Code
+/plugin remove opc-marketplace
+```
+
+Or use skill commands separately:
+```
+/opc-plugin uninstall    # Remove plugins only
+/opc-hud uninstall       # Remove HUD only
+```
+
+**Note:** Claude Code does not automatically trigger cleanup hooks when removing a marketplace. You must run the uninstall script or skill commands first.

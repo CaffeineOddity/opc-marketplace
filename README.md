@@ -43,7 +43,8 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Type | Name | Description |
 |------|------|-------------|
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
-| Skill | `/opc-plugin` | Manage plugins — install, update, list, status |
+| Skill | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
+| Skill | `/opc-hud` | Configure HUD statusline display |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
 ### product-kit — Product
@@ -188,6 +189,25 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 /opc-plugin list               # List installed plugins
 ```
 
+### HUD Statusline
+
+OPC installs a HUD (Heads-Up Display) that shows in the statusline:
+
+```
+[OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
+```
+
+| Element | Description |
+|---------|-------------|
+| `[OPC#version]` | OPC marketplace identifier |
+| `Opus/Sonnet/Haiku` | Current model name |
+| `session:Xm` | Session duration |
+| `skill:name` | Last activated skill |
+| `ctx:X%` | Context window usage (green/yellow/red) |
+| `🔧N ⚡N 🎯N` | Tool/Agent/Skill call counts |
+
+To configure HUD: `/opc-hud`
+
 ### Manual Install (Alternative)
 
 ```shell
@@ -206,6 +226,16 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 /plugin update              # Update marketplace + all plugins
 /plugin update design-kit   # Update specific plugin
 ```
+
+### Uninstall
+
+| Command | Removes Plugins | Removes HUD |
+|---------|:----------------:|:-----------:|
+| `/opc-plugin uninstall` | ✅ | ❌ |
+| `/opc-hud uninstall` | ❌ | ✅ |
+| `/plugin remove opc-marketplace` | ✅ | ✅ |
+
+**Note:** HUD is stored in `~/.claude/plugins/cache/opc-marketplace/hud/`, so `/plugin remove opc-marketplace` automatically cleans up both plugins and HUD.
 
 ## Orchestration Modes
 

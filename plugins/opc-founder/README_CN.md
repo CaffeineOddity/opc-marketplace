@@ -9,7 +9,8 @@
 | 技能 | 描述 |
 |------|------|
 | `/opc` | 一键入口 —— 自动评估任务并编排代理 |
-| `/opc-plugin` | 管理插件 —— 安装、更新、列表、状态 |
+| `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
+| `/opc-hud` | 配置 HUD 状态栏 —— 安装、卸载、状态 |
 
 ### 代理
 
@@ -42,8 +43,42 @@
 /opc-plugin install mobile   # Mobile App (product + design + dev + qa + ship)
 /opc-plugin install designer # 产品设计专注 (product + design + docs)
 /opc-plugin update           # 更新市场 + 所有插件
+/opc-plugin uninstall        # 卸载所有 OPC 插件
 /opc-plugin list             # 列出已安装插件
 ```
+
+## HUD 状态栏
+
+OPC 提供 HUD（状态栏显示）：
+
+```
+[OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
+```
+
+| 元素 | 说明 |
+|------|------|
+| `[OPC#版本]` | OPC 市场标识 |
+| `Opus/Sonnet/Haiku` | 当前模型名称 |
+| `session:Xm` | 会话时长 |
+| `skill:名称` | 最后激活的 skill |
+| `ctx:X%` | 上下文使用率（绿/黄/红） |
+| `🔧N ⚡N 🎯N` | 工具/Agent/Skill 调用次数 |
+
+```shell
+/opc-hud setup      # 安装 HUD
+/opc-hud uninstall  # 卸载 HUD
+/opc-hud status     # 显示 HUD 状态
+```
+
+## 卸载
+
+| 命令 | 删除插件 | 删除 HUD |
+|------|:--------:|:--------:|
+| `/opc-plugin uninstall` | ✅ | ❌ |
+| `/opc-hud uninstall` | ❌ | ✅ |
+| `/plugin remove opc-marketplace` | ✅ | ✅ |
+
+**注意：** HUD 存储在 `~/.claude/plugins/cache/opc-marketplace/hud/`，因此 `/plugin remove opc-marketplace` 会自动清理插件和 HUD。
 
 ## 编排模式
 

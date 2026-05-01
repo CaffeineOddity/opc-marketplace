@@ -42,7 +42,8 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
-| Skill | `/opc-plugin` | 管理插件 —— 安装、更新、列表、状态 |
+| Skill | `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
+| Skill | `/opc-hud` | 配置 HUD 状态栏显示 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 
 ### product-kit — 产品
@@ -185,6 +186,25 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 /opc-plugin list               # 列出已安装插件
 ```
 
+### HUD 状态栏
+
+OPC 安装后会配置 HUD（状态栏显示）：
+
+```
+[OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
+```
+
+| 元素 | 说明 |
+|------|------|
+| `[OPC#版本]` | OPC 市场标识 |
+| `Opus/Sonnet/Haiku` | 当前模型名称 |
+| `session:Xm` | 会话时长 |
+| `skill:名称` | 最后激活的 skill |
+| `ctx:X%` | 上下文使用率（绿/黄/红） |
+| `🔧N ⚡N 🎯N` | 工具/Agent/Skill 调用次数 |
+
+配置 HUD：`/opc-hud`
+
 ### 手动安装（备选）
 
 ```shell
@@ -203,6 +223,16 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 /opc-plugin update              # 更新市场 + 所有插件
 /opc-plugin update design-kit   # 更新指定插件
 ```
+
+### 卸载
+
+| 命令 | 删除插件 | 删除 HUD |
+|------|:--------:|:--------:|
+| `/opc-plugin uninstall` | ✅ | ❌ |
+| `/opc-hud uninstall` | ❌ | ✅ |
+| `/plugin remove opc-marketplace` | ✅ | ✅ |
+
+**注意：** HUD 存储在 `~/.claude/plugins/cache/opc-marketplace/hud/`，因此 `/plugin remove opc-marketplace` 会自动清理插件和 HUD。
 
 ## 编排模式
 
