@@ -1,5 +1,6 @@
 ---
 name: opc-plugin
+invoke-name: opc-founder:opc-plugin
 description: Manage OPC plugins — install, update, or list. Use when user wants to setup, add, or update plugins.
 ---
 

@@ -1,4 +1,5 @@
 ---
+name: opc
 description: One-command entry point to the OPC Founder — assess any task and orchestrate the right agents automatically
 disable-model-invocation: true
 ---
