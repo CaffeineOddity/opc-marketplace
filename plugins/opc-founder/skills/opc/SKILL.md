@@ -25,18 +25,39 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 | `/opc resume` | Resume last active session |
 | `/opc status` | Show current project status |
 
-## Step 0: Check State (NEW)
+## Step 0: Initialize State (ALWAYS)
 
-Before starting, check for existing state:
+**Every `/opc` invocation should create or resume state tracking.**
+
+### Check Existing State
 
 ```
 1. Call opc_session_resume to check for active sessions
 2. If active session exists:
    - Show current stage and progress
    - Ask user: "Resume this session or start new?"
-3. If no active session and starting a new project:
-   - Call opc_state_init with project name
 ```
+
+### Initialize New Session
+
+**For ALL tasks (not just multi-stage):**
+
+```
+1. Extract task description from user input
+2. Call opc_state_init with:
+   - project_name: Brief task summary
+   - project_description: Full user input
+3. This creates a session ID for tracking
+```
+
+### Why Always Track State?
+
+| Benefit | Description |
+|---------|-------------|
+| **Task history** | Record of what was done |
+| **Artifacts** | Track produced files |
+| **Recovery** | Resume if interrupted |
+| **Decisions** | Store important choices |
 
 ### Resume Command
 If user says `/opc resume`:
@@ -127,22 +148,25 @@ Read the user's input and classify:
 
 ## Step 3: Execute
 
-### State Management During Execution
+### State Management (ALWAYS)
 
-**For multi-stage projects:**
+**Every task execution must update state:**
+
 ```
-1. Before starting: Call opc_state_init (if new project)
-2. After each stage: Call opc_state_write to update progress
-3. When handing off: Call opc_handoff to record context
-4. Before risky ops: Call opc_checkpoint_create
+1. After Step 0: State is already initialized
+2. Before dispatch: Call opc_state_write with stage and agent
+3. After completion: Call opc_state_write with artifacts
+4. For multi-stage: Call opc_handoff between stages
+5. Before risky ops: Call opc_checkpoint_create
 ```
 
 ### Simple (Single Agent)
 ```
 This is a [domain] task. Dispatching [agent-name]...
 ```
-Use Agent tool to spawn the agent.
-After completion, call `opc_state_write` with agent and artifact.
+1. Call `opc_state_write(stage, "in_progress", agent)`
+2. Use Agent tool to spawn the agent
+3. After completion, call `opc_state_write(stage, "completed", artifact)`
 
 ### Pipeline (Sequential)
 ```
@@ -164,8 +188,10 @@ This has independent parts. Running in parallel:
 - [agent-1]: [task A]
 - [agent-2]: [task B]
 ```
-Call Agent tool multiple times in one message.
-After all complete, update state with all agents and artifacts.
+1. Call `opc_task_group_create` with all parallel tasks
+2. Call Agent tool multiple times in one message
+3. After each completes: `opc_task_update(task_id, status)`
+4. After all complete: `opc_state_write(stage, "completed")`
 
 ### Project (Complex)
 ```
