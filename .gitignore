@@ -2,3 +2,11 @@
 .env
 .claude/settings.local.json
 **/node_modules/
+
+# OPC state - personal session data, don't commit
+.opc/state/sessions/
+
+# Keep these (optional but recommended):
+# .opc/memory/          - project decisions, useful for team
+# .opc/state/checkpoints/ - rollback points
+# .opc/logs/            - execution logs
