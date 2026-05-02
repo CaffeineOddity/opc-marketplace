@@ -1,0 +1,48 @@
+{
+  "name": "refactor",
+  "description": "Code refactoring while preserving tests",
+  "triggers": {
+    "keywords": ["重构", "优化", "清理", "refactor", "optimize", "cleanup", "restructure"],
+    "patterns": []
+  },
+  "pipeline": [
+    {
+      "stage": "dev",
+      "required": true,
+      "outputs": ["refactored-code"],
+      "agents": ["frontend-agent", "backend-agent"],
+      "agent_mode": "parallel",
+      "skills": [],
+      "constraints": ["tests_must_pass_throughout"],
+      "description": "重构代码，保持测试通过（前后端并行）"
+    },
+    {
+      "stage": "qa",
+      "required": true,
+      "outputs": ["test-report.md"],
+      "agents": ["qa-agent"],
+      "skills": ["test-plan"],
+      "description": "验证重构后功能正常"
+    }
+  ],
+  "gates": [
+    {
+      "name": "tests_must_pass_throughout",
+      "description": "重构过程中测试必须保持通过",
+      "check": "stages.dev.tests_passed === true",
+      "blocker": "重构失败：测试未通过。请修复或回滚。"
+    },
+    {
+      "name": "no_new_features",
+      "description": "重构不能添加新功能",
+      "check": "stages.dev.new_features_added === false",
+      "blocker": "重构违规：检测到新功能。重构应只改善结构。"
+    }
+  ],
+  "rules": {
+    "tdd": false,
+    "sdd": false,
+    "parallel_allowed": false,
+    "behavior_unchanged": true
+  }
+}

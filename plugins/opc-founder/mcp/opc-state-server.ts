@@ -1,8 +1,17 @@
 /**
- * OPC State MCP Server
+ * OPC State MCP Server (Single-Task Model)
  *
  * Provides state management tools for OPC Founder agent.
  * Enables cross-session persistence, stage tracking, and agent handoffs.
+ *
+ * Single-Task Model:
+ * - One window = one task
+ * - Task must complete before starting next
+ * - ESC interruption = task abandoned (start fresh)
+ * - No task queue, no multi-session management
+ *
+ * Window detection uses PID + O_CREAT|O_EXCL atomic file creation
+ * (adopted from OMC's approach - no external dependencies).
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -12,9 +21,185 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
-import { join, resolve, relative, isAbsolute } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, openSync, closeSync, writeSync, statSync } from 'fs';
+import { join, resolve, relative, isAbsolute, dirname } from 'path';
 import { createHash } from 'crypto';
+import { constants as fsConstants } from 'fs';
+
+// ============================================================
+// Process Session ID (OMC-style: PID + timestamp)
+// ============================================================
+
+/**
+ * Auto-generated session ID for the current process.
+ * Uses PID + process start timestamp to be unique even if PIDs are reused.
+ * Generated once at module load time and stable for the process lifetime.
+ */
+let processSessionId: string | null = null;
+
+/**
+ * Get or generate a unique session ID for the current process.
+ *
+ * Format: `pid-{PID}-{startTimestamp}`
+ * Example: `pid-12345-1707350400000`
+ *
+ * This prevents concurrent Claude Code instances in the same repo from
+ * sharing state files. The ID is stable for the process lifetime and
+ * unique across concurrent processes.
+ */
+function getProcessSessionId(): string {
+  if (!processSessionId) {
+    const pid = process.pid;
+    const startTime = Date.now();
+    processSessionId = `pid-${pid}-${startTime}`;
+  }
+  return processSessionId;
+}
+
+// ============================================================
+// Process Alive Detection (OMC-style: process.kill(pid, 0))
+// ============================================================
+
+/**
+ * Check if a process is alive using signal 0.
+ * Works cross-platform - no external dependencies.
+ *
+ * - Returns true if process exists (or exists but we lack permission)
+ * - Returns false if process doesn't exist (ESRCH)
+ */
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e: unknown) {
+    // EPERM means process exists but we lack permission to signal it
+    if (e && typeof e === 'object' && 'code' in e &&
+        (e as NodeJS.ErrnoException).code === 'EPERM') {
+      return true;
+    }
+    return false;  // ESRCH = process doesn't exist
+  }
+}
+
+// ============================================================
+// File Lock with O_CREAT|O_EXCL (OMC-style atomic creation)
+// ============================================================
+
+const O_CREAT = fsConstants.O_CREAT;
+const O_EXCL = fsConstants.O_EXCL;
+const O_WRONLY = fsConstants.O_WRONLY;
+
+const DEFAULT_STALE_LOCK_MS = 30_000;  // 30 seconds
+
+let currentLockId: string | null = null;
+
+/**
+ * Get the lock file path for a given lock ID.
+ */
+function getLockPath(lockId: string, cwd?: string): string {
+  const lockDir = ensureOpcDir('state/locks', cwd);
+  return join(lockDir, `${lockId}.lock`);
+}
+
+/**
+ * Check if an existing lock file is stale.
+ * A lock is stale if older than staleLockMs AND the owning PID is dead.
+ */
+function isLockStale(lockPath: string, staleLockMs: number = DEFAULT_STALE_LOCK_MS): boolean {
+  try {
+    const stat = statSync(lockPath);
+    const ageMs = Date.now() - stat.mtimeMs;
+    if (ageMs < staleLockMs) return false;
+
+    // Try to read PID from the lock payload
+    try {
+      const raw = readFileSync(lockPath, 'utf-8');
+      const payload = JSON.parse(raw) as { pid?: number; timestamp?: number };
+      if (payload.pid && isProcessAlive(payload.pid)) {
+        return false;  // Process is still alive
+      }
+    } catch {
+      // Malformed or unreadable -- treat as stale if old enough
+    }
+    return true;
+  } catch {
+    // Lock file disappeared -- not stale, just gone
+    return false;
+  }
+}
+
+/**
+ * Acquire window lock using atomic file creation.
+ * No external dependencies (fs-ext not required).
+ */
+function acquireWindowLock(cwd?: string): string {
+  // Already holding a lock - return the process session ID
+  if (currentLockId) {
+    return currentLockId;
+  }
+
+  const lockId = getProcessSessionId();
+  const lockPath = getLockPath(lockId, cwd);
+  const lockDir = dirname(lockPath);
+
+  // Ensure directory exists
+  if (!existsSync(lockDir)) {
+    mkdirSync(lockDir, { recursive: true });
+  }
+
+  // Try atomic creation (O_CREAT | O_EXCL guarantees only one process succeeds)
+  try {
+    const fd = openSync(lockPath, O_CREAT | O_EXCL | O_WRONLY, 0o600);
+
+    // Write lock payload with PID and timestamp
+    const payload = JSON.stringify({
+      lockId,
+      pid: process.pid,
+      timestamp: Date.now(),
+    });
+    writeSync(fd, payload, null, 'utf-8');
+    closeSync(fd);
+
+    currentLockId = lockId;
+    return lockId;
+  } catch (err: unknown) {
+    // EEXIST means lock file already exists
+    if (err && typeof err === 'object' && 'code' in err &&
+        (err as NodeJS.ErrnoException).code === 'EEXIST') {
+      // Check if the existing lock is stale
+      if (isLockStale(lockPath)) {
+        try {
+          unlinkSync(lockPath);
+          // Retry after removing stale lock
+          return acquireWindowLock(cwd);
+        } catch {
+          // Another process won the race - use our process session ID anyway
+          // (state files will be isolated by lock_id)
+          currentLockId = lockId;
+          return lockId;
+        }
+      }
+      // Lock is not stale - another window is active
+      // Use our process session ID for isolation
+      currentLockId = lockId;
+      return lockId;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Get current window's task state.
+ * Returns null if no task exists for current window.
+ */
+function getCurrentLockId(cwd?: string): string {
+  if (!currentLockId) {
+    currentLockId = acquireWindowLock(cwd);
+  }
+  return currentLockId;
+}
 
 // ============================================================
 // Path Utilities
@@ -23,8 +208,8 @@ import { createHash } from 'crypto';
 const OPC_PATHS = {
   ROOT: '.opc',
   STATE: '.opc/state',
-  SESSIONS: '.opc/state/sessions',
   CHECKPOINTS: '.opc/state/checkpoints',
+  LOCKS: '.opc/state/locks',
   MEMORY: '.opc/memory',
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',
@@ -67,12 +252,6 @@ function validatePath(inputPath: string): void {
   }
 }
 
-function generateSessionId(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `sess-${timestamp}-${random}`;
-}
-
 function generateCheckpointId(): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
   return `cp-${timestamp}`;
@@ -89,6 +268,32 @@ function atomicWriteJson(filePath: string, data: unknown): void {
   renameSync(tempPath, filePath);
 }
 
+function updateGitignore(cwd?: string): boolean {
+  const root = getWorktreeRoot(cwd);
+  const gitignorePath = join(root, '.gitignore');
+
+  const OPC_GITIGNORE_ENTRY = `
+# OPC state - personal session data, don't commit
+.opc/state/
+`;
+
+  // Check if .gitignore exists
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, OPC_GITIGNORE_ENTRY);
+    return true;
+  }
+
+  // Check if entry already exists
+  const content = readFileSync(gitignorePath, 'utf-8');
+  if (content.includes('.opc/state/')) {
+    return false;  // Already has the entry
+  }
+
+  // Append the entry
+  writeFileSync(gitignorePath, content + OPC_GITIGNORE_ENTRY);
+  return true;
+}
+
 function readJsonFile<T>(filePath: string): T | null {
   if (!existsSync(filePath)) return null;
   try {
@@ -100,7 +305,7 @@ function readJsonFile<T>(filePath: string): T | null {
 }
 
 // ============================================================
-// Project State
+// Project State (Single-Task Model)
 // ============================================================
 
 interface ParallelTask {
@@ -152,8 +357,7 @@ interface ProjectState {
     stages: Record<string, StageState>;
   };
   context: {
-    session_id: string;
-    parent_session_id?: string;
+    lock_id: string;           // Window lock ID (unique per process)
     worktree: string;
   };
   _meta: {
@@ -162,18 +366,22 @@ interface ProjectState {
   };
 }
 
-function getProjectStatePath(sessionId: string, cwd?: string): string {
-  const sessionsDir = ensureOpcDir('state/sessions', cwd);
-  return join(sessionsDir, sessionId, 'project-state.json');
+/**
+ * Get project state path for a lock ID.
+ * Single-task model: one state file per window.
+ */
+function getProjectStatePath(lockId: string, cwd?: string): string {
+  const stateDir = ensureOpcDir('state', cwd);
+  return join(stateDir, lockId, 'project-state.json');
 }
 
-function readProjectState(sessionId: string, cwd?: string): ProjectState | null {
-  const path = getProjectStatePath(sessionId, cwd);
+function readProjectState(lockId: string, cwd?: string): ProjectState | null {
+  const path = getProjectStatePath(lockId, cwd);
   return readJsonFile<ProjectState>(path);
 }
 
 function writeProjectState(state: ProjectState, cwd?: string): void {
-  const path = getProjectStatePath(state.context.session_id, cwd);
+  const path = getProjectStatePath(state.context.lock_id, cwd);
   const dir = join(path, '..');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -186,7 +394,7 @@ function writeProjectState(state: ProjectState, cwd?: string): void {
 function initializeProjectState(
   name: string,
   description: string,
-  sessionId: string,
+  lockId: string,
   cwd?: string
 ): ProjectState {
   const now = new Date().toISOString();
@@ -207,11 +415,11 @@ function initializeProjectState(
       }, {} as Record<string, StageState>),
     },
     context: {
-      session_id: sessionId,
+      lock_id: lockId,
       worktree: getWorktreeRoot(cwd),
     },
     _meta: {
-      version: '1.0.0',
+      version: '3.0.0',  // Single-task model
       updated_by: 'opc_state_init',
     },
   };
@@ -293,12 +501,12 @@ interface HandoffRecord {
   artifacts: string[];
   constraints: string[];
   context: string;
-  session_id: string;
+  lock_id: string;
 }
 
-function getHandoffPath(sessionId: string, cwd?: string): string {
-  const sessionsDir = ensureOpcDir('state/sessions', cwd);
-  return join(sessionsDir, sessionId, 'handoffs.json');
+function getHandoffPath(lockId: string, cwd?: string): string {
+  const stateDir = ensureOpcDir('state', cwd);
+  return join(stateDir, lockId, 'handoffs.json');
 }
 
 function recordHandoff(
@@ -307,7 +515,7 @@ function recordHandoff(
   artifacts: string[],
   constraints: string[],
   context: string,
-  sessionId: string,
+  lockId: string,
   cwd?: string
 ): HandoffRecord {
   const handoff: HandoffRecord = {
@@ -318,10 +526,10 @@ function recordHandoff(
     artifacts,
     constraints,
     context,
-    session_id: sessionId,
+    lock_id: lockId,
   };
 
-  const path = getHandoffPath(sessionId, cwd);
+  const path = getHandoffPath(lockId, cwd);
   let handoffs: HandoffRecord[] = readJsonFile(path) || [];
   handoffs.push(handoff);
   atomicWriteJson(path, handoffs);
@@ -329,8 +537,8 @@ function recordHandoff(
   return handoff;
 }
 
-function getHandoffs(sessionId: string, cwd?: string): HandoffRecord[] {
-  const path = getHandoffPath(sessionId, cwd);
+function getHandoffs(lockId: string, cwd?: string): HandoffRecord[] {
+  const path = getHandoffPath(lockId, cwd);
   return readJsonFile(path) || [];
 }
 
@@ -400,24 +608,57 @@ function searchMemory(query: string, cwd?: string): MemoryEntry[] {
 }
 
 // ============================================================
-// Session Management
+// Session Management (Single-Task Model)
 // ============================================================
 
-function listSessions(cwd?: string): string[] {
-  const sessionsDir = ensureOpcDir('state/sessions', cwd);
-  if (!existsSync(sessionsDir)) return [];
-  return readdirSync(sessionsDir).filter(f => f.startsWith('sess-'));
+/**
+ * List all task directories (lock IDs) in state.
+ */
+function listAllTasks(cwd?: string): string[] {
+  const stateDir = ensureOpcDir('state', cwd);
+  if (!existsSync(stateDir)) return [];
+  return readdirSync(stateDir).filter(f => f.startsWith('pid-'));
 }
 
-function getActiveSession(cwd?: string): ProjectState | null {
-  const sessions = listSessions(cwd);
-  for (const sessionId of sessions) {
-    const state = readProjectState(sessionId, cwd);
-    if (state && state.pipeline.stages[state.pipeline.current_stage]?.status === 'in_progress') {
-      return state;
-    }
+/**
+ * Get current window's task state.
+ */
+function getCurrentTask(cwd?: string): ProjectState | null {
+  const lockId = getCurrentLockId(cwd);
+  return readProjectState(lockId, cwd);
+}
+
+/**
+ * Clear current window's task (abandon).
+ */
+function clearCurrentTask(cwd?: string): boolean {
+  const lockId = getCurrentLockId(cwd);
+  const statePath = getProjectStatePath(lockId, cwd);
+  const handoffPath = getHandoffPath(lockId, cwd);
+
+  let cleared = false;
+
+  if (existsSync(statePath)) {
+    unlinkSync(statePath);
+    cleared = true;
   }
-  return null;
+
+  if (existsSync(handoffPath)) {
+    unlinkSync(handoffPath);
+  }
+
+  // Remove the state directory if empty
+  const stateDir = join(statePath, '..');
+  try {
+    const remaining = readdirSync(stateDir);
+    if (remaining.length === 0) {
+      unlinkSync(stateDir);
+    }
+  } catch {
+    // Directory doesn't exist or not empty
+  }
+
+  return cleared;
 }
 
 // ============================================================
@@ -433,7 +674,6 @@ const tools = [
       type: 'object',
       properties: {
         workingDirectory: { type: 'string', description: 'Working directory (defaults to cwd)' },
-        session_id: { type: 'string', description: 'Session ID for session-scoped state' },
       },
     },
   },
@@ -453,14 +693,13 @@ const tools = [
         progress: { type: 'object', description: 'Progress percentages by subtask' },
         blocker: { type: 'string', description: 'Blocker description' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
     },
   },
   // opc_state_init
   {
     name: 'opc_state_init',
-    description: 'Initialize a new OPC project state. Creates session and pipeline tracking.',
+    description: 'Initialize a new OPC project state. Creates pipeline tracking. One task per window.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -469,6 +708,17 @@ const tools = [
         workingDirectory: { type: 'string' },
       },
       required: ['project_name'],
+    },
+  },
+  // opc_state_clear
+  {
+    name: 'opc_state_clear',
+    description: 'Clear current task. Use when abandoning or restarting. The task will be permanently removed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workingDirectory: { type: 'string' },
+      },
     },
   },
   // opc_checkpoint_create
@@ -480,7 +730,6 @@ const tools = [
       properties: {
         description: { type: 'string', description: 'Description of what this checkpoint captures' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
       required: ['description'],
     },
@@ -522,7 +771,6 @@ const tools = [
         constraints: { type: 'array', items: { type: 'string' }, description: 'Constraints for receiving agent' },
         context: { type: 'string', description: 'Additional context' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
       required: ['from_agent', 'to_agent', 'artifacts'],
     },
@@ -543,21 +791,10 @@ const tools = [
       required: ['action'],
     },
   },
-  // opc_session_list
+  // opc_sessions_list
   {
-    name: 'opc_session_list',
-    description: 'List all OPC sessions.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        workingDirectory: { type: 'string' },
-      },
-    },
-  },
-  // opc_session_resume
-  {
-    name: 'opc_session_resume',
-    description: 'Find and resume the most recent active session.',
+    name: 'opc_sessions_list',
+    description: 'List all OPC tasks. Shows task name, current stage, and status.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -591,7 +828,6 @@ const tools = [
         completion_condition: { type: 'string', enum: ['all', 'any', 'threshold'], description: 'When group is complete' },
         threshold: { type: 'number', description: 'For threshold condition, min completed tasks' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
       required: ['stage', 'group_name', 'tasks'],
     },
@@ -608,7 +844,6 @@ const tools = [
         progress: { type: 'number', description: 'Progress percentage (0-100)' },
         artifact: { type: 'string', description: 'Artifact produced by this task' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
       required: ['task_id', 'status'],
     },
@@ -623,7 +858,6 @@ const tools = [
         stage: { type: 'string', description: 'Stage name' },
         group_id: { type: 'string', description: 'Group ID (optional, shows all if omitted)' },
         workingDirectory: { type: 'string' },
-        session_id: { type: 'string' },
       },
     },
   },
@@ -640,20 +874,13 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
     switch (name) {
       // ============================================================
       case 'opc_state_read': {
-        const sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null = null;
-
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-        }
+        const state = getCurrentTask(cwd);
 
         if (!state) {
           return {
             content: [{
               type: 'text',
-              text: 'No active OPC session found. Use opc_state_init to start a new project.',
+              text: 'No active task. Use opc_state_init to start a new project.',
             }],
           };
         }
@@ -673,7 +900,7 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
             text: `## OPC Project State
 
 **Project:** ${state.project.name}
-**Session:** ${state.context.session_id}
+**Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}
 **Created:** ${state.project.created_at}
 **Updated:** ${state.project.updated_at}
@@ -696,46 +923,94 @@ ${Object.entries(state.pipeline.stages)
       case 'opc_state_init': {
         const projectName = args.project_name as string;
         const projectDescription = (args.project_description as string) || '';
-        const sessionId = generateSessionId();
+        const lockId = getCurrentLockId(cwd);
 
-        const state = initializeProjectState(projectName, projectDescription, sessionId, cwd);
+        // Check if current window already has a task
+        const existingTask = readProjectState(lockId, cwd);
+
+        if (existingTask) {
+          const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
+          if (currentStatus === 'in_progress') {
+            return {
+              content: [{
+                type: 'text',
+                text: `## Task Already Exists
+
+**Current Task:** ${existingTask.project.name}
+**Stage:** ${existingTask.pipeline.current_stage}
+**Status:** 🔄 in_progress
+
+One window can only have one task at a time.
+
+Options:
+1. Continue the current task with \`opc_state_read\`
+2. Abandon current task with \`opc_state_clear\` and start fresh
+`,
+              }],
+            };
+          }
+        }
+
+        // Initialize new task
+        const state = initializeProjectState(projectName, projectDescription, lockId, cwd);
         state.pipeline.stages.product.status = 'in_progress';
         state.pipeline.stages.product.started_at = new Date().toISOString();
         writeProjectState(state, cwd);
 
+        // Update .gitignore if needed
+        const gitignoreUpdated = updateGitignore(cwd);
+        const gitignoreMsg = gitignoreUpdated
+          ? '\n\n📝 **.gitignore updated**: Added `.opc/state/` to ignore personal session data.'
+          : '';
+
         return {
           content: [{
             type: 'text',
-            text: `## OPC Session Initialized
+            text: `## OPC Task Initialized
 
-**Session ID:** ${sessionId}
+**Lock ID:** ${lockId}
 **Project:** ${projectName}
 **Current Stage:** product
 
 The pipeline is ready. Stage "product" is now in progress.
-Use opc_state_write to update progress as you advance through stages.
+Use opc_state_write to update progress as you advance through stages.${gitignoreMsg}
 `,
           }],
         };
       }
 
       // ============================================================
-      case 'opc_state_write': {
-        let sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null;
+      case 'opc_state_clear': {
+        const cleared = clearCurrentTask(cwd);
 
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-          sessionId = state?.context.session_id;
-        }
-
-        if (!state || !sessionId) {
+        if (cleared) {
           return {
             content: [{
               type: 'text',
-              text: 'No active session. Use opc_state_init to start a new project.',
+              text: `## Task Cleared
+
+The current task has been abandoned. You can start a new task with \`opc_state_init\`.`,
+            }],
+          };
+        } else {
+          return {
+            content: [{
+              type: 'text',
+              text: `No task to clear. Use \`opc_state_init\` to start a new task.`,
+            }],
+          };
+        }
+      }
+
+      // ============================================================
+      case 'opc_state_write': {
+        const state = getCurrentTask(cwd);
+
+        if (!state) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'No active task. Use opc_state_init to start a new project.',
             }],
             isError: true,
           };
@@ -807,7 +1082,7 @@ Use opc_state_write to update progress as you advance through stages.
         return {
           content: [{
             type: 'text',
-            text: `State updated for session ${sessionId}.
+            text: `State updated.
 
 **Current Stage:** ${state.pipeline.current_stage}
 **Stage Status:** ${state.pipeline.stages[state.pipeline.current_stage].status}
@@ -818,20 +1093,13 @@ Use opc_state_write to update progress as you advance through stages.
 
       // ============================================================
       case 'opc_checkpoint_create': {
-        let sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null;
-
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-        }
+        const state = getCurrentTask(cwd);
 
         if (!state) {
           return {
             content: [{
               type: 'text',
-              text: 'No active session to checkpoint.',
+              text: 'No active task to checkpoint.',
             }],
             isError: true,
           };
@@ -917,17 +1185,13 @@ The project state has been restored to the checkpoint.
 
       // ============================================================
       case 'opc_handoff': {
-        let sessionId = args.session_id as string | undefined;
-        if (!sessionId) {
-          const state = getActiveSession(cwd);
-          sessionId = state?.context.session_id;
-        }
+        const state = getCurrentTask(cwd);
 
-        if (!sessionId) {
+        if (!state) {
           return {
             content: [{
               type: 'text',
-              text: 'No active session for handoff.',
+              text: 'No active task for handoff.',
             }],
             isError: true,
           };
@@ -939,7 +1203,7 @@ The project state has been restored to the checkpoint.
           args.artifacts as string[],
           (args.constraints as string[]) || [],
           (args.context as string) || '',
-          sessionId,
+          state.context.lock_id,
           cwd
         );
 
@@ -1042,61 +1306,39 @@ ${output || 'No matches found.'}
       }
 
       // ============================================================
-      case 'opc_session_list': {
-        const sessions = listSessions(cwd);
-        const details = sessions.map(sid => {
-          const state = readProjectState(sid, cwd);
-          if (!state) return `- ${sid} (no state)`;
-          return `- **${sid}**: ${state.project.name} - Stage: ${state.pipeline.current_stage}`;
-        }).join('\n');
-
-        return {
-          content: [{
-            type: 'text',
-            text: `## OPC Sessions (${sessions.length})
-
-${details || 'No sessions found.'}
-`,
-          }],
-        };
-      }
-
-      // ============================================================
-      case 'opc_session_resume': {
-        const state = getActiveSession(cwd);
+      case 'opc_sessions_list': {
+        const state = getCurrentTask(cwd);
 
         if (!state) {
           return {
             content: [{
               type: 'text',
-              text: 'No active session to resume. Use opc_state_init to start a new project.',
+              text: 'No active task. Use opc_state_init to start a new project.',
             }],
           };
         }
 
+        const status = state.pipeline.stages[state.pipeline.current_stage]?.status;
+        const icon = status === 'in_progress' ? '🔄' : status === 'completed' ? '✅' : '⏳';
         const stageStatus = Object.entries(state.pipeline.stages)
           .map(([stage, data]) => {
-            const icon = data.status === 'completed' ? '✅' :
+            const stageIcon = data.status === 'completed' ? '✅' :
                         data.status === 'in_progress' ? '🔄' :
                         data.status === 'blocked' ? '🚫' : '⏳';
-            return `${icon} ${stage}: ${data.status}`;
+            return `${stageIcon} ${stage}: ${data.status}`;
           })
           .join('\n');
 
         return {
           content: [{
             type: 'text',
-            text: `## Session Resumed
+            text: `## Current Task
 
-**Session ID:** ${state.context.session_id}
-**Project:** ${state.project.name}
-**Current Stage:** ${state.pipeline.current_stage}
+${icon} **${state.project.name}** - ${status}
 
 ### Pipeline Status
 
 ${stageStatus}
-
-Continue from where you left off.
 `,
           }],
         };
@@ -1104,19 +1346,11 @@ Continue from where you left off.
 
       // ============================================================
       case 'opc_task_group_create': {
-        let sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null;
+        const state = getCurrentTask(cwd);
 
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-          sessionId = state?.context.session_id;
-        }
-
-        if (!state || !sessionId) {
+        if (!state) {
           return {
-            content: [{ type: 'text', text: 'No active session. Use opc_state_init first.' }],
+            content: [{ type: 'text', text: 'No active task. Use opc_state_init first.' }],
             isError: true,
           };
         }
@@ -1185,19 +1419,11 @@ Use \`opc_task_update\` to update task progress.
 
       // ============================================================
       case 'opc_task_update': {
-        let sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null;
+        const state = getCurrentTask(cwd);
 
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-          sessionId = state?.context.session_id;
-        }
-
-        if (!state || !sessionId) {
+        if (!state) {
           return {
-            content: [{ type: 'text', text: 'No active session.' }],
+            content: [{ type: 'text', text: 'No active task.' }],
             isError: true,
           };
         }
@@ -1268,19 +1494,11 @@ Use \`opc_task_update\` to update task progress.
 
       // ============================================================
       case 'opc_task_group_status': {
-        let sessionId = args.session_id as string | undefined;
-        let state: ProjectState | null;
+        const state = getCurrentTask(cwd);
 
-        if (sessionId) {
-          state = readProjectState(sessionId, cwd);
-        } else {
-          state = getActiveSession(cwd);
-          sessionId = state?.context.session_id;
-        }
-
-        if (!state || !sessionId) {
+        if (!state) {
           return {
-            content: [{ type: 'text', text: 'No active session.' }],
+            content: [{ type: 'text', text: 'No active task.' }],
             isError: true,
           };
         }
@@ -1363,7 +1581,7 @@ ${taskList}`;
 // ============================================================
 
 const server = new Server(
-  { name: 'opc-state', version: '1.0.0' },
+  { name: 'opc-state', version: '3.0.0' },
   { capabilities: { tools: {} } }
 );
 

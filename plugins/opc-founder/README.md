@@ -10,6 +10,7 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 |-------|-------------|
 | `/opc` | One-command entry point — auto-assess task and orchestrate agents |
 | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
+| `/opc-workflows` | Manage workflow specs — list, show, create, update, delete |
 | `/opc-hud` | Configure HUD statusline display — setup, uninstall, status |
 
 ### Agents
@@ -97,6 +98,46 @@ The founder-agent automatically manages state for multi-stage projects. You can 
 /opc-plugin uninstall        # Uninstall all OPC plugins
 /opc-plugin list             # List installed plugins
 ```
+
+## Workflow Specs
+
+OPC uses workflow specs to define pipeline stages and constraints for different scenarios:
+
+```shell
+/opc-workflows list              # List all workflow specs
+/opc-workflows show <name>       # Show a specific workflow
+/opc-workflows create <name>     # Create a new workflow (interactive)
+/opc-workflows update <name>     # Update an existing workflow
+/opc-workflows delete <name>     # Delete a workflow
+```
+
+### Built-in Workflows
+
+| Workflow | Triggers | Pipeline |
+|----------|----------|----------|
+| `feature-development` | 实现、开发、添加、功能 | Product → Design → Dev → QA → Ship (SDD + TDD) |
+| `bug-fix` | 修复、bug、错误、崩溃 | Diagnosis → Dev → QA (TDD) |
+| `security-fix` | 安全、漏洞、CVE | Diagnosis → Dev → Security Audit → QA |
+| `api-development` | API、接口、REST | Product → Dev → QA (API-First + TDD) |
+| `refactor` | 重构、优化、清理 | Dev → QA (preserve tests) |
+| `documentation` | 文档、说明、readme | Docs |
+| `product-design` | 产品设计 | Product → Design → Review |
+
+### Workflow Files
+
+Workflows are stored in `.opc/workflows/`:
+
+```
+.opc/
+├── workflows/
+│   ├── feature-development.json
+│   ├── bug-fix.json
+│   ├── security-fix.json
+│   └── my-custom-workflow.json   # User-created workflows
+└── .first-install-done           # Marker (prevents re-copy)
+```
+
+**Note:** Workflows are copied on first `/opc-plugin install` and should be committed to git for team sharing.
 
 ## HUD Statusline
 

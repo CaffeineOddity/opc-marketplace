@@ -22,21 +22,11 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 | `/opc optimize for SEO` | Pipeline: seo-keyword-strategist → seo-content-writer |
 | `/opc create a pitch deck` | Dispatch docs-agent |
 | `/opc how's my app doing` | Dispatch data-analyst |
-| `/opc resume` | Resume last active session |
 | `/opc status` | Show current project status |
 
 ## Step 0: Initialize State (ALWAYS)
 
-**Every `/opc` invocation should create or resume state tracking.**
-
-### Check Existing State
-
-```
-1. Call opc_session_resume to check for active sessions
-2. If active session exists:
-   - Show current stage and progress
-   - Ask user: "Resume this session or start new?"
-```
+**Every `/opc` invocation should create state tracking.**
 
 ### Initialize New Session
 
@@ -56,16 +46,7 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 |---------|-------------|
 | **Task history** | Record of what was done |
 | **Artifacts** | Track produced files |
-| **Recovery** | Resume if interrupted |
 | **Decisions** | Store important choices |
-
-### Resume Command
-If user says `/opc resume`:
-```
-1. Call opc_session_resume
-2. If session found, show status and continue from current stage
-3. If no session, prompt user to start a new task
-```
 
 ### Status Command
 If user says `/opc status`:
@@ -80,7 +61,58 @@ If user says `/opc status`:
 4. Show current agents working
 ```
 
-## Step 1: Assess the Task
+## Step 1: Match Workflow Spec
+
+**Before assessing the task, try to match a workflow spec:**
+
+### Load Workflow Specs
+
+```
+1. Read all JSON files from .opc/workflows/
+2. Parse each workflow's triggers.keywords and triggers.patterns
+3. Match against user's task description
+```
+
+### Matching Logic
+
+```python
+def match_workflow(task_description, workflows):
+    for workflow in workflows:
+        # Check keyword matches
+        for keyword in workflow.triggers.keywords:
+            if keyword.lower() in task_description.lower():
+                return workflow
+        
+        # Check regex patterns
+        for pattern in workflow.triggers.patterns:
+            if re.search(pattern, task_description):
+                return workflow
+    
+    return None  # No match found
+```
+
+### If Workflow Matched
+
+```
+1. Show matched workflow: "Using workflow: {name}"
+2. Load pipeline stages from workflow
+3. Apply gates and constraints
+4. Execute according to workflow rules
+```
+
+### If No Workflow Matched
+
+Fall back to task assessment:
+
+| Signal | Classification | Orchestration |
+|--------|---------------|---------------|
+| Single domain, clear scope | **Simple** | Single agent |
+| Multi-stage, sequential dependencies | **Pipeline** | Sequential agent dispatch |
+| Multiple independent parts | **Parallel** | Parallel agent dispatch |
+| Complex, 3+ agents needed | **Project** | TeamCreate + task tracking |
+| Just a question | **Info** | Answer directly |
+
+## Step 2: Assess the Task (Fallback)
 
 Read the user's input and classify:
 
@@ -92,7 +124,7 @@ Read the user's input and classify:
 | Complex, 3+ agents needed | **Project** | TeamCreate + task tracking |
 | Just a question | **Info** | Answer directly |
 
-## Step 2: Select Agents
+## Step 3: Select Agents
 
 ### Product Stage (product-kit)
 - **product-agent** — Research, requirements, brainstorming
@@ -146,7 +178,7 @@ Read the user's input and classify:
 
 **Skills:** `/docx`, `/pdf`, `/pptx`, `/baoyu-translate`, `/baoyu-slide-deck`, `/baoyu-format-markdown`, `/baoyu-markdown-to-html`, `/baoyu-url-to-markdown`, `/baoyu-compress-image`
 
-## Step 3: Execute
+## Step 4: Execute
 
 ### State Management (ALWAYS)
 
@@ -207,7 +239,7 @@ This is a complex project. Setting up team coordination:
 ### Info (Question)
 Answer directly. No dispatch needed.
 
-## Step 4: Report
+## Step 5: Report
 
 After execution, summarize:
 - What was done
@@ -281,8 +313,7 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 
 ## Guidelines
 - Start with understanding, not dispatching
-- **Check for existing state first** — use `opc_session_resume`
-- **Initialize state for multi-stage projects** — use `opc_state_init`
+- **Initialize state for tasks** — use `opc_state_init`
 - **Update state after each stage** — use `opc_state_write`
 - **Record handoffs with context** — use `opc_handoff`
 - **Create checkpoints before risky operations** — use `opc_checkpoint_create`

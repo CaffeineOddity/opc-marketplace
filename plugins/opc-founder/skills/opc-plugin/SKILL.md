@@ -90,56 +90,34 @@ For each plugin to install:
 4. **Copy/symlink plugin files**: Copy `.claude-plugin/`, `agents/`, `skills/`, and optionally `hooks/`
 5. **Update installed_plugins.json**: Add entry for the plugin
 6. **Update settings.json**: Enable the plugin in `enabledPlugins`
+7. **Run first-install setup**: Execute Python script for one-time setup
 
-### Step 3.5: Install OPC HUD
+### Step 3.5: First Install Setup
 
-After installing plugins, also install the OPC HUD statusline:
+After installing opc-founder plugin, run the first-install setup script:
 
-1. **Create HUD directory**: `mkdir -p ~/.claude/plugins/cache/opc-marketplace/hud/`
-2. **Copy HUD script**: Copy `opc-hud.mjs` to `~/.claude/plugins/cache/opc-marketplace/hud/`
-3. **Make executable**: `chmod +x ~/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs` (Unix only)
-4. **Update settings.json**: Configure `statusLine` to use OPC HUD
+```bash
+python {marketplace_path}/scripts/first-install-setup.py {project_root}
+```
 
-**Why cache directory?** Placing HUD under `~/.claude/plugins/cache/opc-marketplace/` ensures it gets automatically cleaned up when running `/plugin remove opc-marketplace`.
+This script runs **once** and performs:
 
-**HUD settings.json configuration:**
+1. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `.opc/workflows/`
+2. **Update .gitignore**: Add `.opc/state/` entry (if not exists)
+3. **Create marker file**: `.opc/.first-install-done` to prevent re-run
+
+**Marker file structure:**
 ```json
 {
-  "statusLine": {
-    "type": "command",
-    "command": "node $HOME/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs"
-  }
+  "version": "1.0.0",
+  "installed_at": "2026-05-02T10:30:00",
+  "workflows_copied": 7
 }
 ```
 
-**Important:**
-- Use `$HOME` on Unix for portability
-- Use forward slashes on all platforms
-- If user already has a statusLine configured, ask before overwriting
+On subsequent installs, the script checks for this marker and skips if it exists.
 
-### Step 3.6: Update Project .gitignore
-
-After installing opc-founder, automatically update the user's project `.gitignore`:
-
-1. **Check if .gitignore exists**: Read `.gitignore` from project root
-2. **Add OPC entries if missing**: Add the following lines:
-
-```gitignore
-# OPC state - personal session data, don't commit
-.opc/state/sessions/
-```
-
-3. **Preserve existing entries**: Don't modify other gitignore rules
-4. **Notify user**: Inform that .gitignore was updated
-
-**Why?** OPC creates session state files that track personal work progress. These shouldn't be committed to git as they represent individual user's session data, not team-shared artifacts.
-
-**Optional entries to suggest (but don't auto-add):**
-```gitignore
-# Keep these (optional):
-# .opc/memory/          - project decisions, useful for team
-# .opc/state/checkpoints/ - rollback points
-```
+### Step 3.6: Install OPC HUD
 
 ### Step 4: File Paths
 

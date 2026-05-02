@@ -46,12 +46,74 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 |------|------|-------------|
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
 | Skill | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
+| Skill | `/opc-workflows` | Manage workflow specs — list, show, create, update, delete |
 | Skill | `/opc-hud` | Configure HUD statusline display |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 | MCP | opc_state_* | State management tools for cross-session persistence |
 | MCP | opc_checkpoint_* | Checkpoint tools for rollback support |
 | MCP | opc_handoff | Agent handoff with context preservation |
 | MCP | opc_memory | Project memory for decisions and patterns |
+| MCP | opc_task_* | Parallel task group management |
+
+## State Management
+
+OPC provides cross-session state persistence via MCP tools:
+
+### Directory Structure
+```
+.opc/
+├── workflows/                 # Workflow specs (commit to git)
+│   ├── feature-development.json
+│   ├── bug-fix.json
+│   └── my-custom-workflow.json
+├── memory/
+│   └── project-memory.json    # Project knowledge (decisions, patterns, lessons)
+├── state/
+│   ├── sessions/              # Session states (personal, don't commit)
+│   └── checkpoints/           # Rollback points (optional)
+├── artifacts/                 # Produced files (optional)
+└── .first-install-done        # Marker file (prevents re-copy)
+```
+
+### Git Recommendations
+| Path | Commit? | Reason |
+|------|:-------:|--------|
+| `.opc/workflows/` | ✅ | Team-shared workflow specs |
+| `.opc/memory/` | ✅ | Team-shared project knowledge |
+| `.opc/state/` | ❌ | Personal session data |
+| `.opc/state/checkpoints/` | Optional | Rollback points |
+| `.opc/artifacts/` | Optional | Depends on project |
+| `.opc/.first-install-done` | ❌ | Local install marker |
+
+### Auto Gitignore
+On first `/opc-plugin install`, OPC automatically:
+1. Copies built-in workflows to `.opc/workflows/`
+2. Adds `.opc/state/` to `.gitignore`
+3. Creates `.opc/.first-install-done` marker to prevent re-run
+
+## Task Queue System
+
+OPC manages tasks with a queue system:
+
+### Rules
+- **One task per window**: Each window can only have one task
+
+### Commands
+| Command | Description |
+|---------|-------------|
+| `/opc <task>` | Create new task |
+| `/opc status` | Show current task and pipeline progress |
+
+### Task Status Display
+```
+## Current Task
+🔄 build user auth - in_progress
+
+### Pipeline Status
+✅ product: completed
+🔄 dev: in_progress
+⏳ qa: pending
+```
 
 ### product-kit — Product
 | Type | Name | Description |
@@ -175,7 +237,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 |--------|-------|
 | Plugins | 8 |
 | Agents | 29 |
-| Skills | 50 |
+| Skills | 51 |
 | Hooks | 2 |
 | MCP Tools | 13 |
 

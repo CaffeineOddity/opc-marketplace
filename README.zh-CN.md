@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Skill、2 个 Hook、10 个 MCP 工具**，覆盖完整产品生命周期。
+Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、51 个 Skill、2 个 Hook、13 个 MCP 工具**，覆盖完整产品生命周期。
 
 > **中文** | [English](./README.md)
 
@@ -45,12 +45,74 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 |------|------|------|
 | Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
 | Skill | `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
+| Skill | `/opc-workflows` | 管理工作流规范 —— 列表、查看、创建、更新、删除 |
 | Skill | `/opc-hud` | 配置 HUD 状态栏显示 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 | MCP | opc_state_* | 状态管理工具，支持跨会话持久化 |
 | MCP | opc_checkpoint_* | 检查点工具，支持回滚 |
 | MCP | opc_handoff | 代理交接，保留上下文 |
 | MCP | opc_memory | 项目记忆，存储决策和模式 |
+| MCP | opc_task_* | 并行任务组管理 |
+
+## 状态管理
+
+OPC 通过 MCP 工具提供跨会话状态持久化：
+
+### 目录结构
+```
+.opc/
+├── workflows/                 # 工作流规范（提交到 git）
+│   ├── feature-development.json
+│   ├── bug-fix.json
+│   └── my-custom-workflow.json
+├── memory/
+│   └── project-memory.json    # 项目知识（决策、模式、教训）
+├── state/
+│   ├── sessions/              # 会话状态（个人数据，不提交）
+│   └── checkpoints/           # 回滚点（可选）
+├── artifacts/                 # 产物文件（可选）
+└── .first-install-done        # 标记文件（防止重复复制）
+```
+
+### Git 提交建议
+| 路径 | 提交? | 原因 |
+|------|:-----:|------|
+| `.opc/workflows/` | ✅ | 团队共享的工作流规范 |
+| `.opc/memory/` | ✅ | 团队共享的项目知识 |
+| `.opc/state/` | ❌ | 个人会话数据 |
+| `.opc/state/checkpoints/` | 可选 | 回滚点 |
+| `.opc/artifacts/` | 可选 | 视项目而定 |
+| `.opc/.first-install-done` | ❌ | 本地安装标记 |
+
+### 自动初始化
+首次运行 `/opc-plugin install` 时，OPC 自动：
+1. 复制内置工作流到 `.opc/workflows/`
+2. 添加 `.opc/state/` 到 `.gitignore`
+3. 创建 `.opc/.first-install-done` 标记防止重复执行
+
+## 任务队列系统
+
+OPC 通过任务队列系统管理任务：
+
+### 规则
+- **单窗口单任务**：每个窗口只能有一个任务
+
+### 命令
+| 命令 | 描述 |
+|------|------|
+| `/opc <任务>` | 创建新任务 |
+| `/opc status` | 显示当前任务和流水线进度 |
+
+### 任务状态显示
+```
+## 当前任务
+🔄 用户认证功能 - 执行中
+
+### 流水线状态
+✅ product: 已完成
+🔄 dev: 执行中
+⏳ qa: 待执行
+```
 
 ### product-kit — 产品
 | 类型 | 名称 | 描述 |
@@ -172,7 +234,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 |------|------|
 | 插件 | 8 |
 | Agents | 29 |
-| Skills | 50 |
+| Skills | 51 |
 | Hooks | 2 |
 | MCP 工具 | 13 |
 

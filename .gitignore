@@ -5,6 +5,7 @@
 
 # OPC state - personal session data, don't commit
 .opc/state/sessions/
+.opc/workflows/**/*
 
 # Keep these (optional but recommended):
 # .opc/memory/          - project decisions, useful for team

@@ -1,0 +1,104 @@
+{
+  "name": "feature-development",
+  "description": "New feature development with SDD + TDD",
+  "triggers": {
+    "keywords": ["实现", "开发", "添加", "新增", "功能", "feature", "build", "create"],
+    "patterns": []
+  },
+  "pipeline": [
+    {
+      "stage": "product",
+      "required": true,
+      "outputs": ["spec.md", "acceptance-criteria.json"],
+      "optional_outputs": ["api-spec.yaml"],
+      "agents": ["product-agent"],
+      "skills": ["spec-driven-development"],
+      "description": "定义需求规格和验收标准"
+    },
+    {
+      "stage": "design",
+      "required": false,
+      "outputs": ["design-spec.md", "wireframes/"],
+      "agents": ["web-agent", "mobile-agent", "design-reviewer"],
+      "skills": ["ui-design", "ui-ux-pro-max"],
+      "skip_conditions": ["UI简单", "后端任务", "Spec已包含设计"],
+      "description": "UI/UX 设计（可选）"
+    },
+    {
+      "stage": "dev",
+      "required": true,
+      "outputs": ["tests/", "implementation"],
+      "agents": ["frontend-agent", "backend-agent"],
+      "agent_mode": "parallel",
+      "skills": ["test-driven-development", "verification-before-completion"],
+      "constraints": ["tdd_red_first", "tdd_green_minimal", "tdd_refactor_safe"],
+      "description": "TDD 开发：RED → GREEN → REFACTOR（前后端并行）"
+    },
+    {
+      "stage": "qa",
+      "required": true,
+      "outputs": ["test-report.md"],
+      "agents": ["qa-agent"],
+      "skills": ["test-plan", "e2e-test"],
+      "description": "测试验证"
+    },
+    {
+      "stage": "ship",
+      "required": false,
+      "outputs": ["deployment"],
+      "agents": ["devops-agent"],
+      "skills": ["deploy"],
+      "skip_conditions": ["本地开发", "测试环境"],
+      "description": "部署（可选）"
+    }
+  ],
+  "gates": [
+    {
+      "name": "sdd_spec_required",
+      "description": "Product 必须产出 Spec，否则 Dev 无法开始",
+      "check": "stages.product.artifacts.includes('spec.md')",
+      "blocker": "Dev 阻止：缺少 Spec。请先在 Product 阶段完成规格定义。"
+    },
+    {
+      "name": "tdd_red_first",
+      "description": "必须先写失败测试",
+      "check": "stages.dev.progress.red_complete === true",
+      "blocker": "实现阻止：请先写失败测试（RED 阶段）。"
+    },
+    {
+      "name": "verification_required",
+      "description": "Dev 完成前必须运行 verification",
+      "check": "stages.dev.verification_passed === true",
+      "blocker": "Dev 无法完成：请运行 /verification-before-completion。"
+    }
+  ],
+  "rules": {
+    "tdd": true,
+    "sdd": true,
+    "parallel_allowed": true
+  },
+  "execution_flow": {
+    "product": {
+      "sequence": 1,
+      "next": ["design", "dev"]
+    },
+    "design": {
+      "sequence": 2,
+      "next": ["dev"],
+      "optional": true
+    },
+    "dev": {
+      "sequence": 3,
+      "next": ["qa"],
+      "tdd_cycle": ["RED", "GREEN", "REFACTOR"]
+    },
+    "qa": {
+      "sequence": 4,
+      "next": ["ship"]
+    },
+    "ship": {
+      "sequence": 5,
+      "optional": true
+    }
+  }
+}
