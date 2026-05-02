@@ -117,6 +117,30 @@ After installing plugins, also install the OPC HUD statusline:
 - Use forward slashes on all platforms
 - If user already has a statusLine configured, ask before overwriting
 
+### Step 3.6: Update Project .gitignore
+
+After installing opc-founder, automatically update the user's project `.gitignore`:
+
+1. **Check if .gitignore exists**: Read `.gitignore` from project root
+2. **Add OPC entries if missing**: Add the following lines:
+
+```gitignore
+# OPC state - personal session data, don't commit
+.opc/state/sessions/
+```
+
+3. **Preserve existing entries**: Don't modify other gitignore rules
+4. **Notify user**: Inform that .gitignore was updated
+
+**Why?** OPC creates session state files that track personal work progress. These shouldn't be committed to git as they represent individual user's session data, not team-shared artifacts.
+
+**Optional entries to suggest (but don't auto-add):**
+```gitignore
+# Keep these (optional):
+# .opc/memory/          - project decisions, useful for team
+# .opc/state/checkpoints/ - rollback points
+```
+
 ### Step 4: File Paths
 
 - Marketplace path: `/Users/zhuangchubin/learn/opc-marketplace`
