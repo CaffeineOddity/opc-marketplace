@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "OPC State MCP Server for cross-session persistence and agent coordination",
   "type": "module",
-  "main": "dist/opc-state-server.js",
+  "main": "dist/opc-state-server.bundle.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/opc-state-server.js"
+    "bundle": "esbuild dist/opc-state-server.js --bundle --platform=node --format=esm --outfile=dist/opc-state-server.bundle.js --external:fs --external:path --external:crypto --external:child_process --external:os",
+    "build:release": "npm run build && npm run bundle"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.0.0"
   }
 }
