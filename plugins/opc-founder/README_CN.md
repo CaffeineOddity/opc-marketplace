@@ -18,6 +18,22 @@
 |------|------|------|
 | founder-agent | opus | CEO 代理，支持 4 种编排模式 |
 
+### MCP 工具（状态管理）
+
+| 工具 | 描述 |
+|------|------|
+| `opc_state_init` | 初始化项目状态，创建 session |
+| `opc_state_read` | 读取项目进度和阶段状态 |
+| `opc_state_write` | 更新阶段状态、进度、产出物 |
+| `opc_checkpoint_create` | 创建检查点 |
+| `opc_checkpoint_list` | 列出所有检查点 |
+| `opc_checkpoint_rollback` | 回滚到检查点 |
+| `opc_handoff` | 记录代理交接上下文 |
+| `opc_memory` | 读写项目记忆 |
+| `opc_task_group_create` | 创建并行/串行任务组 |
+| `opc_task_update` | 更新任务状态和进度 |
+| `opc_task_group_status` | 获取任务组状态 |
+
 ## 快速开始
 
 ```shell
@@ -33,6 +49,41 @@
 | `/opc fix this bug` | 并行：开发 + 测试代理 |
 | `/opc security audit` | 派遣 security-auditor (opus) |
 | `/opc ship the new release` | 顺序：测试 → 运维 → 营销 |
+| `/opc status` | 显示当前项目进度 |
+| `/opc resume` | 恢复上次活跃的 session |
+
+## 状态管理
+
+OPC 为多阶段项目提供持久化状态管理：
+
+### 功能特性
+
+- **跨会话记忆** — 暂停和恢复项目
+- **阶段追踪** — 追踪 product → design → dev → qa → ship → growth 进度
+- **并行任务组** — 追踪并发代理，支持每个任务的进度
+- **代理交接** — 在代理之间传递工作时保留上下文
+- **检查点** — 在风险操作前创建恢复点
+- **项目记忆** — 存储决策、模式和经验教训
+
+### 状态文件
+
+```
+.opc/
+├── state/
+│   ├── sessions/{session-id}/project-state.json
+│   └── checkpoints/{checkpoint-id}.json
+├── memory/project-memory.json
+└── logs/
+```
+
+### 使用方式
+
+founder-agent 自动为多阶段项目管理状态。你也可以使用命令：
+
+```shell
+/opc status              # 显示当前项目进度
+/opc resume              # 恢复上次活跃的 session
+```
 
 ## 插件管理
 

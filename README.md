@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49 skills, 2 hooks** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49 skills, 2 hooks, 10 MCP tools** covering the full product lifecycle.
 
 > [中文文档](./README.zh-CN.md) | **English**
 
@@ -18,6 +18,8 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | `/opc fix this bug` | dev + qa in parallel |
 | `/opc security audit` | security-auditor (opus) |
 | `/opc ship the new release` | qa → devops → marketing |
+| `/opc status` | Show current project progress |
+| `/opc resume` | Resume last active session |
 | `/opc-plugin install all` | Install all 7 plugins |
 | `/opc-plugin install web` | Install for web product |
 | `/opc-plugin install designer` | Install for product & design focus |
@@ -46,6 +48,10 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Skill | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
 | Skill | `/opc-hud` | Configure HUD statusline display |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
+| MCP | opc_state_* | State management tools for cross-session persistence |
+| MCP | opc_checkpoint_* | Checkpoint tools for rollback support |
+| MCP | opc_handoff | Agent handoff with context preservation |
+| MCP | opc_memory | Project memory for decisions and patterns |
 
 ### product-kit — Product
 | Type | Name | Description |
@@ -171,6 +177,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Agents | 29 |
 | Skills | 50 |
 | Hooks | 2 |
+| MCP Tools | 13 |
 
 ## Install
 

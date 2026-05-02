@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Skill、2 个 Hook**，覆盖完整产品生命周期。
+Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Skill、2 个 Hook、10 个 MCP 工具**，覆盖完整产品生命周期。
 
 > **中文** | [English](./README.md)
 
@@ -18,6 +18,8 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | `/opc 修复这个 bug` | dev + qa 并行 |
 | `/opc 安全审查` | security-auditor |
 | `/opc 上线新版本` | qa → devops → marketing |
+| `/opc status` | 显示当前项目进度 |
+| `/opc resume` | 恢复上次活跃的 session |
 | `/opc-plugin install all` | 安装全部 7 个插件 |
 | `/opc-plugin install web` | 安装 Web 产品所需插件 |
 | `/opc-plugin install designer` | 安装产品设计专注插件 |
@@ -45,6 +47,10 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | Skill | `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
 | Skill | `/opc-hud` | 配置 HUD 状态栏显示 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
+| MCP | opc_state_* | 状态管理工具，支持跨会话持久化 |
+| MCP | opc_checkpoint_* | 检查点工具，支持回滚 |
+| MCP | opc_handoff | 代理交接，保留上下文 |
+| MCP | opc_memory | 项目记忆，存储决策和模式 |
 
 ### product-kit — 产品
 | 类型 | 名称 | 描述 |
@@ -168,6 +174,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、49 个 Sk
 | Agents | 29 |
 | Skills | 50 |
 | Hooks | 2 |
+| MCP 工具 | 13 |
 
 ## 安装
 

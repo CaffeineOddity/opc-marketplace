@@ -22,6 +22,42 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 | `/opc optimize for SEO` | Pipeline: seo-keyword-strategist → seo-content-writer |
 | `/opc create a pitch deck` | Dispatch docs-agent |
 | `/opc how's my app doing` | Dispatch data-analyst |
+| `/opc resume` | Resume last active session |
+| `/opc status` | Show current project status |
+
+## Step 0: Check State (NEW)
+
+Before starting, check for existing state:
+
+```
+1. Call opc_session_resume to check for active sessions
+2. If active session exists:
+   - Show current stage and progress
+   - Ask user: "Resume this session or start new?"
+3. If no active session and starting a new project:
+   - Call opc_state_init with project name
+```
+
+### Resume Command
+If user says `/opc resume`:
+```
+1. Call opc_session_resume
+2. If session found, show status and continue from current stage
+3. If no session, prompt user to start a new task
+```
+
+### Status Command
+If user says `/opc status`:
+```
+1. Call opc_state_read
+2. Show pipeline progress with stage icons:
+   ✅ completed
+   🔄 in_progress
+   🚫 blocked
+   ⏳ pending
+3. Show artifacts produced
+4. Show current agents working
+```
 
 ## Step 1: Assess the Task
 
@@ -91,11 +127,22 @@ Read the user's input and classify:
 
 ## Step 3: Execute
 
+### State Management During Execution
+
+**For multi-stage projects:**
+```
+1. Before starting: Call opc_state_init (if new project)
+2. After each stage: Call opc_state_write to update progress
+3. When handing off: Call opc_handoff to record context
+4. Before risky ops: Call opc_checkpoint_create
+```
+
 ### Simple (Single Agent)
 ```
 This is a [domain] task. Dispatching [agent-name]...
 ```
 Use Agent tool to spawn the agent.
+After completion, call `opc_state_write` with agent and artifact.
 
 ### Pipeline (Sequential)
 ```
@@ -106,7 +153,10 @@ This needs a multi-stage pipeline:
 
 Starting stage 1...
 ```
-Execute stages sequentially, passing output to next.
+Execute stages sequentially:
+1. Before each stage: `opc_state_write(stage, "in_progress")`
+2. After each stage: `opc_state_write(stage, "completed")` + `opc_handoff`
+3. Pass output to next stage
 
 ### Parallel (Independent)
 ```
@@ -115,6 +165,7 @@ This has independent parts. Running in parallel:
 - [agent-2]: [task B]
 ```
 Call Agent tool multiple times in one message.
+After all complete, update state with all agents and artifacts.
 
 ### Project (Complex)
 ```
@@ -123,7 +174,9 @@ This is a complex project. Setting up team coordination:
 - Tasks: [list]
 - Agents: [assignments]
 ```
-Use TeamCreate → TaskCreate → Agent spawns.
+1. Call `opc_state_init` to create session
+2. Use TeamCreate → TaskCreate → Agent spawns
+3. Monitor via TaskList and update state periodically
 
 ### Info (Question)
 Answer directly. No dispatch needed.
@@ -202,6 +255,11 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 
 ## Guidelines
 - Start with understanding, not dispatching
+- **Check for existing state first** — use `opc_session_resume`
+- **Initialize state for multi-stage projects** — use `opc_state_init`
+- **Update state after each stage** — use `opc_state_write`
+- **Record handoffs with context** — use `opc_handoff`
+- **Create checkpoints before risky operations** — use `opc_checkpoint_create`
 - Prefer parallel execution when possible
 - Use opus agents for security/critical decisions
 - Keep humans in the loop for strategic choices

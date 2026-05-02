@@ -1,0 +1,19 @@
+{
+  "name": "opc-state-server",
+  "version": "1.0.0",
+  "description": "OPC State MCP Server for cross-session persistence and agent coordination",
+  "type": "module",
+  "main": "dist/opc-state-server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/opc-state-server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

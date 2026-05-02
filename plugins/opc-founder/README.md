@@ -18,6 +18,22 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 |-------|-------|-------------|
 | founder-agent | opus | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 
+### MCP Tools (State Management)
+
+| Tool | Description |
+|------|-------------|
+| `opc_state_init` | Initialize a new project with pipeline tracking |
+| `opc_state_read` | Read current project state and progress |
+| `opc_state_write` | Update stage status, progress, artifacts |
+| `opc_checkpoint_create` | Create a checkpoint before risky operations |
+| `opc_checkpoint_list` | List available checkpoints |
+| `opc_checkpoint_rollback` | Restore state from a checkpoint |
+| `opc_handoff` | Record agent handoff with context |
+| `opc_memory` | Read/write project decisions and patterns |
+| `opc_task_group_create` | Create a parallel/serial task group |
+| `opc_task_update` | Update task status and progress |
+| `opc_task_group_status` | Get status of task groups |
+
 ## Quick Start
 
 ```shell
@@ -33,6 +49,41 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `/opc fix this bug` | Parallel: dev + qa agents |
 | `/opc security audit` | Dispatches security-auditor (opus) |
 | `/opc ship the new release` | Sequential: qa → devops → marketing |
+| `/opc status` | Show current project progress |
+| `/opc resume` | Resume last active session |
+
+## State Management
+
+OPC provides persistent state management for multi-stage projects:
+
+### Features
+
+- **Cross-session memory** — Pause and resume projects
+- **Stage tracking** — Track progress through product → design → dev → qa → ship → growth
+- **Parallel task groups** — Track concurrent agents with progress per task
+- **Agent handoffs** — Preserve context when passing work between agents
+- **Checkpoints** — Create restore points before risky operations
+- **Project memory** — Store decisions, patterns, and lessons learned
+
+### State Files
+
+```
+.opc/
+├── state/
+│   ├── sessions/{session-id}/project-state.json
+│   └── checkpoints/{checkpoint-id}.json
+├── memory/project-memory.json
+└── logs/
+```
+
+### Usage
+
+The founder-agent automatically manages state for multi-stage projects. You can also use commands:
+
+```shell
+/opc status              # Show current project progress
+/opc resume              # Resume last active session
+```
 
 ## Plugin Management
 
