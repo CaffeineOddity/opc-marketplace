@@ -56,12 +56,39 @@ def get_project_root() -> Path:
 def get_marketplace_root() -> Path:
     """Get marketplace root.
 
-    Script is at: {marketplace}/plugins/opc-founder/scripts/first-install-setup.py
-    Or in cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/scripts/
+    Script location depends on installation method:
+
+    1. Claude Code install: ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/scripts/
+       - marketplace root is 4 levels up: scripts -> opc-founder -> plugins -> opc-marketplace
+
+    2. Manual cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/scripts/
+       - opc-founder dir is parent, but workflows may not exist there
 
     Returns the opc-founder directory (which contains workflows/).
     """
-    return get_script_dir().parent
+    script_dir = get_script_dir()
+
+    # Go up to find opc-founder directory
+    # It should be the parent of scripts/ directory
+    opc_founder_dir = script_dir.parent
+
+    # Check if workflows exists directly (cache case)
+    if (opc_founder_dir / "workflows" / "built-in").exists():
+        return opc_founder_dir
+
+    # For marketplaces path, we need to find the correct opc-founder
+    # Path: .../opc-marketplace/plugins/opc-founder/scripts/
+    if "plugins" in script_dir.parts:
+        # Find plugins directory index
+        idx = script_dir.parts.index("plugins")
+        # opc-marketplace is parent of plugins
+        marketplace_root = Path(*script_dir.parts[:idx])
+        opc_founder_dir = marketplace_root / "plugins" / "opc-founder"
+        if (opc_founder_dir / "workflows" / "built-in").exists():
+            return opc_founder_dir
+
+    # Fallback: return parent of scripts
+    return script_dir.parent
 
 
 def run_first_install_setup(project_root: Path) -> dict:
