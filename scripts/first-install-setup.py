@@ -14,6 +14,7 @@ Usage:
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,11 +24,33 @@ def get_script_dir() -> Path:
     return Path(__file__).parent.resolve()
 
 
+def get_git_toplevel(path: Path = None) -> Path | None:
+    """Get git toplevel directory using git rev-parse."""
+    try:
+        cwd = str(path) if path else None
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
 def get_project_root() -> Path:
-    """Get project root from argument or current working directory."""
+    """Get project root from argument, git toplevel, or current working directory."""
     if len(sys.argv) > 1:
-        return Path(sys.argv[1]).resolve()
-    return Path.cwd()
+        arg_path = Path(sys.argv[1]).resolve()
+        # Use git toplevel if the argument is inside a git repo
+        git_root = get_git_toplevel(arg_path)
+        return git_root if git_root else arg_path
+
+    # Try git toplevel from cwd
+    git_root = get_git_toplevel()
+    return git_root if git_root else Path.cwd()
 
 
 def get_marketplace_root() -> Path:
