@@ -474,6 +474,101 @@ After completing, provide:
 `)
 ```
 
+### Knowledge Protocol (Always Apply)
+
+**IMPORTANT:** Whether using a workflow or manually assembling a pipeline, ALWAYS follow the knowledge protocol:
+
+#### Step 1: Extract Requirement ID
+
+Before starting any pipeline, extract or generate a requirement ID:
+```
+- If user mentions "REQ-XXX" → use that ID
+- If user describes a new feature → generate ID like "REQ-001"
+- Use opc_knowledge_list() to check existing requirements
+```
+
+#### Step 2: Initialize Knowledge Library
+
+```
+opc_knowledge_init(requirementId, title)
+```
+
+#### Step 3: For Each Stage, Apply Knowledge Flow
+
+**Before dispatching to any agent:**
+```typescript
+// Determine domain from stage
+const domainMap = {
+  product: "requirement",
+  design: "design",
+  dev: determinePlatformDomain(),  // "platforms/web" or "backend"
+  qa: "backend",
+  ship: "shared",
+  growth: "growth"
+}
+
+// Read all prior domains
+const domainsToRead = getPriorDomains(currentStage)
+for (const domain of domainsToRead) {
+  if (opc_knowledge_exists(requirementId, domain)) {
+    knowledge += opc_knowledge_read(requirementId, domain)
+  }
+}
+
+// Inject knowledge into agent context
+```
+
+**After agent completes:**
+```typescript
+// Extract knowledge from agent output
+const knowledgeUpdate = extractKnowledgeUpdate(agentOutput)
+
+// Write to current domain
+opc_knowledge_write(requirementId, currentDomain, doc, knowledgeUpdate)
+```
+
+#### Step 4: Domain Resolution Logic
+
+```typescript
+function getPriorDomains(stage: string): string[] {
+  const stageOrder = ['product', 'design', 'dev', 'qa', 'ship', 'growth']
+  const currentIndex = stageOrder.indexOf(stage)
+  
+  // Read all prior stage domains
+  return stageOrder.slice(0, currentIndex).map(s => stageToDomain(s))
+}
+
+function stageToDomain(stage: string): string {
+  const map = {
+    product: "requirement",
+    design: "design",
+    dev: "platforms",  // or "backend" based on task
+    qa: "backend",
+    ship: "shared",
+    growth: "growth"
+  }
+  return map[stage]
+}
+```
+
+#### Example: Manual Pipeline with Knowledge
+
+```
+User: /opc fix the login bug in REQ-001
+
+// No workflow, but still apply knowledge protocol:
+
+1. Extract requirement ID: "REQ-001"
+2. Check knowledge exists: opc_knowledge_exists("REQ-001") → true
+3. Determine stage: "dev" (bug fix)
+4. Read prior knowledge:
+   - opc_knowledge_read("REQ-001", "requirement")
+   - opc_knowledge_read("REQ-001", "platforms", "web", "tech")
+5. Dispatch to frontend-agent with knowledge context
+6. After completion:
+   - opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## Bug Fix\n...")
+```
+
 ### Task Lifecycle
 
 #### Starting a New Task
