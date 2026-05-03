@@ -1,3 +1,4 @@
+"use strict";
 /**
  * OPC State MCP Server (Single-Task Model)
  *
@@ -13,12 +14,13 @@
  * Window detection uses PID + O_CREAT|O_EXCL atomic file creation
  * (adopted from OMC's approach - no external dependencies).
  */
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, openSync, closeSync, writeSync, statSync } from 'fs';
-import { join, isAbsolute, dirname } from 'path';
-import { constants as fsConstants } from 'fs';
+Object.defineProperty(exports, "__esModule", { value: true });
+const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
+const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
+const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
+const fs_1 = require("fs");
+const path_1 = require("path");
+const fs_2 = require("fs");
 // ============================================================
 // Process Session ID (OMC-style: PID + timestamp)
 // ============================================================
@@ -75,17 +77,17 @@ function isProcessAlive(pid) {
 // ============================================================
 // File Lock with O_CREAT|O_EXCL (OMC-style atomic creation)
 // ============================================================
-const O_CREAT = fsConstants.O_CREAT;
-const O_EXCL = fsConstants.O_EXCL;
-const O_WRONLY = fsConstants.O_WRONLY;
-const DEFAULT_STALE_LOCK_MS = 30_000; // 30 seconds
+const O_CREAT = fs_2.constants.O_CREAT;
+const O_EXCL = fs_2.constants.O_EXCL;
+const O_WRONLY = fs_2.constants.O_WRONLY;
+const DEFAULT_STALE_LOCK_MS = 30000; // 30 seconds
 let currentLockId = null;
 /**
  * Get the lock file path for a given lock ID.
  */
 function getLockPath(lockId, cwd) {
     const lockDir = ensureOpcDir('state/locks', cwd);
-    return join(lockDir, `${lockId}.lock`);
+    return (0, path_1.join)(lockDir, `${lockId}.lock`);
 }
 /**
  * Check if an existing lock file is stale.
@@ -93,13 +95,13 @@ function getLockPath(lockId, cwd) {
  */
 function isLockStale(lockPath, staleLockMs = DEFAULT_STALE_LOCK_MS) {
     try {
-        const stat = statSync(lockPath);
+        const stat = (0, fs_1.statSync)(lockPath);
         const ageMs = Date.now() - stat.mtimeMs;
         if (ageMs < staleLockMs)
             return false;
         // Try to read PID from the lock payload
         try {
-            const raw = readFileSync(lockPath, 'utf-8');
+            const raw = (0, fs_1.readFileSync)(lockPath, 'utf-8');
             const payload = JSON.parse(raw);
             if (payload.pid && isProcessAlive(payload.pid)) {
                 return false; // Process is still alive
@@ -126,22 +128,22 @@ function acquireWindowLock(cwd) {
     }
     const lockId = getProcessSessionId();
     const lockPath = getLockPath(lockId, cwd);
-    const lockDir = dirname(lockPath);
+    const lockDir = (0, path_1.dirname)(lockPath);
     // Ensure directory exists
-    if (!existsSync(lockDir)) {
-        mkdirSync(lockDir, { recursive: true });
+    if (!(0, fs_1.existsSync)(lockDir)) {
+        (0, fs_1.mkdirSync)(lockDir, { recursive: true });
     }
     // Try atomic creation (O_CREAT | O_EXCL guarantees only one process succeeds)
     try {
-        const fd = openSync(lockPath, O_CREAT | O_EXCL | O_WRONLY, 0o600);
+        const fd = (0, fs_1.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 0o600);
         // Write lock payload with PID and timestamp
         const payload = JSON.stringify({
             lockId,
             pid: process.pid,
             timestamp: Date.now(),
         });
-        writeSync(fd, payload, null, 'utf-8');
-        closeSync(fd);
+        (0, fs_1.writeSync)(fd, payload, null, 'utf-8');
+        (0, fs_1.closeSync)(fd);
         currentLockId = lockId;
         return lockId;
     }
@@ -152,7 +154,7 @@ function acquireWindowLock(cwd) {
             // Check if the existing lock is stale
             if (isLockStale(lockPath)) {
                 try {
-                    unlinkSync(lockPath);
+                    (0, fs_1.unlinkSync)(lockPath);
                     // Retry after removing stale lock
                     return acquireWindowLock(cwd);
                 }
@@ -193,6 +195,35 @@ const OPC_PATHS = {
     ARTIFACTS: '.opc/artifacts',
     LOGS: '.opc/logs',
     WORKFLOWS: '.opc/workflows',
+    KNOWLEDGE: '.opc/knowledge',
+};
+// Knowledge library structure definition
+const KNOWLEDGE_STRUCTURE = {
+    requirement: {
+        docs: ['main'],
+        hasSubdocs: false,
+    },
+    design: {
+        docs: ['ui', 'interaction'],
+        hasSubdocs: false,
+    },
+    platforms: {
+        platforms: ['web', 'ios', 'android', 'miniprogram'],
+        docs: ['tech', 'test'],
+        hasSubdocs: true,
+    },
+    backend: {
+        docs: ['api', 'architecture', 'test'],
+        hasSubdocs: false,
+    },
+    shared: {
+        docs: ['database', 'infrastructure'],
+        hasSubdocs: false,
+    },
+    growth: {
+        docs: ['metrics', 'analytics'],
+        hasSubdocs: false,
+    },
 };
 function getWorktreeRoot(cwd) {
     const effectiveCwd = cwd || process.cwd();
@@ -210,25 +241,25 @@ function getWorktreeRoot(cwd) {
 }
 function getOpcRoot(cwd) {
     const root = getWorktreeRoot(cwd);
-    return join(root, OPC_PATHS.ROOT);
+    return (0, path_1.join)(root, OPC_PATHS.ROOT);
 }
 function getWorkflowsPath(cwd) {
     const root = getWorktreeRoot(cwd);
-    return join(root, OPC_PATHS.WORKFLOWS);
+    return (0, path_1.join)(root, OPC_PATHS.WORKFLOWS);
 }
 function ensureWorkflowsDir(cwd) {
     const root = getWorktreeRoot(cwd);
-    const dir = join(root, OPC_PATHS.WORKFLOWS);
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+    const dir = (0, path_1.join)(root, OPC_PATHS.WORKFLOWS);
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
     }
     return dir;
 }
 function ensureOpcDir(subdir, cwd) {
     const root = getWorktreeRoot(cwd);
-    const dir = join(root, OPC_PATHS.ROOT, subdir);
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+    const dir = (0, path_1.join)(root, OPC_PATHS.ROOT, subdir);
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
     }
     return dir;
 }
@@ -236,7 +267,7 @@ function validatePath(inputPath) {
     if (inputPath.includes('..')) {
         throw new Error('Path traversal not allowed');
     }
-    if (isAbsolute(inputPath)) {
+    if ((0, path_1.isAbsolute)(inputPath)) {
         throw new Error('Absolute paths not allowed');
     }
 }
@@ -249,36 +280,36 @@ function generateCheckpointId() {
 // ============================================================
 function atomicWriteJson(filePath, data) {
     const tempPath = `${filePath}.tmp-${process.pid}`;
-    writeFileSync(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+    (0, fs_1.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });
     const { renameSync } = require('fs');
     renameSync(tempPath, filePath);
 }
 function updateGitignore(cwd) {
     const root = getWorktreeRoot(cwd);
-    const gitignorePath = join(root, '.gitignore');
+    const gitignorePath = (0, path_1.join)(root, '.gitignore');
     const OPC_GITIGNORE_ENTRY = `
 # OPC state - personal session data, don't commit
 .opc/state/
 `;
     // Check if .gitignore exists
-    if (!existsSync(gitignorePath)) {
-        writeFileSync(gitignorePath, OPC_GITIGNORE_ENTRY);
+    if (!(0, fs_1.existsSync)(gitignorePath)) {
+        (0, fs_1.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
         return true;
     }
     // Check if entry already exists
-    const content = readFileSync(gitignorePath, 'utf-8');
+    const content = (0, fs_1.readFileSync)(gitignorePath, 'utf-8');
     if (content.includes('.opc/state/')) {
         return false; // Already has the entry
     }
     // Append the entry
-    writeFileSync(gitignorePath, content + OPC_GITIGNORE_ENTRY);
+    (0, fs_1.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
     return true;
 }
 function readJsonFile(filePath) {
-    if (!existsSync(filePath))
+    if (!(0, fs_1.existsSync)(filePath))
         return null;
     try {
-        const content = readFileSync(filePath, 'utf-8');
+        const content = (0, fs_1.readFileSync)(filePath, 'utf-8');
         return JSON.parse(content);
     }
     catch {
@@ -291,7 +322,7 @@ function readJsonFile(filePath) {
  */
 function getProjectStatePath(lockId, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return join(stateDir, lockId, 'project-state.json');
+    return (0, path_1.join)(stateDir, lockId, 'project-state.json');
 }
 function readProjectState(lockId, cwd) {
     const path = getProjectStatePath(lockId, cwd);
@@ -299,9 +330,9 @@ function readProjectState(lockId, cwd) {
 }
 function writeProjectState(state, cwd) {
     const path = getProjectStatePath(state.context.lock_id, cwd);
-    const dir = join(path, '..');
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+    const dir = (0, path_1.join)(path, '..');
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
     }
     state.project.updated_at = new Date().toISOString();
     state._meta.updated_by = 'opc_state_write';
@@ -336,7 +367,7 @@ function initializeProjectState(name, description, lockId, cwd) {
 }
 function getCheckpointPath(checkpointId, cwd) {
     const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-    return join(checkpointsDir, `${checkpointId}.json`);
+    return (0, path_1.join)(checkpointsDir, `${checkpointId}.json`);
 }
 function createCheckpoint(state, description, cwd) {
     const checkpointId = generateCheckpointId();
@@ -363,17 +394,17 @@ function readCheckpoint(checkpointId, cwd) {
 }
 function listCheckpoints(cwd) {
     const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-    if (!existsSync(checkpointsDir))
+    if (!(0, fs_1.existsSync)(checkpointsDir))
         return [];
-    const files = readdirSync(checkpointsDir).filter(f => f.endsWith('.json'));
+    const files = (0, fs_1.readdirSync)(checkpointsDir).filter(f => f.endsWith('.json'));
     return files
-        .map(f => readJsonFile(join(checkpointsDir, f)))
+        .map(f => readJsonFile((0, path_1.join)(checkpointsDir, f)))
         .filter((c) => c !== null)
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 function getHandoffPath(lockId, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return join(stateDir, lockId, 'handoffs.json');
+    return (0, path_1.join)(stateDir, lockId, 'handoffs.json');
 }
 function recordHandoff(fromAgent, toAgent, artifacts, constraints, context, lockId, cwd) {
     const handoff = {
@@ -397,7 +428,7 @@ function getHandoffs(lockId, cwd) {
     return readJsonFile(path) || [];
 }
 function getMemoryPath(cwd) {
-    return join(getOpcRoot(cwd), 'memory', 'project-memory.json');
+    return (0, path_1.join)(getOpcRoot(cwd), 'memory', 'project-memory.json');
 }
 function readProjectMemory(cwd) {
     const path = getMemoryPath(cwd);
@@ -406,9 +437,9 @@ function readProjectMemory(cwd) {
 }
 function writeProjectMemory(memory, cwd) {
     const path = getMemoryPath(cwd);
-    const dir = join(path, '..');
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+    const dir = (0, path_1.join)(path, '..');
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
     }
     memory.updated_at = new Date().toISOString();
     atomicWriteJson(path, memory);
@@ -432,6 +463,185 @@ function searchMemory(query, cwd) {
     return memory.entries.filter(e => e.content.toLowerCase().includes(lowerQuery) ||
         e.category.toLowerCase().includes(lowerQuery));
 }
+function getKnowledgePath(cwd) {
+    return (0, path_1.join)(getOpcRoot(cwd), 'knowledge');
+}
+function getKnowledgeIndexPath(cwd) {
+    return (0, path_1.join)(getKnowledgePath(cwd), 'index.json');
+}
+function getRequirementPath(requirementId, cwd) {
+    return (0, path_1.join)(getKnowledgePath(cwd), requirementId);
+}
+function getKnowledgeDocPath(requirementId, domain, platform, doc, cwd) {
+    const reqPath = getRequirementPath(requirementId, cwd);
+    const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+    if (domain === 'platforms' && platform) {
+        return (0, path_1.join)(reqPath, 'platforms', platform, `${doc || 'tech'}.md`);
+    }
+    return (0, path_1.join)(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
+}
+function readKnowledgeIndex(cwd) {
+    const path = getKnowledgeIndexPath(cwd);
+    const index = readJsonFile(path);
+    return index || { requirements: {} };
+}
+function writeKnowledgeIndex(index, cwd) {
+    const path = getKnowledgeIndexPath(cwd);
+    const dir = (0, path_1.join)(path, '..');
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    }
+    atomicWriteJson(path, index);
+}
+function initKnowledgeLibrary(requirementId, title, cwd) {
+    const index = readKnowledgeIndex(cwd);
+    if (index.requirements[requirementId]) {
+        throw new Error(`Requirement ${requirementId} already exists in knowledge library`);
+    }
+    const now = new Date().toISOString();
+    index.requirements[requirementId] = {
+        title,
+        status: 'in_progress',
+        created_at: now,
+        updated_at: now,
+        domains: {},
+    };
+    writeKnowledgeIndex(index, cwd);
+    // Create requirement directory
+    const reqPath = getRequirementPath(requirementId, cwd);
+    if (!(0, fs_1.existsSync)(reqPath)) {
+        (0, fs_1.mkdirSync)(reqPath, { recursive: true });
+    }
+}
+function readKnowledgeDoc(requirementId, domain, platform, doc, cwd) {
+    const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+    if (!(0, fs_1.existsSync)(path))
+        return null;
+    return (0, fs_1.readFileSync)(path, 'utf-8');
+}
+function readAllKnowledgeDocs(requirementId, domain, cwd) {
+    const reqPath = getRequirementPath(requirementId, cwd);
+    const domainPath = (0, path_1.join)(reqPath, domain);
+    if (!(0, fs_1.existsSync)(domainPath))
+        return null;
+    const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+    const results = [];
+    if (domain === 'platforms') {
+        // Read all platforms
+        const platformsDir = domainPath;
+        if ((0, fs_1.existsSync)(platformsDir)) {
+            for (const platform of (0, fs_1.readdirSync)(platformsDir)) {
+                const platformPath = (0, path_1.join)(platformsDir, platform);
+                if (!(0, fs_1.existsSync)(platformPath) || !isDirectory(platformPath))
+                    continue;
+                for (const docFile of (0, fs_1.readdirSync)(platformPath)) {
+                    if (!docFile.endsWith('.md'))
+                        continue;
+                    const content = (0, fs_1.readFileSync)((0, path_1.join)(platformPath, docFile), 'utf-8');
+                    results.push(`## ${platform}/${docFile}\n\n${content}`);
+                }
+            }
+        }
+    }
+    else {
+        // Read all docs in domain
+        for (const docName of domainConfig.docs) {
+            const docPath = (0, path_1.join)(domainPath, `${docName}.md`);
+            if ((0, fs_1.existsSync)(docPath)) {
+                const content = (0, fs_1.readFileSync)(docPath, 'utf-8');
+                results.push(`## ${docName}.md\n\n${content}`);
+            }
+        }
+    }
+    return results.length > 0 ? results.join('\n\n---\n\n') : null;
+}
+function isDirectory(path) {
+    try {
+        return (0, fs_1.statSync)(path).isDirectory();
+    }
+    catch {
+        return false;
+    }
+}
+function writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode = 'append', section, cwd) {
+    const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+    const dir = (0, path_1.join)(path, '..');
+    // Ensure directory exists
+    if (!(0, fs_1.existsSync)(dir)) {
+        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    }
+    let finalContent = content;
+    if (mode === 'append' && (0, fs_1.existsSync)(path)) {
+        const existing = (0, fs_1.readFileSync)(path, 'utf-8');
+        const timestamp = new Date().toISOString().split('T')[0];
+        finalContent = `${existing}\n\n## ${timestamp}\n\n${content}`;
+    }
+    else if (mode === 'update' && section && (0, fs_1.existsSync)(path)) {
+        const existing = (0, fs_1.readFileSync)(path, 'utf-8');
+        // Update specific section (find ## section header and replace content)
+        const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, 'g');
+        if (sectionRegex.test(existing)) {
+            finalContent = existing.replace(sectionRegex, `$1${content}\n\n`);
+        }
+        else {
+            // Section not found, append it
+            finalContent = `${existing}\n\n## ${section}\n\n${content}`;
+        }
+    }
+    (0, fs_1.writeFileSync)(path, finalContent, 'utf-8');
+    // Update index
+    const index = readKnowledgeIndex(cwd);
+    const req = index.requirements[requirementId];
+    if (req) {
+        req.updated_at = new Date().toISOString();
+        // Track which domains/docs have been created
+        if (!req.domains[domain]) {
+            req.domains[domain] = [];
+        }
+        const docKey = domain === 'platforms' ? `${platform}/${doc}` : doc || KNOWLEDGE_STRUCTURE[domain].docs[0];
+        if (!req.domains[domain].includes(docKey)) {
+            req.domains[domain].push(docKey);
+        }
+        writeKnowledgeIndex(index, cwd);
+    }
+}
+function knowledgeExists(requirementId, domain, platform, doc, cwd) {
+    if (!domain) {
+        // Check if requirement exists
+        const index = readKnowledgeIndex(cwd);
+        return !!index.requirements[requirementId];
+    }
+    const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+    return (0, fs_1.existsSync)(path);
+}
+function listKnowledgeDocs(requirementId, domain, cwd) {
+    const reqPath = getRequirementPath(requirementId, cwd);
+    const domainPath = (0, path_1.join)(reqPath, domain);
+    if (!(0, fs_1.existsSync)(domainPath))
+        return [];
+    const docs = [];
+    if (domain === 'platforms') {
+        const platformsDir = domainPath;
+        for (const platform of (0, fs_1.readdirSync)(platformsDir)) {
+            const platformPath = (0, path_1.join)(platformsDir, platform);
+            if (!isDirectory(platformPath))
+                continue;
+            for (const docFile of (0, fs_1.readdirSync)(platformPath)) {
+                if (docFile.endsWith('.md')) {
+                    docs.push(`${platform}/${docFile.replace('.md', '')}`);
+                }
+            }
+        }
+    }
+    else {
+        for (const docFile of (0, fs_1.readdirSync)(domainPath)) {
+            if (docFile.endsWith('.md')) {
+                docs.push(docFile.replace('.md', ''));
+            }
+        }
+    }
+    return docs;
+}
 // ============================================================
 // Session Management (Single-Task Model)
 // ============================================================
@@ -440,9 +650,9 @@ function searchMemory(query, cwd) {
  */
 function listAllTasks(cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    if (!existsSync(stateDir))
+    if (!(0, fs_1.existsSync)(stateDir))
         return [];
-    return readdirSync(stateDir).filter(f => f.startsWith('pid-'));
+    return (0, fs_1.readdirSync)(stateDir).filter(f => f.startsWith('pid-'));
 }
 /**
  * Get current window's task state.
@@ -459,19 +669,19 @@ function clearCurrentTask(cwd) {
     const statePath = getProjectStatePath(lockId, cwd);
     const handoffPath = getHandoffPath(lockId, cwd);
     let cleared = false;
-    if (existsSync(statePath)) {
-        unlinkSync(statePath);
+    if ((0, fs_1.existsSync)(statePath)) {
+        (0, fs_1.unlinkSync)(statePath);
         cleared = true;
     }
-    if (existsSync(handoffPath)) {
-        unlinkSync(handoffPath);
+    if ((0, fs_1.existsSync)(handoffPath)) {
+        (0, fs_1.unlinkSync)(handoffPath);
     }
     // Remove the state directory if empty
-    const stateDir = join(statePath, '..');
+    const stateDir = (0, path_1.join)(statePath, '..');
     try {
-        const remaining = readdirSync(stateDir);
+        const remaining = (0, fs_1.readdirSync)(stateDir);
         if (remaining.length === 0) {
-            unlinkSync(stateDir);
+            (0, fs_1.unlinkSync)(stateDir);
         }
     }
     catch {
@@ -687,6 +897,98 @@ const tools = [
             properties: {
                 workingDirectory: { type: 'string' },
             },
+        },
+    },
+    // opc_knowledge_init
+    {
+        name: 'opc_knowledge_init',
+        description: 'Initialize knowledge library for a requirement. Creates directory structure and index entry.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requirementId: { type: 'string', description: 'Requirement ID (e.g., REQ-001)' },
+                title: { type: 'string', description: 'Requirement title' },
+                workingDirectory: { type: 'string' },
+            },
+            required: ['requirementId', 'title'],
+        },
+    },
+    // opc_knowledge_read
+    {
+        name: 'opc_knowledge_read',
+        description: 'Read knowledge from knowledge library. Can read specific doc or entire domain.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requirementId: { type: 'string', description: 'Requirement ID' },
+                domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+                platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
+                doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+                workingDirectory: { type: 'string' },
+            },
+            required: ['requirementId', 'domain'],
+        },
+    },
+    // opc_knowledge_write
+    {
+        name: 'opc_knowledge_write',
+        description: 'Write or update knowledge document. Supports append, update section, or overwrite.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requirementId: { type: 'string', description: 'Requirement ID' },
+                domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+                platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
+                doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+                content: { type: 'string', description: 'Content to write' },
+                section: { type: 'string', description: 'Section header to update (optional)' },
+                mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
+                workingDirectory: { type: 'string' },
+            },
+            required: ['requirementId', 'domain', 'doc', 'content'],
+        },
+    },
+    // opc_knowledge_exists
+    {
+        name: 'opc_knowledge_exists',
+        description: 'Check if knowledge document exists.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requirementId: { type: 'string', description: 'Requirement ID' },
+                domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+                platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform' },
+                doc: { type: 'string', description: 'Document name' },
+                workingDirectory: { type: 'string' },
+            },
+            required: ['requirementId'],
+        },
+    },
+    // opc_knowledge_list
+    {
+        name: 'opc_knowledge_list',
+        description: 'List requirements in knowledge library.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                status: { type: 'string', enum: ['in_progress', 'completed', 'paused'], description: 'Filter by status' },
+                domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Filter by domain' },
+                workingDirectory: { type: 'string' },
+            },
+        },
+    },
+    // opc_knowledge_docs
+    {
+        name: 'opc_knowledge_docs',
+        description: 'List available documents in a domain for a requirement.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                requirementId: { type: 'string', description: 'Requirement ID' },
+                domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+                workingDirectory: { type: 'string' },
+            },
+            required: ['requirementId', 'domain'],
         },
     },
 ];
@@ -1312,6 +1614,199 @@ This ensures consistency regardless of current working directory.`,
                 };
             }
             // ============================================================
+            case 'opc_knowledge_init': {
+                const requirementId = args.requirementId;
+                const title = args.title;
+                try {
+                    initKnowledgeLibrary(requirementId, title, cwd);
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `## Knowledge Library Initialized
+
+**Requirement ID:** ${requirementId}
+**Title:** ${title}
+**Path:** .opc/knowledge/${requirementId}/
+
+Knowledge documents will be created on-demand when writing to each domain.`,
+                            }],
+                    };
+                }
+                catch (error) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                            }],
+                        isError: true,
+                    };
+                }
+            }
+            // ============================================================
+            case 'opc_knowledge_read': {
+                const requirementId = args.requirementId;
+                const domain = args.domain;
+                const platform = args.platform;
+                const doc = args.doc;
+                // If doc specified, read specific doc
+                if (doc || (domain === 'platforms' && platform)) {
+                    const content = readKnowledgeDoc(requirementId, domain, platform, doc, cwd);
+                    if (!content) {
+                        return {
+                            content: [{
+                                    type: 'text',
+                                    text: `Knowledge document not found: ${requirementId}/${domain}${platform ? `/${platform}` : ''}/${doc}`,
+                                }],
+                        };
+                    }
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: content,
+                            }],
+                    };
+                }
+                // Read all docs in domain
+                const content = readAllKnowledgeDocs(requirementId, domain, cwd);
+                if (!content) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `No knowledge documents found for ${requirementId}/${domain}`,
+                            }],
+                    };
+                }
+                return {
+                    content: [{
+                            type: 'text',
+                            text: content,
+                        }],
+                };
+            }
+            // ============================================================
+            case 'opc_knowledge_write': {
+                const requirementId = args.requirementId;
+                const domain = args.domain;
+                const platform = args.platform;
+                const doc = args.doc;
+                const content = args.content;
+                const mode = args.mode || 'append';
+                const section = args.section;
+                // Validate platform for platforms domain
+                if (domain === 'platforms' && !platform) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: 'Error: platform parameter is required when domain is "platforms"',
+                            }],
+                        isError: true,
+                    };
+                }
+                // Check if requirement exists
+                const index = readKnowledgeIndex(cwd);
+                if (!index.requirements[requirementId]) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`,
+                            }],
+                        isError: true,
+                    };
+                }
+                writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode, section, cwd);
+                const docPath = domain === 'platforms'
+                    ? `${domain}/${platform}/${doc}.md`
+                    : `${domain}/${doc}.md`;
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `## Knowledge Written
+
+**Requirement:** ${requirementId}
+**Document:** ${docPath}
+**Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
+
+Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.`,
+                        }],
+                };
+            }
+            // ============================================================
+            case 'opc_knowledge_exists': {
+                const requirementId = args.requirementId;
+                const domain = args.domain;
+                const platform = args.platform;
+                const doc = args.doc;
+                const exists = knowledgeExists(requirementId, domain, platform, doc, cwd);
+                return {
+                    content: [{
+                            type: 'text',
+                            text: exists ? 'true' : 'false',
+                        }],
+                };
+            }
+            // ============================================================
+            case 'opc_knowledge_list': {
+                const status = args.status;
+                const domainFilter = args.domain;
+                const index = readKnowledgeIndex(cwd);
+                let requirements = Object.entries(index.requirements);
+                if (status) {
+                    requirements = requirements.filter(([, r]) => r.status === status);
+                }
+                if (domainFilter) {
+                    requirements = requirements.filter(([, r]) => r.domains[domainFilter]?.length > 0);
+                }
+                if (requirements.length === 0) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: 'No requirements found in knowledge library.',
+                            }],
+                    };
+                }
+                const table = requirements
+                    .map(([id, r]) => {
+                    const domains = Object.keys(r.domains).join(', ') || '-';
+                    const platforms = r.domains.platforms?.join(', ') || '';
+                    const domainDisplay = platforms ? `${domains} (${platforms})` : domains;
+                    return `| ${id} | ${r.title} | ${r.status} | ${domainDisplay} | ${r.updated_at.split('T')[0]} |`;
+                })
+                    .join('\n');
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `## Knowledge Library
+
+| ID | Title | Status | Domains | Updated |
+|-----|-------|--------|---------|--------|
+${table}`,
+                        }],
+                };
+            }
+            // ============================================================
+            case 'opc_knowledge_docs': {
+                const requirementId = args.requirementId;
+                const domain = args.domain;
+                const docs = listKnowledgeDocs(requirementId, domain, cwd);
+                if (docs.length === 0) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `No documents found for ${requirementId}/${domain}`,
+                            }],
+                    };
+                }
+                const docList = docs.map(d => `- ${d}`).join('\n');
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `## ${requirementId}/${domain} Documents
+
+${docList}`,
+                        }],
+                };
+            }
+            // ============================================================
             default:
                 return {
                     content: [{
@@ -1335,14 +1830,14 @@ This ensures consistency regardless of current working directory.`,
 // ============================================================
 // Server Setup
 // ============================================================
-const server = new Server({ name: 'opc-state', version: '3.0.0' }, { capabilities: { tools: {} } });
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+const server = new index_js_1.Server({ name: 'opc-state', version: '3.0.0' }, { capabilities: { tools: {} } });
+server.setRequestHandler(types_js_1.ListToolsRequestSchema, async () => ({ tools }));
+server.setRequestHandler(types_js_1.CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     return handleToolCall(name, args || {});
 });
 async function main() {
-    const transport = new StdioServerTransport();
+    const transport = new stdio_js_1.StdioServerTransport();
     await server.connect(transport);
 }
 main().catch(console.error);

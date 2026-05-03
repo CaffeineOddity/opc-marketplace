@@ -214,7 +214,40 @@ const OPC_PATHS = {
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',
   WORKFLOWS: '.opc/workflows',
+  KNOWLEDGE: '.opc/knowledge',
 } as const;
+
+// Knowledge library structure definition
+const KNOWLEDGE_STRUCTURE = {
+  requirement: {
+    docs: ['main'],
+    hasSubdocs: false,
+  },
+  design: {
+    docs: ['ui', 'interaction'],
+    hasSubdocs: false,
+  },
+  platforms: {
+    platforms: ['web', 'ios', 'android', 'miniprogram'],
+    docs: ['tech', 'test'],
+    hasSubdocs: true,
+  },
+  backend: {
+    docs: ['api', 'architecture', 'test'],
+    hasSubdocs: false,
+  },
+  shared: {
+    docs: ['database', 'infrastructure'],
+    hasSubdocs: false,
+  },
+  growth: {
+    docs: ['metrics', 'analytics'],
+    hasSubdocs: false,
+  },
+} as const;
+
+type KnowledgeDomain = keyof typeof KNOWLEDGE_STRUCTURE;
+type KnowledgePlatform = 'web' | 'ios' | 'android' | 'miniprogram';
 
 function getWorktreeRoot(cwd?: string): string {
   const effectiveCwd = cwd || process.cwd();
@@ -623,6 +656,265 @@ function searchMemory(query: string, cwd?: string): MemoryEntry[] {
 }
 
 // ============================================================
+// Knowledge Library
+// ============================================================
+
+interface KnowledgeIndex {
+  requirements: Record<string, {
+    title: string;
+    status: 'in_progress' | 'completed' | 'paused';
+    created_at: string;
+    updated_at: string;
+    domains: Record<string, string[]>;
+  }>;
+}
+
+function getKnowledgePath(cwd?: string): string {
+  return join(getOpcRoot(cwd), 'knowledge');
+}
+
+function getKnowledgeIndexPath(cwd?: string): string {
+  return join(getKnowledgePath(cwd), 'index.json');
+}
+
+function getRequirementPath(requirementId: string, cwd?: string): string {
+  return join(getKnowledgePath(cwd), requirementId);
+}
+
+function getKnowledgeDocPath(
+  requirementId: string,
+  domain: KnowledgeDomain,
+  platform?: KnowledgePlatform,
+  doc?: string,
+  cwd?: string
+): string {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+
+  if (domain === 'platforms' && platform) {
+    return join(reqPath, 'platforms', platform, `${doc || 'tech'}.md`);
+  }
+
+  return join(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
+}
+
+function readKnowledgeIndex(cwd?: string): KnowledgeIndex {
+  const path = getKnowledgeIndexPath(cwd);
+  const index = readJsonFile<KnowledgeIndex>(path);
+  return index || { requirements: {} };
+}
+
+function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void {
+  const path = getKnowledgeIndexPath(cwd);
+  const dir = join(path, '..');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  atomicWriteJson(path, index);
+}
+
+function initKnowledgeLibrary(
+  requirementId: string,
+  title: string,
+  cwd?: string
+): void {
+  const index = readKnowledgeIndex(cwd);
+
+  if (index.requirements[requirementId]) {
+    throw new Error(`Requirement ${requirementId} already exists in knowledge library`);
+  }
+
+  const now = new Date().toISOString();
+  index.requirements[requirementId] = {
+    title,
+    status: 'in_progress',
+    created_at: now,
+    updated_at: now,
+    domains: {},
+  };
+
+  writeKnowledgeIndex(index, cwd);
+
+  // Create requirement directory
+  const reqPath = getRequirementPath(requirementId, cwd);
+  if (!existsSync(reqPath)) {
+    mkdirSync(reqPath, { recursive: true });
+  }
+}
+
+function readKnowledgeDoc(
+  requirementId: string,
+  domain: KnowledgeDomain,
+  platform?: KnowledgePlatform,
+  doc?: string,
+  cwd?: string
+): string | null {
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  if (!existsSync(path)) return null;
+  return readFileSync(path, 'utf-8');
+}
+
+function readAllKnowledgeDocs(
+  requirementId: string,
+  domain: KnowledgeDomain,
+  cwd?: string
+): string | null {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainPath = join(reqPath, domain);
+
+  if (!existsSync(domainPath)) return null;
+
+  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+  const results: string[] = [];
+
+  if (domain === 'platforms') {
+    // Read all platforms
+    const platformsDir = domainPath;
+    if (existsSync(platformsDir)) {
+      for (const platform of readdirSync(platformsDir)) {
+        const platformPath = join(platformsDir, platform);
+        if (!existsSync(platformPath) || !isDirectory(platformPath)) continue;
+
+        for (const docFile of readdirSync(platformPath)) {
+          if (!docFile.endsWith('.md')) continue;
+          const content = readFileSync(join(platformPath, docFile), 'utf-8');
+          results.push(`## ${platform}/${docFile}\n\n${content}`);
+        }
+      }
+    }
+  } else {
+    // Read all docs in domain
+    for (const docName of domainConfig.docs) {
+      const docPath = join(domainPath, `${docName}.md`);
+      if (existsSync(docPath)) {
+        const content = readFileSync(docPath, 'utf-8');
+        results.push(`## ${docName}.md\n\n${content}`);
+      }
+    }
+  }
+
+  return results.length > 0 ? results.join('\n\n---\n\n') : null;
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function writeKnowledgeDoc(
+  requirementId: string,
+  domain: KnowledgeDomain,
+  content: string,
+  platform?: KnowledgePlatform,
+  doc?: string,
+  mode: 'append' | 'update' | 'overwrite' = 'append',
+  section?: string,
+  cwd?: string
+): void {
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  const dir = join(path, '..');
+
+  // Ensure directory exists
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  let finalContent = content;
+
+  if (mode === 'append' && existsSync(path)) {
+    const existing = readFileSync(path, 'utf-8');
+    const timestamp = new Date().toISOString().split('T')[0];
+    finalContent = `${existing}\n\n## ${timestamp}\n\n${content}`;
+  } else if (mode === 'update' && section && existsSync(path)) {
+    const existing = readFileSync(path, 'utf-8');
+    // Update specific section (find ## section header and replace content)
+    const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, 'g');
+    if (sectionRegex.test(existing)) {
+      finalContent = existing.replace(sectionRegex, `$1${content}\n\n`);
+    } else {
+      // Section not found, append it
+      finalContent = `${existing}\n\n## ${section}\n\n${content}`;
+    }
+  }
+
+  writeFileSync(path, finalContent, 'utf-8');
+
+  // Update index
+  const index = readKnowledgeIndex(cwd);
+  const req = index.requirements[requirementId];
+  if (req) {
+    req.updated_at = new Date().toISOString();
+
+    // Track which domains/docs have been created
+    if (!req.domains[domain]) {
+      req.domains[domain] = [];
+    }
+
+    const docKey = domain === 'platforms' ? `${platform}/${doc}` : doc || KNOWLEDGE_STRUCTURE[domain].docs[0];
+    if (!req.domains[domain].includes(docKey)) {
+      req.domains[domain].push(docKey);
+    }
+
+    writeKnowledgeIndex(index, cwd);
+  }
+}
+
+function knowledgeExists(
+  requirementId: string,
+  domain?: KnowledgeDomain,
+  platform?: KnowledgePlatform,
+  doc?: string,
+  cwd?: string
+): boolean {
+  if (!domain) {
+    // Check if requirement exists
+    const index = readKnowledgeIndex(cwd);
+    return !!index.requirements[requirementId];
+  }
+
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  return existsSync(path);
+}
+
+function listKnowledgeDocs(
+  requirementId: string,
+  domain: KnowledgeDomain,
+  cwd?: string
+): string[] {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainPath = join(reqPath, domain);
+
+  if (!existsSync(domainPath)) return [];
+
+  const docs: string[] = [];
+
+  if (domain === 'platforms') {
+    const platformsDir = domainPath;
+    for (const platform of readdirSync(platformsDir)) {
+      const platformPath = join(platformsDir, platform);
+      if (!isDirectory(platformPath)) continue;
+
+      for (const docFile of readdirSync(platformPath)) {
+        if (docFile.endsWith('.md')) {
+          docs.push(`${platform}/${docFile.replace('.md', '')}`);
+        }
+      }
+    }
+  } else {
+    for (const docFile of readdirSync(domainPath)) {
+      if (docFile.endsWith('.md')) {
+        docs.push(docFile.replace('.md', ''));
+      }
+    }
+  }
+
+  return docs;
+}
+
+// ============================================================
 // Session Management (Single-Task Model)
 // ============================================================
 
@@ -885,6 +1177,98 @@ const tools = [
       properties: {
         workingDirectory: { type: 'string' },
       },
+    },
+  },
+  // opc_knowledge_init
+  {
+    name: 'opc_knowledge_init',
+    description: 'Initialize knowledge library for a requirement. Creates directory structure and index entry.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'Requirement ID (e.g., REQ-001)' },
+        title: { type: 'string', description: 'Requirement title' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['requirementId', 'title'],
+    },
+  },
+  // opc_knowledge_read
+  {
+    name: 'opc_knowledge_read',
+    description: 'Read knowledge from knowledge library. Can read specific doc or entire domain.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'Requirement ID' },
+        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
+        doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['requirementId', 'domain'],
+    },
+  },
+  // opc_knowledge_write
+  {
+    name: 'opc_knowledge_write',
+    description: 'Write or update knowledge document. Supports append, update section, or overwrite.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'Requirement ID' },
+        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
+        doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+        content: { type: 'string', description: 'Content to write' },
+        section: { type: 'string', description: 'Section header to update (optional)' },
+        mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['requirementId', 'domain', 'doc', 'content'],
+    },
+  },
+  // opc_knowledge_exists
+  {
+    name: 'opc_knowledge_exists',
+    description: 'Check if knowledge document exists.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'Requirement ID' },
+        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform' },
+        doc: { type: 'string', description: 'Document name' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['requirementId'],
+    },
+  },
+  // opc_knowledge_list
+  {
+    name: 'opc_knowledge_list',
+    description: 'List requirements in knowledge library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['in_progress', 'completed', 'paused'], description: 'Filter by status' },
+        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Filter by domain' },
+        workingDirectory: { type: 'string' },
+      },
+    },
+  },
+  // opc_knowledge_docs
+  {
+    name: 'opc_knowledge_docs',
+    description: 'List available documents in a domain for a requirement.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'Requirement ID' },
+        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['requirementId', 'domain'],
     },
   },
 ];
@@ -1596,6 +1980,229 @@ ${taskList}`;
 
 All workflow files should be read from/written to this directory.
 This ensures consistency regardless of current working directory.`,
+          }],
+        };
+      }
+
+      // ============================================================
+      case 'opc_knowledge_init': {
+        const requirementId = args.requirementId as string;
+        const title = args.title as string;
+
+        try {
+          initKnowledgeLibrary(requirementId, title, cwd);
+
+          return {
+            content: [{
+              type: 'text',
+              text: `## Knowledge Library Initialized
+
+**Requirement ID:** ${requirementId}
+**Title:** ${title}
+**Path:** .opc/knowledge/${requirementId}/
+
+Knowledge documents will be created on-demand when writing to each domain.`,
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            }],
+            isError: true,
+          };
+        }
+      }
+
+      // ============================================================
+      case 'opc_knowledge_read': {
+        const requirementId = args.requirementId as string;
+        const domain = args.domain as KnowledgeDomain;
+        const platform = args.platform as KnowledgePlatform | undefined;
+        const doc = args.doc as string | undefined;
+
+        // If doc specified, read specific doc
+        if (doc || (domain === 'platforms' && platform)) {
+          const content = readKnowledgeDoc(requirementId, domain, platform, doc, cwd);
+
+          if (!content) {
+            return {
+              content: [{
+                type: 'text',
+                text: `Knowledge document not found: ${requirementId}/${domain}${platform ? `/${platform}` : ''}/${doc}`,
+              }],
+            };
+          }
+
+          return {
+            content: [{
+              type: 'text',
+              text: content,
+            }],
+          };
+        }
+
+        // Read all docs in domain
+        const content = readAllKnowledgeDocs(requirementId, domain, cwd);
+
+        if (!content) {
+          return {
+            content: [{
+              type: 'text',
+              text: `No knowledge documents found for ${requirementId}/${domain}`,
+            }],
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: content,
+          }],
+        };
+      }
+
+      // ============================================================
+      case 'opc_knowledge_write': {
+        const requirementId = args.requirementId as string;
+        const domain = args.domain as KnowledgeDomain;
+        const platform = args.platform as KnowledgePlatform | undefined;
+        const doc = args.doc as string;
+        const content = args.content as string;
+        const mode = (args.mode as 'append' | 'update' | 'overwrite') || 'append';
+        const section = args.section as string | undefined;
+
+        // Validate platform for platforms domain
+        if (domain === 'platforms' && !platform) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: platform parameter is required when domain is "platforms"',
+            }],
+            isError: true,
+          };
+        }
+
+        // Check if requirement exists
+        const index = readKnowledgeIndex(cwd);
+        if (!index.requirements[requirementId]) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`,
+            }],
+            isError: true,
+          };
+        }
+
+        writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode, section, cwd);
+
+        const docPath = domain === 'platforms'
+          ? `${domain}/${platform}/${doc}.md`
+          : `${domain}/${doc}.md`;
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Knowledge Written
+
+**Requirement:** ${requirementId}
+**Document:** ${docPath}
+**Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
+
+Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.`,
+          }],
+        };
+      }
+
+      // ============================================================
+      case 'opc_knowledge_exists': {
+        const requirementId = args.requirementId as string;
+        const domain = args.domain as KnowledgeDomain | undefined;
+        const platform = args.platform as KnowledgePlatform | undefined;
+        const doc = args.doc as string | undefined;
+
+        const exists = knowledgeExists(requirementId, domain, platform, doc, cwd);
+
+        return {
+          content: [{
+            type: 'text',
+            text: exists ? 'true' : 'false',
+          }],
+        };
+      }
+
+      // ============================================================
+      case 'opc_knowledge_list': {
+        const status = args.status as string | undefined;
+        const domainFilter = args.domain as KnowledgeDomain | undefined;
+
+        const index = readKnowledgeIndex(cwd);
+        let requirements = Object.entries(index.requirements);
+
+        if (status) {
+          requirements = requirements.filter(([, r]) => r.status === status);
+        }
+
+        if (domainFilter) {
+          requirements = requirements.filter(([, r]) => r.domains[domainFilter]?.length > 0);
+        }
+
+        if (requirements.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'No requirements found in knowledge library.',
+            }],
+          };
+        }
+
+        const table = requirements
+          .map(([id, r]) => {
+            const domains = Object.keys(r.domains).join(', ') || '-';
+            const platforms = r.domains.platforms?.join(', ') || '';
+            const domainDisplay = platforms ? `${domains} (${platforms})` : domains;
+            return `| ${id} | ${r.title} | ${r.status} | ${domainDisplay} | ${r.updated_at.split('T')[0]} |`;
+          })
+          .join('\n');
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Knowledge Library
+
+| ID | Title | Status | Domains | Updated |
+|-----|-------|--------|---------|--------|
+${table}`,
+          }],
+        };
+      }
+
+      // ============================================================
+      case 'opc_knowledge_docs': {
+        const requirementId = args.requirementId as string;
+        const domain = args.domain as KnowledgeDomain;
+
+        const docs = listKnowledgeDocs(requirementId, domain, cwd);
+
+        if (docs.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `No documents found for ${requirementId}/${domain}`,
+            }],
+          };
+        }
+
+        const docList = docs.map(d => `- ${d}`).join('\n');
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## ${requirementId}/${domain} Documents
+
+${docList}`,
           }],
         };
       }

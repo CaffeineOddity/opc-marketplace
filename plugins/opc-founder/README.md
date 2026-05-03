@@ -35,6 +35,17 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `opc_task_update` | Update task status and progress |
 | `opc_task_group_status` | Get status of task groups |
 
+### MCP Tools (Knowledge Library)
+
+| Tool | Description |
+|------|-------------|
+| `opc_knowledge_init` | Initialize knowledge library for a requirement |
+| `opc_knowledge_read` | Read knowledge from a domain/platform/doc |
+| `opc_knowledge_write` | Write or update knowledge document |
+| `opc_knowledge_exists` | Check if knowledge document exists |
+| `opc_knowledge_list` | List requirements in knowledge library |
+| `opc_knowledge_docs` | List available documents in a domain |
+
 ## Quick Start
 
 ```shell
@@ -138,6 +149,95 @@ Workflows are stored in `.opc/workflows/`:
 ```
 
 **Note:** Workflows are copied on first `/opc-plugin install` and should be committed to git for team sharing.
+
+## Knowledge Library
+
+OPC provides a self-evolving knowledge library that accumulates project knowledge across the full lifecycle.
+
+### Directory Structure
+
+```
+.opc/knowledge/
+├── REQ-001/
+│   ├── requirement/
+│   │   └── main.md              # Requirement knowledge
+│   ├── design/
+│   │   ├── ui.md                # UI design
+│   │   └── interaction.md       # Interaction design
+│   ├── platforms/
+│   │   ├── web/
+│   │   │   ├── tech.md          # Web frontend tech
+│   │   │   └── test.md          # Web tests
+│   │   ├── ios/
+│   │   │   ├── tech.md          # iOS tech
+│   │   │   └── test.md          # iOS tests
+│   │   ├── android/
+│   │   │   ├── tech.md          # Android tech
+│   │   │   └── test.md          # Android tests
+│   │   └── miniprogram/
+│   │       ├── tech.md          # Miniprogram tech
+│   │       └── test.md          # Miniprogram tests
+│   ├── backend/
+│   │   ├── api.md               # API documentation
+│   │   ├── architecture.md      # Backend architecture
+│   │   └── test.md              # Backend tests
+│   ├── shared/
+│   │   ├── database.md          # Database schema
+│   │   └── infrastructure.md    # Infrastructure
+│   └── growth/
+│       ├── metrics.md           # Growth metrics
+│       └── analytics.md         # Analytics
+├── REQ-002/
+│   └── ...
+└── index.json                    # Global index
+```
+
+### Usage Flow
+
+```
+1. Task Start → Read existing knowledge
+2. Task Execute → Based on knowledge
+3. Task Complete → Update knowledge
+```
+
+### MCP Tool Usage
+
+```typescript
+// Initialize knowledge library for a requirement
+opc_knowledge_init("REQ-001", "User Login Feature")
+
+// Read requirement before design phase
+opc_knowledge_read("REQ-001", "requirement")
+
+// Write design after design phase
+opc_knowledge_write("REQ-001", "design", "ui", "## Login Page Layout\n...")
+
+// Read web tech before frontend development
+opc_knowledge_read("REQ-001", "platforms", "web", "tech")
+
+// Write web tech after development
+opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## 2025-05-03\n- LoginForm component\n- useAuth hook")
+
+// Check if knowledge exists
+opc_knowledge_exists("REQ-001", "platforms", "web", "tech")
+
+// List all requirements
+opc_knowledge_list()
+
+// List docs in a domain
+opc_knowledge_docs("REQ-001", "platforms")
+```
+
+### Self-Evolution
+
+The knowledge library evolves automatically:
+
+1. **New Requirement** → Initialize knowledge library
+2. **Stage Start** → Read domain knowledge (if exists)
+3. **Stage Complete** → Write/update domain knowledge
+4. **Future Tasks** → Read and build upon existing knowledge
+
+**Note:** Knowledge files should be committed to git for team sharing.
 
 ## HUD Statusline
 
