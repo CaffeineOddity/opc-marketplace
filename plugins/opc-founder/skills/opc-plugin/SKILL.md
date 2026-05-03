@@ -131,15 +131,20 @@ On subsequent installs, the script checks for this marker and skips if it exists
 
 ### Step 5: Execution
 
-When user runs `/opc-plugin install all`:
+When user runs `/opc-plugin install <option>`:
 
-1. Read all plugin versions from their plugin.json files
-2. For each plugin in PLUGIN_SETS.all:
-   - Create versioned cache directory
-   - Copy plugin files (or create symlinks)
-   - Update installed_plugins.json
-3. Update settings.json to enable all plugins
-4. Show summary and remind user to run `/reload-plugins`
+```bash
+python3 {marketplace_path}/plugins/opc-founder/scripts/install-plugins.py <option>
+```
+
+The script handles:
+1. Finding marketplace path from `~/.claude/plugins/marketplaces/opc-marketplace/`
+2. Reading plugin versions from plugin.json
+3. Creating cache directories and copying files
+4. Updating `installed_plugins.json` and `settings.json`
+5. Running first-install setup for workflows
+
+After installation, remind user to run `/reload-plugins`.
 
 ## Available Plugins
 
