@@ -24,9 +24,9 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 | `/opc how's my app doing` | Dispatch data-analyst |
 | `/opc status` | Show current project status |
 
-## Step 0: Initialize State (ALWAYS)
+## Step 0: Initialize State & Knowledge (ALWAYS)
 
-**Every `/opc` invocation should create state tracking.**
+**Every `/opc` invocation should create state tracking and knowledge library.**
 
 ### Initialize New Session
 
@@ -37,16 +37,19 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 2. Call opc_state_init with:
    - project_name: Brief task summary
    - project_description: Full user input
-3. This creates a session ID for tracking
+3. Extract or generate requirement ID (e.g., REQ-001)
+4. Call opc_knowledge_init(requirementId, title)
 ```
 
-### Why Always Track State?
+### Why Always Track State & Knowledge?
 
 | Benefit | Description |
 |---------|-------------|
 | **Task history** | Record of what was done |
 | **Artifacts** | Track produced files |
 | **Decisions** | Store important choices |
+| **Knowledge** | Accumulate for future stages |
+| **Resume** | Can continue after interruption |
 
 ### Status Command
 If user says `/opc status`:
@@ -59,6 +62,7 @@ If user says `/opc status`:
    ⏳ pending
 3. Show artifacts produced
 4. Show current agents working
+5. Call opc_knowledge_list to show knowledge domains
 ```
 
 ## Step 1: Match Workflow Spec
@@ -183,6 +187,57 @@ Read the user's input and classify:
 
 ## Step 4: Execute
 
+### Knowledge Flow (Per Stage)
+
+**Each stage must follow knowledge protocol based on workflow config:**
+
+```
+Before stage execution:
+1. Parse stage's knowledge config from workflow
+2. If read_before defined:
+   - For each domain in read_before:
+     - Call opc_knowledge_read(requirementId, domain)
+   - Combine all knowledge into context
+3. Inject knowledge context into agent dispatch
+
+After stage execution:
+4. If write_after true:
+   - Extract knowledge update from agent output
+   - Call opc_knowledge_write(requirementId, domain, doc, content)
+```
+
+**Knowledge config example from workflow:**
+```json
+{
+  "stage": "design",
+  "knowledge": {
+    "domain": "design",
+    "doc": "ui",
+    "read_before": ["requirement"],
+    "write_after": true
+  }
+}
+```
+
+**Agent dispatch with knowledge:**
+```
+Agent({agent}, `
+## Task: {task}
+
+## Knowledge Context
+${knowledgeContext}
+
+## Instructions
+1. Review knowledge context above
+2. Execute your stage tasks
+3. After completion, summarize what should be saved to knowledge library
+
+## Output
+1. Your deliverables
+2. Knowledge update for this domain
+`)
+```
+
 ### State Management (ALWAYS)
 
 **Every task execution must update state:**
@@ -199,9 +254,12 @@ Read the user's input and classify:
 ```
 This is a [domain] task. Dispatching [agent-name]...
 ```
-1. Call `opc_state_write(stage, "in_progress", agent)`
-2. Use Agent tool to spawn the agent
-3. After completion, call `opc_state_write(stage, "completed", artifact)`
+1. Read knowledge (if config has read_before)
+2. Call `opc_state_write(stage, "in_progress", agent)`
+3. Use Agent tool to spawn the agent (with knowledge context)
+4. After completion:
+   - Write knowledge (if config has write_after)
+   - Call `opc_state_write(stage, "completed", artifact)`
 
 ### Pipeline (Sequential)
 ```
@@ -213,8 +271,12 @@ This needs a multi-stage pipeline:
 Starting stage 1...
 ```
 Execute stages sequentially:
-1. Before each stage: `opc_state_write(stage, "in_progress")`
-2. After each stage: `opc_state_write(stage, "completed")` + `opc_handoff`
+1. Before each stage:
+   - Read knowledge (per workflow config)
+   - `opc_state_write(stage, "in_progress")`
+2. After each stage:
+   - Write knowledge (per workflow config)
+   - `opc_state_write(stage, "completed")` + `opc_handoff`
 3. Pass output to next stage
 
 ### Parallel (Independent)
@@ -316,7 +378,9 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 
 ## Guidelines
 - Start with understanding, not dispatching
-- **Initialize state for tasks** — use `opc_state_init`
+- **Initialize state & knowledge** — use `opc_state_init` + `opc_knowledge_init`
+- **Read knowledge before each stage** — use `opc_knowledge_read` per workflow config
+- **Write knowledge after each stage** — use `opc_knowledge_write` per workflow config
 - **Update state after each stage** — use `opc_state_write`
 - **Record handoffs with context** — use `opc_handoff`
 - **Create checkpoints before risky operations** — use `opc_checkpoint_create`
