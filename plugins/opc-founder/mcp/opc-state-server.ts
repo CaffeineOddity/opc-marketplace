@@ -214,7 +214,7 @@ const OPC_PATHS = {
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',
   WORKFLOWS: '.opc/workflows',
-  KNOWLEDGE: '.opc/knowledge',
+  KNOWLEDGE: '.opc/knowledgebase',
 } as const;
 
 // Knowledge library structure definition
@@ -1999,7 +1999,7 @@ This ensures consistency regardless of current working directory.`,
 
 **Requirement ID:** ${requirementId}
 **Title:** ${title}
-**Path:** .opc/knowledge/${requirementId}/
+**Path:** .opc/knowledgebase/${requirementId}/
 
 Knowledge documents will be created on-demand when writing to each domain.`,
             }],

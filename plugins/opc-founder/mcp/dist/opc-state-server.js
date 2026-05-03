@@ -1,4 +1,3 @@
-"use strict";
 /**
  * OPC State MCP Server (Single-Task Model)
  *
@@ -14,13 +13,12 @@
  * Window detection uses PID + O_CREAT|O_EXCL atomic file creation
  * (adopted from OMC's approach - no external dependencies).
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
-const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
-const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
-const fs_1 = require("fs");
-const path_1 = require("path");
-const fs_2 = require("fs");
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, openSync, closeSync, writeSync, statSync } from 'fs';
+import { join, isAbsolute, dirname } from 'path';
+import { constants as fsConstants } from 'fs';
 // ============================================================
 // Process Session ID (OMC-style: PID + timestamp)
 // ============================================================
@@ -77,17 +75,17 @@ function isProcessAlive(pid) {
 // ============================================================
 // File Lock with O_CREAT|O_EXCL (OMC-style atomic creation)
 // ============================================================
-const O_CREAT = fs_2.constants.O_CREAT;
-const O_EXCL = fs_2.constants.O_EXCL;
-const O_WRONLY = fs_2.constants.O_WRONLY;
-const DEFAULT_STALE_LOCK_MS = 30000; // 30 seconds
+const O_CREAT = fsConstants.O_CREAT;
+const O_EXCL = fsConstants.O_EXCL;
+const O_WRONLY = fsConstants.O_WRONLY;
+const DEFAULT_STALE_LOCK_MS = 30_000; // 30 seconds
 let currentLockId = null;
 /**
  * Get the lock file path for a given lock ID.
  */
 function getLockPath(lockId, cwd) {
     const lockDir = ensureOpcDir('state/locks', cwd);
-    return (0, path_1.join)(lockDir, `${lockId}.lock`);
+    return join(lockDir, `${lockId}.lock`);
 }
 /**
  * Check if an existing lock file is stale.
@@ -95,13 +93,13 @@ function getLockPath(lockId, cwd) {
  */
 function isLockStale(lockPath, staleLockMs = DEFAULT_STALE_LOCK_MS) {
     try {
-        const stat = (0, fs_1.statSync)(lockPath);
+        const stat = statSync(lockPath);
         const ageMs = Date.now() - stat.mtimeMs;
         if (ageMs < staleLockMs)
             return false;
         // Try to read PID from the lock payload
         try {
-            const raw = (0, fs_1.readFileSync)(lockPath, 'utf-8');
+            const raw = readFileSync(lockPath, 'utf-8');
             const payload = JSON.parse(raw);
             if (payload.pid && isProcessAlive(payload.pid)) {
                 return false; // Process is still alive
@@ -128,22 +126,22 @@ function acquireWindowLock(cwd) {
     }
     const lockId = getProcessSessionId();
     const lockPath = getLockPath(lockId, cwd);
-    const lockDir = (0, path_1.dirname)(lockPath);
+    const lockDir = dirname(lockPath);
     // Ensure directory exists
-    if (!(0, fs_1.existsSync)(lockDir)) {
-        (0, fs_1.mkdirSync)(lockDir, { recursive: true });
+    if (!existsSync(lockDir)) {
+        mkdirSync(lockDir, { recursive: true });
     }
     // Try atomic creation (O_CREAT | O_EXCL guarantees only one process succeeds)
     try {
-        const fd = (0, fs_1.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 0o600);
+        const fd = openSync(lockPath, O_CREAT | O_EXCL | O_WRONLY, 0o600);
         // Write lock payload with PID and timestamp
         const payload = JSON.stringify({
             lockId,
             pid: process.pid,
             timestamp: Date.now(),
         });
-        (0, fs_1.writeSync)(fd, payload, null, 'utf-8');
-        (0, fs_1.closeSync)(fd);
+        writeSync(fd, payload, null, 'utf-8');
+        closeSync(fd);
         currentLockId = lockId;
         return lockId;
     }
@@ -154,7 +152,7 @@ function acquireWindowLock(cwd) {
             // Check if the existing lock is stale
             if (isLockStale(lockPath)) {
                 try {
-                    (0, fs_1.unlinkSync)(lockPath);
+                    unlinkSync(lockPath);
                     // Retry after removing stale lock
                     return acquireWindowLock(cwd);
                 }
@@ -195,7 +193,7 @@ const OPC_PATHS = {
     ARTIFACTS: '.opc/artifacts',
     LOGS: '.opc/logs',
     WORKFLOWS: '.opc/workflows',
-    KNOWLEDGE: '.opc/knowledge',
+    KNOWLEDGE: '.opc/knowledgebase',
 };
 // Knowledge library structure definition
 const KNOWLEDGE_STRUCTURE = {
@@ -241,25 +239,25 @@ function getWorktreeRoot(cwd) {
 }
 function getOpcRoot(cwd) {
     const root = getWorktreeRoot(cwd);
-    return (0, path_1.join)(root, OPC_PATHS.ROOT);
+    return join(root, OPC_PATHS.ROOT);
 }
 function getWorkflowsPath(cwd) {
     const root = getWorktreeRoot(cwd);
-    return (0, path_1.join)(root, OPC_PATHS.WORKFLOWS);
+    return join(root, OPC_PATHS.WORKFLOWS);
 }
 function ensureWorkflowsDir(cwd) {
     const root = getWorktreeRoot(cwd);
-    const dir = (0, path_1.join)(root, OPC_PATHS.WORKFLOWS);
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    const dir = join(root, OPC_PATHS.WORKFLOWS);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     return dir;
 }
 function ensureOpcDir(subdir, cwd) {
     const root = getWorktreeRoot(cwd);
-    const dir = (0, path_1.join)(root, OPC_PATHS.ROOT, subdir);
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    const dir = join(root, OPC_PATHS.ROOT, subdir);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     return dir;
 }
@@ -267,7 +265,7 @@ function validatePath(inputPath) {
     if (inputPath.includes('..')) {
         throw new Error('Path traversal not allowed');
     }
-    if ((0, path_1.isAbsolute)(inputPath)) {
+    if (isAbsolute(inputPath)) {
         throw new Error('Absolute paths not allowed');
     }
 }
@@ -280,36 +278,36 @@ function generateCheckpointId() {
 // ============================================================
 function atomicWriteJson(filePath, data) {
     const tempPath = `${filePath}.tmp-${process.pid}`;
-    (0, fs_1.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+    writeFileSync(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });
     const { renameSync } = require('fs');
     renameSync(tempPath, filePath);
 }
 function updateGitignore(cwd) {
     const root = getWorktreeRoot(cwd);
-    const gitignorePath = (0, path_1.join)(root, '.gitignore');
+    const gitignorePath = join(root, '.gitignore');
     const OPC_GITIGNORE_ENTRY = `
 # OPC state - personal session data, don't commit
 .opc/state/
 `;
     // Check if .gitignore exists
-    if (!(0, fs_1.existsSync)(gitignorePath)) {
-        (0, fs_1.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
+    if (!existsSync(gitignorePath)) {
+        writeFileSync(gitignorePath, OPC_GITIGNORE_ENTRY);
         return true;
     }
     // Check if entry already exists
-    const content = (0, fs_1.readFileSync)(gitignorePath, 'utf-8');
+    const content = readFileSync(gitignorePath, 'utf-8');
     if (content.includes('.opc/state/')) {
         return false; // Already has the entry
     }
     // Append the entry
-    (0, fs_1.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
+    writeFileSync(gitignorePath, content + OPC_GITIGNORE_ENTRY);
     return true;
 }
 function readJsonFile(filePath) {
-    if (!(0, fs_1.existsSync)(filePath))
+    if (!existsSync(filePath))
         return null;
     try {
-        const content = (0, fs_1.readFileSync)(filePath, 'utf-8');
+        const content = readFileSync(filePath, 'utf-8');
         return JSON.parse(content);
     }
     catch {
@@ -322,7 +320,7 @@ function readJsonFile(filePath) {
  */
 function getProjectStatePath(lockId, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return (0, path_1.join)(stateDir, lockId, 'project-state.json');
+    return join(stateDir, lockId, 'project-state.json');
 }
 function readProjectState(lockId, cwd) {
     const path = getProjectStatePath(lockId, cwd);
@@ -330,9 +328,9 @@ function readProjectState(lockId, cwd) {
 }
 function writeProjectState(state, cwd) {
     const path = getProjectStatePath(state.context.lock_id, cwd);
-    const dir = (0, path_1.join)(path, '..');
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    const dir = join(path, '..');
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     state.project.updated_at = new Date().toISOString();
     state._meta.updated_by = 'opc_state_write';
@@ -367,7 +365,7 @@ function initializeProjectState(name, description, lockId, cwd) {
 }
 function getCheckpointPath(checkpointId, cwd) {
     const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-    return (0, path_1.join)(checkpointsDir, `${checkpointId}.json`);
+    return join(checkpointsDir, `${checkpointId}.json`);
 }
 function createCheckpoint(state, description, cwd) {
     const checkpointId = generateCheckpointId();
@@ -394,17 +392,17 @@ function readCheckpoint(checkpointId, cwd) {
 }
 function listCheckpoints(cwd) {
     const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-    if (!(0, fs_1.existsSync)(checkpointsDir))
+    if (!existsSync(checkpointsDir))
         return [];
-    const files = (0, fs_1.readdirSync)(checkpointsDir).filter(f => f.endsWith('.json'));
+    const files = readdirSync(checkpointsDir).filter(f => f.endsWith('.json'));
     return files
-        .map(f => readJsonFile((0, path_1.join)(checkpointsDir, f)))
+        .map(f => readJsonFile(join(checkpointsDir, f)))
         .filter((c) => c !== null)
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 function getHandoffPath(lockId, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return (0, path_1.join)(stateDir, lockId, 'handoffs.json');
+    return join(stateDir, lockId, 'handoffs.json');
 }
 function recordHandoff(fromAgent, toAgent, artifacts, constraints, context, lockId, cwd) {
     const handoff = {
@@ -428,7 +426,7 @@ function getHandoffs(lockId, cwd) {
     return readJsonFile(path) || [];
 }
 function getMemoryPath(cwd) {
-    return (0, path_1.join)(getOpcRoot(cwd), 'memory', 'project-memory.json');
+    return join(getOpcRoot(cwd), 'memory', 'project-memory.json');
 }
 function readProjectMemory(cwd) {
     const path = getMemoryPath(cwd);
@@ -437,9 +435,9 @@ function readProjectMemory(cwd) {
 }
 function writeProjectMemory(memory, cwd) {
     const path = getMemoryPath(cwd);
-    const dir = (0, path_1.join)(path, '..');
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    const dir = join(path, '..');
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     memory.updated_at = new Date().toISOString();
     atomicWriteJson(path, memory);
@@ -464,21 +462,21 @@ function searchMemory(query, cwd) {
         e.category.toLowerCase().includes(lowerQuery));
 }
 function getKnowledgePath(cwd) {
-    return (0, path_1.join)(getOpcRoot(cwd), 'knowledge');
+    return join(getOpcRoot(cwd), 'knowledge');
 }
 function getKnowledgeIndexPath(cwd) {
-    return (0, path_1.join)(getKnowledgePath(cwd), 'index.json');
+    return join(getKnowledgePath(cwd), 'index.json');
 }
 function getRequirementPath(requirementId, cwd) {
-    return (0, path_1.join)(getKnowledgePath(cwd), requirementId);
+    return join(getKnowledgePath(cwd), requirementId);
 }
 function getKnowledgeDocPath(requirementId, domain, platform, doc, cwd) {
     const reqPath = getRequirementPath(requirementId, cwd);
     const domainConfig = KNOWLEDGE_STRUCTURE[domain];
     if (domain === 'platforms' && platform) {
-        return (0, path_1.join)(reqPath, 'platforms', platform, `${doc || 'tech'}.md`);
+        return join(reqPath, 'platforms', platform, `${doc || 'tech'}.md`);
     }
-    return (0, path_1.join)(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
+    return join(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
 }
 function readKnowledgeIndex(cwd) {
     const path = getKnowledgeIndexPath(cwd);
@@ -487,9 +485,9 @@ function readKnowledgeIndex(cwd) {
 }
 function writeKnowledgeIndex(index, cwd) {
     const path = getKnowledgeIndexPath(cwd);
-    const dir = (0, path_1.join)(path, '..');
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    const dir = join(path, '..');
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     atomicWriteJson(path, index);
 }
@@ -509,35 +507,35 @@ function initKnowledgeLibrary(requirementId, title, cwd) {
     writeKnowledgeIndex(index, cwd);
     // Create requirement directory
     const reqPath = getRequirementPath(requirementId, cwd);
-    if (!(0, fs_1.existsSync)(reqPath)) {
-        (0, fs_1.mkdirSync)(reqPath, { recursive: true });
+    if (!existsSync(reqPath)) {
+        mkdirSync(reqPath, { recursive: true });
     }
 }
 function readKnowledgeDoc(requirementId, domain, platform, doc, cwd) {
     const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
-    if (!(0, fs_1.existsSync)(path))
+    if (!existsSync(path))
         return null;
-    return (0, fs_1.readFileSync)(path, 'utf-8');
+    return readFileSync(path, 'utf-8');
 }
 function readAllKnowledgeDocs(requirementId, domain, cwd) {
     const reqPath = getRequirementPath(requirementId, cwd);
-    const domainPath = (0, path_1.join)(reqPath, domain);
-    if (!(0, fs_1.existsSync)(domainPath))
+    const domainPath = join(reqPath, domain);
+    if (!existsSync(domainPath))
         return null;
     const domainConfig = KNOWLEDGE_STRUCTURE[domain];
     const results = [];
     if (domain === 'platforms') {
         // Read all platforms
         const platformsDir = domainPath;
-        if ((0, fs_1.existsSync)(platformsDir)) {
-            for (const platform of (0, fs_1.readdirSync)(platformsDir)) {
-                const platformPath = (0, path_1.join)(platformsDir, platform);
-                if (!(0, fs_1.existsSync)(platformPath) || !isDirectory(platformPath))
+        if (existsSync(platformsDir)) {
+            for (const platform of readdirSync(platformsDir)) {
+                const platformPath = join(platformsDir, platform);
+                if (!existsSync(platformPath) || !isDirectory(platformPath))
                     continue;
-                for (const docFile of (0, fs_1.readdirSync)(platformPath)) {
+                for (const docFile of readdirSync(platformPath)) {
                     if (!docFile.endsWith('.md'))
                         continue;
-                    const content = (0, fs_1.readFileSync)((0, path_1.join)(platformPath, docFile), 'utf-8');
+                    const content = readFileSync(join(platformPath, docFile), 'utf-8');
                     results.push(`## ${platform}/${docFile}\n\n${content}`);
                 }
             }
@@ -546,9 +544,9 @@ function readAllKnowledgeDocs(requirementId, domain, cwd) {
     else {
         // Read all docs in domain
         for (const docName of domainConfig.docs) {
-            const docPath = (0, path_1.join)(domainPath, `${docName}.md`);
-            if ((0, fs_1.existsSync)(docPath)) {
-                const content = (0, fs_1.readFileSync)(docPath, 'utf-8');
+            const docPath = join(domainPath, `${docName}.md`);
+            if (existsSync(docPath)) {
+                const content = readFileSync(docPath, 'utf-8');
                 results.push(`## ${docName}.md\n\n${content}`);
             }
         }
@@ -557,7 +555,7 @@ function readAllKnowledgeDocs(requirementId, domain, cwd) {
 }
 function isDirectory(path) {
     try {
-        return (0, fs_1.statSync)(path).isDirectory();
+        return statSync(path).isDirectory();
     }
     catch {
         return false;
@@ -565,19 +563,19 @@ function isDirectory(path) {
 }
 function writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode = 'append', section, cwd) {
     const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
-    const dir = (0, path_1.join)(path, '..');
+    const dir = join(path, '..');
     // Ensure directory exists
-    if (!(0, fs_1.existsSync)(dir)) {
-        (0, fs_1.mkdirSync)(dir, { recursive: true });
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
     }
     let finalContent = content;
-    if (mode === 'append' && (0, fs_1.existsSync)(path)) {
-        const existing = (0, fs_1.readFileSync)(path, 'utf-8');
+    if (mode === 'append' && existsSync(path)) {
+        const existing = readFileSync(path, 'utf-8');
         const timestamp = new Date().toISOString().split('T')[0];
         finalContent = `${existing}\n\n## ${timestamp}\n\n${content}`;
     }
-    else if (mode === 'update' && section && (0, fs_1.existsSync)(path)) {
-        const existing = (0, fs_1.readFileSync)(path, 'utf-8');
+    else if (mode === 'update' && section && existsSync(path)) {
+        const existing = readFileSync(path, 'utf-8');
         // Update specific section (find ## section header and replace content)
         const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, 'g');
         if (sectionRegex.test(existing)) {
@@ -588,7 +586,7 @@ function writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode =
             finalContent = `${existing}\n\n## ${section}\n\n${content}`;
         }
     }
-    (0, fs_1.writeFileSync)(path, finalContent, 'utf-8');
+    writeFileSync(path, finalContent, 'utf-8');
     // Update index
     const index = readKnowledgeIndex(cwd);
     const req = index.requirements[requirementId];
@@ -612,21 +610,21 @@ function knowledgeExists(requirementId, domain, platform, doc, cwd) {
         return !!index.requirements[requirementId];
     }
     const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
-    return (0, fs_1.existsSync)(path);
+    return existsSync(path);
 }
 function listKnowledgeDocs(requirementId, domain, cwd) {
     const reqPath = getRequirementPath(requirementId, cwd);
-    const domainPath = (0, path_1.join)(reqPath, domain);
-    if (!(0, fs_1.existsSync)(domainPath))
+    const domainPath = join(reqPath, domain);
+    if (!existsSync(domainPath))
         return [];
     const docs = [];
     if (domain === 'platforms') {
         const platformsDir = domainPath;
-        for (const platform of (0, fs_1.readdirSync)(platformsDir)) {
-            const platformPath = (0, path_1.join)(platformsDir, platform);
+        for (const platform of readdirSync(platformsDir)) {
+            const platformPath = join(platformsDir, platform);
             if (!isDirectory(platformPath))
                 continue;
-            for (const docFile of (0, fs_1.readdirSync)(platformPath)) {
+            for (const docFile of readdirSync(platformPath)) {
                 if (docFile.endsWith('.md')) {
                     docs.push(`${platform}/${docFile.replace('.md', '')}`);
                 }
@@ -634,7 +632,7 @@ function listKnowledgeDocs(requirementId, domain, cwd) {
         }
     }
     else {
-        for (const docFile of (0, fs_1.readdirSync)(domainPath)) {
+        for (const docFile of readdirSync(domainPath)) {
             if (docFile.endsWith('.md')) {
                 docs.push(docFile.replace('.md', ''));
             }
@@ -650,9 +648,9 @@ function listKnowledgeDocs(requirementId, domain, cwd) {
  */
 function listAllTasks(cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    if (!(0, fs_1.existsSync)(stateDir))
+    if (!existsSync(stateDir))
         return [];
-    return (0, fs_1.readdirSync)(stateDir).filter(f => f.startsWith('pid-'));
+    return readdirSync(stateDir).filter(f => f.startsWith('pid-'));
 }
 /**
  * Get current window's task state.
@@ -669,19 +667,19 @@ function clearCurrentTask(cwd) {
     const statePath = getProjectStatePath(lockId, cwd);
     const handoffPath = getHandoffPath(lockId, cwd);
     let cleared = false;
-    if ((0, fs_1.existsSync)(statePath)) {
-        (0, fs_1.unlinkSync)(statePath);
+    if (existsSync(statePath)) {
+        unlinkSync(statePath);
         cleared = true;
     }
-    if ((0, fs_1.existsSync)(handoffPath)) {
-        (0, fs_1.unlinkSync)(handoffPath);
+    if (existsSync(handoffPath)) {
+        unlinkSync(handoffPath);
     }
     // Remove the state directory if empty
-    const stateDir = (0, path_1.join)(statePath, '..');
+    const stateDir = join(statePath, '..');
     try {
-        const remaining = (0, fs_1.readdirSync)(stateDir);
+        const remaining = readdirSync(stateDir);
         if (remaining.length === 0) {
-            (0, fs_1.unlinkSync)(stateDir);
+            unlinkSync(stateDir);
         }
     }
     catch {
@@ -1626,7 +1624,7 @@ This ensures consistency regardless of current working directory.`,
 
 **Requirement ID:** ${requirementId}
 **Title:** ${title}
-**Path:** .opc/knowledge/${requirementId}/
+**Path:** .opc/knowledgebase/${requirementId}/
 
 Knowledge documents will be created on-demand when writing to each domain.`,
                             }],
@@ -1830,14 +1828,14 @@ ${docList}`,
 // ============================================================
 // Server Setup
 // ============================================================
-const server = new index_js_1.Server({ name: 'opc-state', version: '3.0.0' }, { capabilities: { tools: {} } });
-server.setRequestHandler(types_js_1.ListToolsRequestSchema, async () => ({ tools }));
-server.setRequestHandler(types_js_1.CallToolRequestSchema, async (request) => {
+const server = new Server({ name: 'opc-state', version: '3.0.0' }, { capabilities: { tools: {} } });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     return handleToolCall(name, args || {});
 });
 async function main() {
-    const transport = new stdio_js_1.StdioServerTransport();
+    const transport = new StdioServerTransport();
     await server.connect(transport);
 }
 main().catch(console.error);
