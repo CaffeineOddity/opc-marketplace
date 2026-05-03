@@ -44,108 +44,33 @@ Configure the OPC HUD (Heads-Up Display) for the statusline.
 
 When the user runs `/opc-founder:opc-hud setup`:
 
-### Step 1: Check if HUD script exists in marketplace
+### Step 1: Run the install script
 
 ```bash
-ls -la ~/.claude/plugins/marketplaces/opc-marketplace/.claude/hud/opc-hud.mjs
+bash ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/skills/opc-hud/install.sh
 ```
 
-Or if developing locally:
-```bash
-ls -la ~/YYInc/Me/opc-marketplace/.claude/hud/opc-hud.mjs
-```
+**The script handles all installation steps automatically.**
 
-### Step 2: Create HUD directory in cache
+### Step 2: Restart Claude Code
 
-```bash
-mkdir -p ~/.claude/plugins/cache/opc-marketplace/hud
-```
-
-**Why cache directory?** Placing HUD under `~/.claude/plugins/cache/opc-marketplace/` ensures it gets automatically cleaned up when running `/plugin remove opc-marketplace`.
-
-### Step 3: Copy HUD script to cache location
-
-```bash
-# From marketplace
-cp ~/.claude/plugins/marketplaces/opc-marketplace/.claude/hud/opc-hud.mjs ~/.claude/plugins/cache/opc-marketplace/hud/
-
-# Or from local development
-cp ~/YYInc/Me/opc-marketplace/.claude/hud/opc-hud.mjs ~/.claude/plugins/cache/opc-marketplace/hud/
-```
-
-### Step 4: Make it executable (Unix only)
-
-```bash
-chmod +x ~/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs
-```
-
-### Step 5: Update settings.json
-
-Read `~/.claude/settings.json`, then update/add the `statusLine` field:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "node $HOME/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs"
-  }
-}
-```
-
-**IMPORTANT:**
-- Use `$HOME` on Unix for portability
-- Use forward slashes on all platforms
-- If user already has a statusLine configured, ask before overwriting
-
-### Step 6: Verify installation
-
-```bash
-echo '{"context_window":{"used_percentage":45},"model":{"display_name":"Claude Opus 4.6"}}' | node ~/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs
-```
-
-Expected output:
-```
-[OPC#1.0] | Opus | ctx:45%
-```
-
-### Step 7: Tell user to restart Claude Code
-
-**Restart Claude Code for changes to take effect.**
+Tell user: **Restart Claude Code for changes to take effect.**
 
 ## Uninstall (Remove HUD)
 
 When the user runs `/opc-founder:opc-hud uninstall`:
 
-### Step 1: Remove HUD script
+### Step 1: Run the uninstall script
 
 ```bash
-rm -f ~/.claude/plugins/cache/opc-marketplace/hud/opc-hud.mjs
+bash ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/skills/opc-hud/uninstall.sh
 ```
 
-### Step 2: Remove HUD directory if empty
+**The script handles all uninstallation steps automatically.**
 
-```bash
-rmdir ~/.claude/plugins/cache/opc-marketplace/hud 2>/dev/null || true
-```
+### Step 2: Restart Claude Code
 
-### Step 3: Clear statusLine from settings.json
-
-Read `~/.claude/settings.json`, then remove the `statusLine` field:
-
-```json
-{
-  "statusLine": null
-}
-```
-
-Or delete the field entirely using jq:
-```bash
-jq 'del(.statusLine)' ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
-```
-
-### Step 4: Confirm removal
-
-Tell user: **HUD uninstalled. Restart Claude Code for changes to take effect.**
+Tell user: **Restart Claude Code for changes to take effect.**
 
 ## Status Check
 
