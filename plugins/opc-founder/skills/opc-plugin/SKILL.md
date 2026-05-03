@@ -123,8 +123,8 @@ On subsequent installs, the script checks for this marker and skips if it exists
 
 ### Step 4: File Paths
 
-- Marketplace path: `/Users/zhuangchubin/learn/opc-marketplace`
-- Plugins source: `/Users/zhuangchubin/learn/opc-marketplace/plugins/{plugin-name}/`
+- Marketplace path: `{marketplace-root}` (detected from `~/.claude/plugins/marketplaces/opc-marketplace/`)
+- Plugins source: `{marketplace-root}/plugins/{plugin-name}/`
 - Cache path: `~/.claude/plugins/cache/opc-marketplace/{plugin-name}/{version}/`
 - Installed plugins: `~/.claude/plugins/installed_plugins.json`
 - Settings: `~/.claude/settings.json`
