@@ -13,7 +13,14 @@
       "optional_outputs": ["api-spec.yaml"],
       "agents": ["product-agent"],
       "skills": ["spec-driven-development"],
-      "description": "定义需求规格和验收标准"
+      "description": "定义需求规格和验收标准",
+      "knowledge": {
+        "domain": "requirement",
+        "doc": "main",
+        "read_before": false,
+        "write_after": true,
+        "content_template": "## User Stories\n\n{user_stories}\n\n## Acceptance Criteria\n\n{acceptance_criteria}"
+      }
     },
     {
       "stage": "design",
@@ -22,7 +29,14 @@
       "agents": ["web-agent", "mobile-agent", "design-reviewer"],
       "skills": ["ui-design", "ui-ux-pro-max"],
       "skip_conditions": ["UI简单", "后端任务", "Spec已包含设计"],
-      "description": "UI/UX 设计（可选）"
+      "description": "UI/UX 设计（可选）",
+      "knowledge": {
+        "domain": "design",
+        "doc": "ui",
+        "read_before": ["requirement"],
+        "write_after": true,
+        "content_template": "## UI Design\n\n{ui_spec}\n\n## Interaction Flow\n\n{interaction_flow}"
+      }
     },
     {
       "stage": "dev",
@@ -32,7 +46,24 @@
       "agent_mode": "parallel",
       "skills": ["test-driven-development", "verification-before-completion"],
       "constraints": ["tdd_red_first", "tdd_green_minimal", "tdd_refactor_safe"],
-      "description": "TDD 开发：RED → GREEN → REFACTOR（前后端并行）"
+      "description": "TDD 开发：RED → GREEN → REFACTOR（前后端并行）",
+      "knowledge": {
+        "frontend": {
+          "domain": "platforms",
+          "platform": "web",
+          "doc": "tech",
+          "read_before": ["requirement", "design"],
+          "write_after": true,
+          "content_template": "## {date} Component Update\n\n{components}\n\n## Architecture\n\n{architecture}"
+        },
+        "backend": {
+          "domain": "backend",
+          "doc": "api",
+          "read_before": ["requirement"],
+          "write_after": true,
+          "content_template": "## {date} API Update\n\n{api_changes}\n\n## Endpoints\n\n{endpoints}"
+        }
+      }
     },
     {
       "stage": "qa",
@@ -40,7 +71,14 @@
       "outputs": ["test-report.md"],
       "agents": ["qa-agent"],
       "skills": ["test-plan", "e2e-test"],
-      "description": "测试验证"
+      "description": "测试验证",
+      "knowledge": {
+        "domain": "backend",
+        "doc": "test",
+        "read_before": ["platforms/web/tech", "backend/api"],
+        "write_after": true,
+        "content_template": "## Test Cases\n\n{test_cases}\n\n## Test Results\n\n{results}"
+      }
     },
     {
       "stage": "ship",
@@ -49,7 +87,14 @@
       "agents": ["devops-agent"],
       "skills": ["deploy"],
       "skip_conditions": ["本地开发", "测试环境"],
-      "description": "部署（可选）"
+      "description": "部署（可选）",
+      "knowledge": {
+        "domain": "shared",
+        "doc": "infrastructure",
+        "read_before": ["backend/api"],
+        "write_after": true,
+        "content_template": "## {date} Deployment\n\n{deployment_info}\n\n## Infrastructure\n\n{infrastructure_changes}"
+      }
     }
   ],
   "gates": [
@@ -75,30 +120,51 @@
   "rules": {
     "tdd": true,
     "sdd": true,
-    "parallel_allowed": true
+    "parallel_allowed": true,
+    "knowledge_enabled": true
   },
   "execution_flow": {
     "product": {
       "sequence": 1,
-      "next": ["design", "dev"]
+      "next": ["design", "dev"],
+      "knowledge_flow": {
+        "init": "opc_knowledge_init",
+        "write": "requirement/main"
+      }
     },
     "design": {
       "sequence": 2,
       "next": ["dev"],
-      "optional": true
+      "optional": true,
+      "knowledge_flow": {
+        "read": ["requirement"],
+        "write": "design/ui"
+      }
     },
     "dev": {
       "sequence": 3,
       "next": ["qa"],
-      "tdd_cycle": ["RED", "GREEN", "REFACTOR"]
+      "tdd_cycle": ["RED", "GREEN", "REFACTOR"],
+      "knowledge_flow": {
+        "read": ["requirement", "design"],
+        "write": ["platforms/web/tech", "backend/api"]
+      }
     },
     "qa": {
       "sequence": 4,
-      "next": ["ship"]
+      "next": ["ship"],
+      "knowledge_flow": {
+        "read": ["platforms/web/tech", "backend/api"],
+        "write": "backend/test"
+      }
     },
     "ship": {
       "sequence": 5,
-      "optional": true
+      "optional": true,
+      "knowledge_flow": {
+        "read": ["backend/api"],
+        "write": "shared/infrastructure"
+      }
     }
   }
 }
