@@ -97,7 +97,7 @@ For each plugin to install:
 After installing opc-founder plugin, run the first-install setup script:
 
 ```bash
-python {marketplace_path}/plugins/opc-founder/scripts/first-install-setup.py {project_root}
+python {skill_path}/scripts/first-install-setup.py {project_root}
 ```
 
 This script runs **once** and performs:
@@ -134,7 +134,7 @@ On subsequent installs, the script checks for this marker and skips if it exists
 When user runs `/opc-plugin install <option>`:
 
 ```bash
-python3 {marketplace_path}/plugins/opc-founder/scripts/install-plugins.py <option>
+python3 {skill_path}/scripts/install-plugins.py <option>
 ```
 
 The script handles:
@@ -200,7 +200,7 @@ To completely remove OPC Marketplace (plugins + HUD):
 
 ```bash
 # Run the uninstall script (removes plugins + HUD)
-~/YYInc/Me/opc-marketplace/plugins/opc-founder/scripts/uninstall.sh
+{skill_path}/scripts/uninstall.sh
 
 # Then remove the marketplace via Claude Code
 /plugin remove opc-marketplace
