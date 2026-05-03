@@ -220,8 +220,9 @@ def run_first_install_setup(marketplace_path: Path, project_root: Path = None):
 
     try:
         import subprocess
+        # Pass both project_root and marketplace_path as arguments
         result = subprocess.run(
-            ['python3', str(setup_script), str(project_root)],
+            ['python3', str(setup_script), str(project_root), str(marketplace_path)],
             capture_output=True,
             text=True
         )

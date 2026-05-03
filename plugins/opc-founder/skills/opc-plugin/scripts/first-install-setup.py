@@ -8,7 +8,8 @@ Runs once on first opc-plugin install:
 3. Create marker file to prevent re-run
 
 Usage:
-    python scripts/first-install-setup.py [project_root]
+    python scripts/first-install-setup.py <project_root> [marketplace_root]
+    python scripts/first-install-setup.py /path/to/project /path/to/marketplace
 """
 
 import json
@@ -53,42 +54,53 @@ def get_project_root() -> Path:
     return git_root if git_root else Path.cwd()
 
 
+def get_marketplace_root_from_args() -> Path | None:
+    """Get marketplace root from command line argument if provided."""
+    if len(sys.argv) > 2:
+        return Path(sys.argv[2]).resolve()
+    return None
+
+
 def get_marketplace_root() -> Path:
-    """Get marketplace root.
+    """Get marketplace root from args or calculate from script location.
 
     Script location depends on installation method:
 
-    1. Claude Code install: ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/scripts/
-       - marketplace root is 4 levels up: scripts -> opc-founder -> plugins -> opc-marketplace
+    1. Claude Code install: ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/skills/opc-plugin/scripts/
+       - opc-founder is 3 levels up: scripts -> opc-plugin -> skills -> opc-founder
 
-    2. Manual cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/scripts/
-       - opc-founder dir is parent, but workflows may not exist there
+    2. Manual cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/skills/opc-plugin/scripts/
+       - opc-founder dir is 3 levels up: scripts -> opc-plugin -> skills -> opc-founder
 
     Returns the opc-founder directory (which contains workflows/).
     """
+    # Check if marketplace root is provided via command line
+    marketplace_from_args = get_marketplace_root_from_args()
+    if marketplace_from_args:
+        # Verify workflows exist at the provided path
+        if (marketplace_from_args / "plugins" / "opc-founder" / "workflows" / "built-in").exists():
+            return marketplace_from_args / "plugins" / "opc-founder"
+
     script_dir = get_script_dir()
 
-    # Go up to find opc-founder directory
-    # It should be the parent of scripts/ directory
-    opc_founder_dir = script_dir.parent
+    # Script is at .../opc-founder/skills/opc-plugin/scripts/
+    # Go up 3 levels to reach opc-founder
+    opc_founder_dir = script_dir.parent.parent.parent  # scripts -> opc-plugin -> skills -> opc-founder
 
-    # Check if workflows exists directly (cache case)
+    # Check if workflows exists
     if (opc_founder_dir / "workflows" / "built-in").exists():
         return opc_founder_dir
 
-    # For marketplaces path, we need to find the correct opc-founder
-    # Path: .../opc-marketplace/plugins/opc-founder/scripts/
+    # For marketplaces path, try to find via plugins directory
     if "plugins" in script_dir.parts:
-        # Find plugins directory index
         idx = script_dir.parts.index("plugins")
-        # opc-marketplace is parent of plugins
         marketplace_root = Path(*script_dir.parts[:idx])
         opc_founder_dir = marketplace_root / "plugins" / "opc-founder"
         if (opc_founder_dir / "workflows" / "built-in").exists():
             return opc_founder_dir
 
-    # Fallback: return parent of scripts
-    return script_dir.parent
+    # Fallback: return 3 levels up
+    return script_dir.parent.parent.parent
 
 
 def run_first_install_setup(project_root: Path) -> dict:
@@ -114,11 +126,11 @@ def run_first_install_setup(project_root: Path) -> dict:
     results = []
 
     # 1. Copy built-in workflows
+    copied_files = []
     if workflows_source.exists():
         workflows_target.mkdir(parents=True, exist_ok=True)
 
         # Copy each JSON file
-        copied_files = []
         for workflow_file in workflows_source.glob("*.json"):
             target_file = workflows_target / workflow_file.name
             shutil.copy2(workflow_file, target_file)
