@@ -8,25 +8,38 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 
 ## Quick Examples
 
-| Command | What Happens |
-|---------|-------------|
-| `/opc build a user management feature` | Full pipeline: product → design → dev → qa → ship |
-| `/opc research the competitor landscape` | Dispatch product-agent |
-| `/opc design a checkout flow` | Dispatch ux-agent → ui-agent |
-| `/opc implement user authentication` | Parallel: frontend-agent + backend-agent |
-| `/opc fix this bug` | Parallel: dev-agent + qa-agent |
-| `/opc security audit` | Dispatch security-auditor (opus) |
-| `/opc test the payment flow` | Dispatch qa-agent |
-| `/opc deploy to production` | Pipeline: qa → devops |
-| `/opc ship the new release` | Pipeline: qa → devops → marketing |
-| `/opc optimize for SEO` | Pipeline: seo-keyword-strategist → seo-content-writer |
-| `/opc create a pitch deck` | Dispatch docs-agent |
-| `/opc how's my app doing` | Dispatch data-analyst |
-| `/opc status` | Show current project status |
+| Command | What Happens | Knowledge Created |
+|---------|--------------|-------------------|
+| `/opc build a user management feature` | Full pipeline: product → design → dev → qa → ship | REQ-XXX with all domain docs |
+| `/opc research the competitor landscape` | Dispatch product-agent | REQ-XXX/requirement/main.md |
+| `/opc design a checkout flow` | Dispatch ux-agent → ui-agent | REQ-XXX/design/ui.md |
+| `/opc implement user authentication` | Parallel: frontend-agent + backend-agent | REQ-XXX/platforms & backend |
+| `/opc fix this bug` | Parallel: dev-agent + qa-agent | Updates existing REQ docs |
+| `/opc security audit` | Dispatch security-auditor (opus) | REQ-XXX/backend/architecture.md |
+| `/opc test the payment flow` | Dispatch qa-agent | REQ-XXX/backend/test.md |
+| `/opc deploy to production` | Pipeline: qa → devops | REQ-XXX/shared/infrastructure.md |
+| `/opc ship the new release` | Pipeline: qa → devops → marketing | REQ-XXX/growth/metrics.md |
+| `/opc optimize for SEO` | Pipeline: seo-keyword-strategist → seo-content-writer | REQ-XXX/growth/analytics.md |
+| `/opc create a pitch deck` | Dispatch docs-agent | REQ-XXX/requirement/main.md |
+| `/opc how's my app doing` | Dispatch data-analyst | REQ-XXX/growth/metrics.md |
+| `/opc status` | Show current project status + knowledge domains | - |
+
+**💡 Tip: Every command creates/updates knowledge library. Use `/opc status` to see what knowledge has been accumulated.**
 
 ## Step 0: Initialize State & Knowledge (ALWAYS)
 
-**Every `/opc` invocation should create state tracking and knowledge library.**
+**⚠️ CRITICAL: Every `/opc` invocation MUST initialize state AND knowledge library. The knowledge library is the foundation for cross-stage context preservation.**
+
+### Why Knowledge Library Matters
+
+| Without Knowledge | With Knowledge |
+|-------------------|----------------|
+| Each stage starts fresh | Stages build on previous work |
+| Decisions lost between agents | Decisions preserved and referenced |
+| Repeated context gathering | Context accumulates automatically |
+| Inconsistent outputs | Coherent, traceable outputs |
+
+**Knowledge library is NOT optional** — it's the core mechanism that makes multi-stage workflows coherent. Without it, you're just running isolated agents.
 
 ### Initialize New Session
 
@@ -37,19 +50,59 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
 2. Call opc_state_init with:
    - project_name: Brief task summary
    - project_description: Full user input
-3. Extract or generate requirement ID (e.g., REQ-001)
-4. Call opc_knowledge_init(requirementId, title)
+   - requirement_id: (optional) "REQ-XXX" to use existing, "new" to force new, or omit for auto-detect
+3. The tool will automatically:
+   - Match existing requirements (if similarity > 50%)
+   - Generate new requirement ID if no match
+   - Initialize knowledge library (idempotent)
+   - Store requirement_id in project state
 ```
 
-### Why Always Track State & Knowledge?
+### Requirement ID Auto-Detection
 
-| Benefit | Description |
-|---------|-------------|
-| **Task history** | Record of what was done |
-| **Artifacts** | Track produced files |
-| **Decisions** | Store important choices |
-| **Knowledge** | Accumulate for future stages |
-| **Resume** | Can continue after interruption |
+| Scenario | Behavior |
+|----------|----------|
+| User specifies `requirement_id="REQ-001"` | Use specified ID |
+| User specifies `requirement_id="new"` | Force generate new ID |
+| User omits `requirement_id`, high similarity match (>50%) | Auto-use existing requirement |
+| User omits `requirement_id`, low similarity matches (30-50%) | Show candidates, ask user |
+| User omits `requirement_id`, no matches | Auto-generate new ID (REQ-XXX) |
+
+### Best Practice: Explicit Requirement ID
+
+**Recommended workflow for new tasks:**
+
+```
+/opc build user authentication
+  ↓
+opc_state_init(project_name="用户认证功能", requirement_id="new")
+  ↓
+# System generates REQ-XXX and creates knowledge library
+# All subsequent stages will use this ID
+```
+
+**For continuing existing work:**
+
+```
+/opc continue the authentication feature
+  ↓
+opc_state_init(project_name="用户认证功能", requirement_id="REQ-001")
+  ↓
+# System loads existing knowledge from REQ-001
+# Previous decisions and context are available
+```
+
+### What Gets Stored in Knowledge Library
+
+| Stage | Domain | What's Stored |
+|-------|--------|---------------|
+| product | requirement | Requirements, user stories, acceptance criteria |
+| design | design | UI specs, interaction flows, design decisions |
+| dev | platforms | Tech stack, architecture, implementation notes |
+| dev | backend | API contracts, database schemas |
+| qa | backend/test | Test plans, edge cases |
+| ship | shared/infrastructure | Deployment configs, infrastructure |
+| growth | growth/metrics | Success metrics, analytics |
 
 ### Status Command
 If user says `/opc status`:
@@ -62,7 +115,9 @@ If user says `/opc status`:
    ⏳ pending
 3. Show artifacts produced
 4. Show current agents working
-5. Call opc_knowledge_list to show knowledge domains
+5. Show associated requirement_id
+6. Call opc_knowledge_list to show knowledge domains
+7. REMIND user: Knowledge library is the source of truth for cross-stage context
 ```
 
 ## Step 1: Match Workflow Spec
@@ -187,59 +242,97 @@ Read the user's input and classify:
 
 ## Step 4: Execute
 
-### Knowledge Flow (Per Stage)
+### Knowledge Flow (CRITICAL - READ THIS)
+
+**⚠️ The knowledge library is the CORE mechanism for cross-stage context preservation. Without it, multi-stage workflows are incoherent.**
 
 **Each stage must follow knowledge protocol based on workflow config.**
 
 > **详见 `references/knowledge-protocol.md`** — 包含完整的目录结构、Stage-to-Domain 映射、使用示例。
 
-**核心流程：**
+#### The Knowledge Flow Pattern
 
 ```
-Before stage execution:
-1. Parse stage's knowledge config from workflow
-2. If read_before defined:
-   - For each domain in read_before:
-     - Call opc_knowledge_read(requirementId, domain)
-   - Combine all knowledge into context
-3. Inject knowledge context into agent dispatch
-
-After stage execution:
-4. If write_after true:
-   - Extract knowledge update from agent output
-   - Call opc_knowledge_write(requirementId, domain, doc, content)
+┌─────────────────────────────────────────────────────────────────┐
+│                    KNOWLEDGE FLOW PATTERN                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  BEFORE STAGE:                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ 1. Get requirement_id from opc_state_read()             │    │
+│  │ 2. Parse stage's knowledge config from workflow         │    │
+│  │ 3. For each domain in read_before:                      │    │
+│  │    - Call opc_knowledge_read(requirementId, domain)     │    │
+│  │ 4. Combine all knowledge into context                   │    │
+│  │ 5. Inject knowledge context into agent dispatch         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              ↓                                   │
+│  STAGE EXECUTION: Agent performs work with full context          │
+│                              ↓                                   │
+│  AFTER STAGE:                                                    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ 6. Extract knowledge update from agent output           │    │
+│  │ 7. Call opc_knowledge_write(requirementId, domain,      │    │
+│  │    doc, content)                                        │    │
+│  │ 8. Knowledge is now available for next stage            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Stage-to-Domain 映射速查：**
+#### Getting Requirement ID (ALWAYS do this first)
 
-| Stage | Domain | Doc |
-|-------|--------|-----|
-| product | requirement | main |
-| design | design | ui, interaction |
-| dev (web) | platforms | web/tech |
-| dev (backend) | backend | api |
-| qa | backend | test |
-| ship | shared | infrastructure |
-| growth | growth | metrics |
+```javascript
+// Read current state to get requirement_id
+const state = opc_state_read()
+const requirementId = state.project.requirement_id
 
-**Agent dispatch with knowledge:**
+// Use for ALL knowledge operations
+opc_knowledge_read(requirementId, "requirement")
+opc_knowledge_write(requirementId, "design", "ui", content)
+```
+
+#### Stage-to-Domain Mapping
+
+| Stage | Domain | Doc | What to Read | What to Write |
+|-------|--------|-----|--------------|---------------|
+| product | requirement | main | - | Requirements, user stories |
+| design | design | ui, interaction | requirement | UI specs, interaction flows |
+| dev (web) | platforms | web/tech | requirement, design | Tech decisions, architecture |
+| dev (backend) | backend | api, architecture | requirement, design | API contracts, schemas |
+| qa | backend | test | requirement, backend | Test plans, edge cases |
+| ship | shared | infrastructure | backend, platforms | Deployment configs |
+| growth | growth | metrics | requirement | Success metrics |
+
+#### Agent Dispatch with Knowledge Context
+
 ```
 Agent({agent}, `
 ## Task: {task}
 
-## Knowledge Context
+## Knowledge Context (READ THIS FIRST)
 ${knowledgeContext}
 
 ## Instructions
-1. Review knowledge context above
-2. Execute your stage tasks
-3. After completion, summarize what should be saved to knowledge library
+1. ⚠️ Review knowledge context above BEFORE starting work
+2. Understand what previous stages have decided
+3. Execute your stage tasks building on that context
+4. After completion, summarize what should be saved to knowledge library
 
 ## Output
 1. Your deliverables
-2. Knowledge update for this domain
+2. Knowledge update for this domain (will be used by next stages)
 `)
 ```
+
+#### Why This Matters
+
+| Scenario | Without Knowledge Flow | With Knowledge Flow |
+|----------|------------------------|---------------------|
+| Design stage | Starts from scratch, may contradict requirements | Builds on requirements, consistent UX |
+| Dev stage | May implement wrong API contract | Follows design decisions, correct implementation |
+| QA stage | May test wrong scenarios | Tests against requirements and edge cases |
+| Ship stage | May deploy wrong config | Uses verified architecture decisions |
 
 ### State Management (ALWAYS)
 
@@ -380,14 +473,36 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 | **inherit** | startup-analyst, backend-architect, etc. | Inherits from caller |
 
 ## Guidelines
+
+### Core Principles
 - Start with understanding, not dispatching
-- **Initialize state & knowledge** — use `opc_state_init` + `opc_knowledge_init`
-- **Read knowledge before each stage** — use `opc_knowledge_read` per workflow config
-- **Write knowledge after each stage** — use `opc_knowledge_write` per workflow config
+- **Knowledge library is MANDATORY** — it's the foundation for coherent multi-stage workflows
+- **Always initialize with `opc_state_init`** — this creates both state AND knowledge library in one call
+- **Get requirement_id from state** — `opc_state_read().project.requirement_id` — never guess or assume
+
+### Knowledge Flow (CRITICAL)
+1. **Before each stage**: Read knowledge from previous stages
+   - `opc_knowledge_read(requirementId, domain)` per workflow config
+   - This ensures continuity and context awareness
+2. **After each stage**: Write knowledge for future stages
+   - `opc_knowledge_write(requirementId, domain, doc, content)` per workflow config
+   - This enables knowledge accumulation and handoff
+
+### State Management
 - **Update state after each stage** — use `opc_state_write`
 - **Record handoffs with context** — use `opc_handoff`
 - **Create checkpoints before risky operations** — use `opc_checkpoint_create`
+
+### Execution Best Practices
 - Prefer parallel execution when possible
 - Use opus agents for security/critical decisions
 - Keep humans in the loop for strategic choices
 - A one-person company's scarcest resource is time — optimize for it
+
+### Common Mistakes to Avoid
+| ❌ Wrong | ✅ Right |
+|----------|----------|
+| Skip `opc_state_init` and dispatch agent directly | Always call `opc_state_init` first |
+| Ignore knowledge library, treat each stage as isolated | Read knowledge before, write after each stage |
+| Hardcode `requirement_id` in subsequent calls | Get it from `opc_state_read().project.requirement_id` |
+| Start stage without checking previous knowledge | Always check if relevant knowledge exists first |
