@@ -97,7 +97,7 @@ For each plugin to install:
 After installing opc-founder plugin, run the first-install setup script:
 
 ```bash
-python {marketplace_path}/scripts/first-install-setup.py {project_root}
+python {marketplace_path}/plugins/opc-founder/scripts/first-install-setup.py {project_root}
 ```
 
 This script runs **once** and performs:
@@ -195,7 +195,7 @@ To completely remove OPC Marketplace (plugins + HUD):
 
 ```bash
 # Run the uninstall script (removes plugins + HUD)
-~/YYInc/Me/opc-marketplace/scripts/uninstall.sh
+~/YYInc/Me/opc-marketplace/plugins/opc-founder/scripts/uninstall.sh
 
 # Then remove the marketplace via Claude Code
 /plugin remove opc-marketplace
