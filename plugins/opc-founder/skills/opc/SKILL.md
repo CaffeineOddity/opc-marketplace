@@ -189,7 +189,11 @@ Read the user's input and classify:
 
 ### Knowledge Flow (Per Stage)
 
-**Each stage must follow knowledge protocol based on workflow config:**
+**Each stage must follow knowledge protocol based on workflow config.**
+
+> **详见 `references/knowledge-protocol.md`** — 包含完整的目录结构、Stage-to-Domain 映射、使用示例。
+
+**核心流程：**
 
 ```
 Before stage execution:
@@ -206,18 +210,17 @@ After stage execution:
    - Call opc_knowledge_write(requirementId, domain, doc, content)
 ```
 
-**Knowledge config example from workflow:**
-```json
-{
-  "stage": "design",
-  "knowledge": {
-    "domain": "design",
-    "doc": "ui",
-    "read_before": ["requirement"],
-    "write_after": true
-  }
-}
-```
+**Stage-to-Domain 映射速查：**
+
+| Stage | Domain | Doc |
+|-------|--------|-----|
+| product | requirement | main |
+| design | design | ui, interaction |
+| dev (web) | platforms | web/tech |
+| dev (backend) | backend | api |
+| qa | backend | test |
+| ship | shared | infrastructure |
+| growth | growth | metrics |
 
 **Agent dispatch with knowledge:**
 ```
