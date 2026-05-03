@@ -336,13 +336,14 @@ function writeProjectState(state, cwd) {
     state._meta.updated_by = 'opc_state_write';
     atomicWriteJson(path, state);
 }
-function initializeProjectState(name, description, lockId, cwd) {
+function initializeProjectState(name, description, lockId, requirementId, cwd) {
     const now = new Date().toISOString();
     const stages = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
     return {
         project: {
             name,
             description,
+            requirement_id: requirementId,
             created_at: now,
             updated_at: now,
         },
@@ -493,9 +494,14 @@ function writeKnowledgeIndex(index, cwd) {
 }
 function initKnowledgeLibrary(requirementId, title, cwd) {
     const index = readKnowledgeIndex(cwd);
+    // If requirement already exists, update status and return (idempotent)
     if (index.requirements[requirementId]) {
-        throw new Error(`Requirement ${requirementId} already exists in knowledge library`);
+        index.requirements[requirementId].status = 'in_progress';
+        index.requirements[requirementId].updated_at = new Date().toISOString();
+        writeKnowledgeIndex(index, cwd);
+        return { isNew: false, title: index.requirements[requirementId].title };
     }
+    // Create new requirement
     const now = new Date().toISOString();
     index.requirements[requirementId] = {
         title,
@@ -510,6 +516,7 @@ function initKnowledgeLibrary(requirementId, title, cwd) {
     if (!existsSync(reqPath)) {
         mkdirSync(reqPath, { recursive: true });
     }
+    return { isNew: true, title };
 }
 function readKnowledgeDoc(requirementId, domain, platform, doc, cwd) {
     const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
@@ -641,6 +648,56 @@ function listKnowledgeDocs(requirementId, domain, cwd) {
     return docs;
 }
 // ============================================================
+// Requirement ID Helpers
+// ============================================================
+/**
+ * Generate the next available requirement ID.
+ * Format: REQ-XXX (zero-padded to 3 digits)
+ */
+function generateNextRequirementId(cwd) {
+    const index = readKnowledgeIndex(cwd);
+    const existingIds = Object.keys(index.requirements)
+        .filter(id => id.startsWith('REQ-'))
+        .map(id => {
+        const num = parseInt(id.replace('REQ-', ''), 10);
+        return isNaN(num) ? 0 : num;
+    });
+    const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+    return `REQ-${String(nextNum).padStart(3, '0')}`;
+}
+/**
+ * Find candidate requirements that match the given query.
+ * Returns candidates sorted by similarity score (highest first).
+ */
+function findCandidateRequirements(index, query, threshold = 0.3) {
+    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+    const candidates = [];
+    for (const [id, req] of Object.entries(index.requirements)) {
+        const titleWords = req.title.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+        // Calculate word overlap score
+        let matchCount = 0;
+        for (const queryWord of queryWords) {
+            for (const titleWord of titleWords) {
+                if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+                    matchCount++;
+                    break;
+                }
+            }
+        }
+        const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+        if (score >= threshold) {
+            candidates.push({
+                id,
+                title: req.title,
+                status: req.status,
+                score,
+            });
+        }
+    }
+    // Sort by score descending
+    return candidates.sort((a, b) => b.score - a.score);
+}
+// ============================================================
 // Session Management (Single-Task Model)
 // ============================================================
 /**
@@ -724,12 +781,13 @@ const tools = [
     // opc_state_init
     {
         name: 'opc_state_init',
-        description: 'Initialize a new OPC project state. Creates pipeline tracking. One task per window.',
+        description: 'Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.',
         inputSchema: {
             type: 'object',
             properties: {
                 project_name: { type: 'string', description: 'Project name' },
                 project_description: { type: 'string', description: 'Project description' },
+                requirement_id: { type: 'string', description: 'Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing.' },
                 workingDirectory: { type: 'string' },
             },
             required: ['project_name'],
@@ -1016,12 +1074,15 @@ async function handleToolCall(name, args) {
                     return `${icon} **${stage}**: ${data.status}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(', ')})` : ''}`;
                 })
                     .join('\n');
+                const requirementInfo = state.project.requirement_id
+                    ? `\n**Requirement ID:** ${state.project.requirement_id}`
+                    : '';
                 return {
                     content: [{
                             type: 'text',
                             text: `## OPC Project State
 
-**Project:** ${state.project.name}
+**Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}
 **Created:** ${state.project.created_at}
@@ -1044,6 +1105,7 @@ ${Object.entries(state.pipeline.stages)
             case 'opc_state_init': {
                 const projectName = args.project_name;
                 const projectDescription = args.project_description || '';
+                const providedRequirementId = args.requirement_id;
                 const lockId = getCurrentLockId(cwd);
                 // Check if current window already has a task
                 const existingTask = readProjectState(lockId, cwd);
@@ -1056,6 +1118,7 @@ ${Object.entries(state.pipeline.stages)
                                     text: `## Task Already Exists
 
 **Current Task:** ${existingTask.project.name}
+**Requirement ID:** ${existingTask.project.requirement_id || 'Not set'}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** 🔄 in_progress
 
@@ -1069,8 +1132,60 @@ Options:
                         };
                     }
                 }
+                // Determine requirement ID
+                let requirementId = providedRequirementId;
+                let requirementMatchInfo = '';
+                if (!requirementId) {
+                    // Try to match existing requirements
+                    const index = readKnowledgeIndex(cwd);
+                    const candidates = findCandidateRequirements(index, projectName);
+                    if (candidates.length > 0 && candidates[0].score >= 0.5) {
+                        // High confidence match - use it
+                        requirementId = candidates[0].id;
+                        requirementMatchInfo = `\n\n🔗 **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
+                    }
+                    else if (candidates.length > 0) {
+                        // Low confidence matches - show candidates for user to decide
+                        const candidateList = candidates.slice(0, 3)
+                            .map(c => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`)
+                            .join('\n');
+                        return {
+                            content: [{
+                                    type: 'text',
+                                    text: `## Similar Requirements Found
+
+The following requirements may be related to your task:
+
+${candidateList}
+
+**Options:**
+1. Specify a requirement ID: \`opc_state_init(project_name, requirement_id="REQ-XXX")\`
+2. Create new: \`opc_state_init(project_name, requirement_id="new")\`
+3. Let system auto-generate: call again without requirement_id (will create REQ-XXX)
+
+Please choose how to proceed.
+`,
+                                }],
+                        };
+                    }
+                    else {
+                        // No matches - auto-generate new ID
+                        requirementId = generateNextRequirementId(cwd);
+                        requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
+                    }
+                }
+                else if (requirementId === 'new') {
+                    // User explicitly wants new
+                    requirementId = generateNextRequirementId(cwd);
+                    requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
+                }
+                // Initialize knowledge library (idempotent)
+                const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
+                const knowledgeInfo = knowledgeResult.isNew
+                    ? 'Knowledge library initialized.'
+                    : `Resumed existing requirement: "${knowledgeResult.title}"`;
                 // Initialize new task
-                const state = initializeProjectState(projectName, projectDescription, lockId, cwd);
+                const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
                 state.pipeline.stages.product.status = 'in_progress';
                 state.pipeline.stages.product.started_at = new Date().toISOString();
                 writeProjectState(state, cwd);
@@ -1086,10 +1201,15 @@ Options:
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Current Stage:** product
+**Requirement ID:** ${requirementId}
+**Current Stage:** product${requirementMatchInfo}
+
+### Knowledge Library
+${knowledgeInfo}
 
 The pipeline is ready. Stage "product" is now in progress.
-Use opc_state_write to update progress as you advance through stages.${gitignoreMsg}
+Use \`opc_state_write\` to update progress as you advance through stages.
+Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `,
                         }],
                 };

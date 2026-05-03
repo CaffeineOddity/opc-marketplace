@@ -13985,7 +13985,36 @@ var OPC_PATHS = {
   LOCKS: ".opc/state/locks",
   MEMORY: ".opc/memory",
   ARTIFACTS: ".opc/artifacts",
-  LOGS: ".opc/logs"
+  LOGS: ".opc/logs",
+  WORKFLOWS: ".opc/workflows",
+  KNOWLEDGE: ".opc/knowledgebase"
+};
+var KNOWLEDGE_STRUCTURE = {
+  requirement: {
+    docs: ["main"],
+    hasSubdocs: false
+  },
+  design: {
+    docs: ["ui", "interaction"],
+    hasSubdocs: false
+  },
+  platforms: {
+    platforms: ["web", "ios", "android", "miniprogram"],
+    docs: ["tech", "test"],
+    hasSubdocs: true
+  },
+  backend: {
+    docs: ["api", "architecture", "test"],
+    hasSubdocs: false
+  },
+  shared: {
+    docs: ["database", "infrastructure"],
+    hasSubdocs: false
+  },
+  growth: {
+    docs: ["metrics", "analytics"],
+    hasSubdocs: false
+  }
 };
 function getWorktreeRoot(cwd) {
   const effectiveCwd = cwd || process.cwd();
@@ -14003,6 +14032,14 @@ function getWorktreeRoot(cwd) {
 function getOpcRoot(cwd) {
   const root = getWorktreeRoot(cwd);
   return (0, import_path.join)(root, OPC_PATHS.ROOT);
+}
+function ensureWorkflowsDir(cwd) {
+  const root = getWorktreeRoot(cwd);
+  const dir = (0, import_path.join)(root, OPC_PATHS.WORKFLOWS);
+  if (!(0, import_fs.existsSync)(dir)) {
+    (0, import_fs.mkdirSync)(dir, { recursive: true });
+  }
+  return dir;
 }
 function ensureOpcDir(subdir, cwd) {
   const root = getWorktreeRoot(cwd);
@@ -14068,13 +14105,14 @@ function writeProjectState(state, cwd) {
   state._meta.updated_by = "opc_state_write";
   atomicWriteJson(path, state);
 }
-function initializeProjectState(name, description, lockId, cwd) {
+function initializeProjectState(name, description, lockId, requirementId, cwd) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const stages = ["product", "design", "dev", "qa", "ship", "growth"];
   return {
     project: {
       name,
       description,
+      requirement_id: requirementId,
       created_at: now,
       updated_at: now
     },
@@ -14186,6 +14224,224 @@ function searchMemory(query, cwd) {
   const lowerQuery = query.toLowerCase();
   return memory.entries.filter((e) => e.content.toLowerCase().includes(lowerQuery) || e.category.toLowerCase().includes(lowerQuery));
 }
+function getKnowledgePath(cwd) {
+  return (0, import_path.join)(getOpcRoot(cwd), "knowledge");
+}
+function getKnowledgeIndexPath(cwd) {
+  return (0, import_path.join)(getKnowledgePath(cwd), "index.json");
+}
+function getRequirementPath(requirementId, cwd) {
+  return (0, import_path.join)(getKnowledgePath(cwd), requirementId);
+}
+function getKnowledgeDocPath(requirementId, domain, platform, doc, cwd) {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+  if (domain === "platforms" && platform) {
+    return (0, import_path.join)(reqPath, "platforms", platform, `${doc || "tech"}.md`);
+  }
+  return (0, import_path.join)(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
+}
+function readKnowledgeIndex(cwd) {
+  const path = getKnowledgeIndexPath(cwd);
+  const index = readJsonFile(path);
+  return index || { requirements: {} };
+}
+function writeKnowledgeIndex(index, cwd) {
+  const path = getKnowledgeIndexPath(cwd);
+  const dir = (0, import_path.join)(path, "..");
+  if (!(0, import_fs.existsSync)(dir)) {
+    (0, import_fs.mkdirSync)(dir, { recursive: true });
+  }
+  atomicWriteJson(path, index);
+}
+function initKnowledgeLibrary(requirementId, title, cwd) {
+  const index = readKnowledgeIndex(cwd);
+  if (index.requirements[requirementId]) {
+    index.requirements[requirementId].status = "in_progress";
+    index.requirements[requirementId].updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    writeKnowledgeIndex(index, cwd);
+    return { isNew: false, title: index.requirements[requirementId].title };
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  index.requirements[requirementId] = {
+    title,
+    status: "in_progress",
+    created_at: now,
+    updated_at: now,
+    domains: {}
+  };
+  writeKnowledgeIndex(index, cwd);
+  const reqPath = getRequirementPath(requirementId, cwd);
+  if (!(0, import_fs.existsSync)(reqPath)) {
+    (0, import_fs.mkdirSync)(reqPath, { recursive: true });
+  }
+  return { isNew: true, title };
+}
+function readKnowledgeDoc(requirementId, domain, platform, doc, cwd) {
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  if (!(0, import_fs.existsSync)(path))
+    return null;
+  return (0, import_fs.readFileSync)(path, "utf-8");
+}
+function readAllKnowledgeDocs(requirementId, domain, cwd) {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainPath = (0, import_path.join)(reqPath, domain);
+  if (!(0, import_fs.existsSync)(domainPath))
+    return null;
+  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
+  const results = [];
+  if (domain === "platforms") {
+    const platformsDir = domainPath;
+    if ((0, import_fs.existsSync)(platformsDir)) {
+      for (const platform of (0, import_fs.readdirSync)(platformsDir)) {
+        const platformPath = (0, import_path.join)(platformsDir, platform);
+        if (!(0, import_fs.existsSync)(platformPath) || !isDirectory(platformPath))
+          continue;
+        for (const docFile of (0, import_fs.readdirSync)(platformPath)) {
+          if (!docFile.endsWith(".md"))
+            continue;
+          const content = (0, import_fs.readFileSync)((0, import_path.join)(platformPath, docFile), "utf-8");
+          results.push(`## ${platform}/${docFile}
+
+${content}`);
+        }
+      }
+    }
+  } else {
+    for (const docName of domainConfig.docs) {
+      const docPath = (0, import_path.join)(domainPath, `${docName}.md`);
+      if ((0, import_fs.existsSync)(docPath)) {
+        const content = (0, import_fs.readFileSync)(docPath, "utf-8");
+        results.push(`## ${docName}.md
+
+${content}`);
+      }
+    }
+  }
+  return results.length > 0 ? results.join("\n\n---\n\n") : null;
+}
+function isDirectory(path) {
+  try {
+    return (0, import_fs.statSync)(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+function writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode = "append", section, cwd) {
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  const dir = (0, import_path.join)(path, "..");
+  if (!(0, import_fs.existsSync)(dir)) {
+    (0, import_fs.mkdirSync)(dir, { recursive: true });
+  }
+  let finalContent = content;
+  if (mode === "append" && (0, import_fs.existsSync)(path)) {
+    const existing = (0, import_fs.readFileSync)(path, "utf-8");
+    const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    finalContent = `${existing}
+
+## ${timestamp}
+
+${content}`;
+  } else if (mode === "update" && section && (0, import_fs.existsSync)(path)) {
+    const existing = (0, import_fs.readFileSync)(path, "utf-8");
+    const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, "g");
+    if (sectionRegex.test(existing)) {
+      finalContent = existing.replace(sectionRegex, `$1${content}
+
+`);
+    } else {
+      finalContent = `${existing}
+
+## ${section}
+
+${content}`;
+    }
+  }
+  (0, import_fs.writeFileSync)(path, finalContent, "utf-8");
+  const index = readKnowledgeIndex(cwd);
+  const req = index.requirements[requirementId];
+  if (req) {
+    req.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    if (!req.domains[domain]) {
+      req.domains[domain] = [];
+    }
+    const docKey = domain === "platforms" ? `${platform}/${doc}` : doc || KNOWLEDGE_STRUCTURE[domain].docs[0];
+    if (!req.domains[domain].includes(docKey)) {
+      req.domains[domain].push(docKey);
+    }
+    writeKnowledgeIndex(index, cwd);
+  }
+}
+function knowledgeExists(requirementId, domain, platform, doc, cwd) {
+  if (!domain) {
+    const index = readKnowledgeIndex(cwd);
+    return !!index.requirements[requirementId];
+  }
+  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  return (0, import_fs.existsSync)(path);
+}
+function listKnowledgeDocs(requirementId, domain, cwd) {
+  const reqPath = getRequirementPath(requirementId, cwd);
+  const domainPath = (0, import_path.join)(reqPath, domain);
+  if (!(0, import_fs.existsSync)(domainPath))
+    return [];
+  const docs = [];
+  if (domain === "platforms") {
+    const platformsDir = domainPath;
+    for (const platform of (0, import_fs.readdirSync)(platformsDir)) {
+      const platformPath = (0, import_path.join)(platformsDir, platform);
+      if (!isDirectory(platformPath))
+        continue;
+      for (const docFile of (0, import_fs.readdirSync)(platformPath)) {
+        if (docFile.endsWith(".md")) {
+          docs.push(`${platform}/${docFile.replace(".md", "")}`);
+        }
+      }
+    }
+  } else {
+    for (const docFile of (0, import_fs.readdirSync)(domainPath)) {
+      if (docFile.endsWith(".md")) {
+        docs.push(docFile.replace(".md", ""));
+      }
+    }
+  }
+  return docs;
+}
+function generateNextRequirementId(cwd) {
+  const index = readKnowledgeIndex(cwd);
+  const existingIds = Object.keys(index.requirements).filter((id) => id.startsWith("REQ-")).map((id) => {
+    const num = parseInt(id.replace("REQ-", ""), 10);
+    return isNaN(num) ? 0 : num;
+  });
+  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+  return `REQ-${String(nextNum).padStart(3, "0")}`;
+}
+function findCandidateRequirements(index, query, threshold = 0.3) {
+  const queryWords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const candidates = [];
+  for (const [id, req] of Object.entries(index.requirements)) {
+    const titleWords = req.title.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const titleWord of titleWords) {
+        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+    if (score >= threshold) {
+      candidates.push({
+        id,
+        title: req.title,
+        status: req.status,
+        score
+      });
+    }
+  }
+  return candidates.sort((a, b) => b.score - a.score);
+}
 function getCurrentTask(cwd) {
   const lockId = getCurrentLockId(cwd);
   return readProjectState(lockId, cwd);
@@ -14246,12 +14502,13 @@ var tools = [
   // opc_state_init
   {
     name: "opc_state_init",
-    description: "Initialize a new OPC project state. Creates pipeline tracking. One task per window.",
+    description: "Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.",
     inputSchema: {
       type: "object",
       properties: {
         project_name: { type: "string", description: "Project name" },
         project_description: { type: "string", description: "Project description" },
+        requirement_id: { type: "string", description: "Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing." },
         workingDirectory: { type: "string" }
       },
       required: ["project_name"]
@@ -14407,6 +14664,109 @@ var tools = [
         workingDirectory: { type: "string" }
       }
     }
+  },
+  // opc_workflows_path
+  {
+    name: "opc_workflows_path",
+    description: "Get the workflows directory path. Always uses git toplevel root for consistency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
+  },
+  // opc_knowledge_init
+  {
+    name: "opc_knowledge_init",
+    description: "Initialize knowledge library for a requirement. Creates directory structure and index entry.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID (e.g., REQ-001)" },
+        title: { type: "string", description: "Requirement title" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "title"]
+    }
+  },
+  // opc_knowledge_read
+  {
+    name: "opc_knowledge_read",
+    description: "Read knowledge from knowledge library. Can read specific doc or entire domain.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        domain: { type: "string", enum: ["requirement", "design", "platforms", "backend", "shared", "growth"], description: "Knowledge domain" },
+        platform: { type: "string", enum: ["web", "ios", "android", "miniprogram"], description: "Platform (required when domain=platforms)" },
+        doc: { type: "string", description: "Document name (e.g., main, ui, api, tech, test)" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "domain"]
+    }
+  },
+  // opc_knowledge_write
+  {
+    name: "opc_knowledge_write",
+    description: "Write or update knowledge document. Supports append, update section, or overwrite.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        domain: { type: "string", enum: ["requirement", "design", "platforms", "backend", "shared", "growth"], description: "Knowledge domain" },
+        platform: { type: "string", enum: ["web", "ios", "android", "miniprogram"], description: "Platform (required when domain=platforms)" },
+        doc: { type: "string", description: "Document name (e.g., main, ui, api, tech, test)" },
+        content: { type: "string", description: "Content to write" },
+        section: { type: "string", description: "Section header to update (optional)" },
+        mode: { type: "string", enum: ["append", "update", "overwrite"], description: "Write mode (default: append)" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "domain", "doc", "content"]
+    }
+  },
+  // opc_knowledge_exists
+  {
+    name: "opc_knowledge_exists",
+    description: "Check if knowledge document exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        domain: { type: "string", enum: ["requirement", "design", "platforms", "backend", "shared", "growth"], description: "Knowledge domain" },
+        platform: { type: "string", enum: ["web", "ios", "android", "miniprogram"], description: "Platform" },
+        doc: { type: "string", description: "Document name" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId"]
+    }
+  },
+  // opc_knowledge_list
+  {
+    name: "opc_knowledge_list",
+    description: "List requirements in knowledge library.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["in_progress", "completed", "paused"], description: "Filter by status" },
+        domain: { type: "string", enum: ["requirement", "design", "platforms", "backend", "shared", "growth"], description: "Filter by domain" },
+        workingDirectory: { type: "string" }
+      }
+    }
+  },
+  // opc_knowledge_docs
+  {
+    name: "opc_knowledge_docs",
+    description: "List available documents in a domain for a requirement.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        domain: { type: "string", enum: ["requirement", "design", "platforms", "backend", "shared", "growth"], description: "Knowledge domain" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "domain"]
+    }
   }
 ];
 async function handleToolCall(name, args) {
@@ -14428,12 +14788,14 @@ async function handleToolCall(name, args) {
           const icon = data.status === "completed" ? "\u2705" : data.status === "in_progress" ? "\u{1F504}" : data.status === "blocked" ? "\u{1F6AB}" : "\u23F3";
           return `${icon} **${stage}**: ${data.status}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(", ")})` : ""}`;
         }).join("\n");
+        const requirementInfo = state.project.requirement_id ? `
+**Requirement ID:** ${state.project.requirement_id}` : "";
         return {
           content: [{
             type: "text",
             text: `## OPC Project State
 
-**Project:** ${state.project.name}
+**Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}
 **Created:** ${state.project.created_at}
@@ -14453,6 +14815,7 @@ ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.len
       case "opc_state_init": {
         const projectName = args.project_name;
         const projectDescription = args.project_description || "";
+        const providedRequirementId = args.requirement_id;
         const lockId = getCurrentLockId(cwd);
         const existingTask = readProjectState(lockId, cwd);
         if (existingTask) {
@@ -14464,6 +14827,7 @@ ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.len
                 text: `## Task Already Exists
 
 **Current Task:** ${existingTask.project.name}
+**Requirement ID:** ${existingTask.project.requirement_id || "Not set"}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** \u{1F504} in_progress
 
@@ -14477,7 +14841,51 @@ Options:
             };
           }
         }
-        const state = initializeProjectState(projectName, projectDescription, lockId, cwd);
+        let requirementId = providedRequirementId;
+        let requirementMatchInfo = "";
+        if (!requirementId) {
+          const index = readKnowledgeIndex(cwd);
+          const candidates = findCandidateRequirements(index, projectName);
+          if (candidates.length > 0 && candidates[0].score >= 0.5) {
+            requirementId = candidates[0].id;
+            requirementMatchInfo = `
+
+\u{1F517} **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
+          } else if (candidates.length > 0) {
+            const candidateList = candidates.slice(0, 3).map((c) => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`).join("\n");
+            return {
+              content: [{
+                type: "text",
+                text: `## Similar Requirements Found
+
+The following requirements may be related to your task:
+
+${candidateList}
+
+**Options:**
+1. Specify a requirement ID: \`opc_state_init(project_name, requirement_id="REQ-XXX")\`
+2. Create new: \`opc_state_init(project_name, requirement_id="new")\`
+3. Let system auto-generate: call again without requirement_id (will create REQ-XXX)
+
+Please choose how to proceed.
+`
+              }]
+            };
+          } else {
+            requirementId = generateNextRequirementId(cwd);
+            requirementMatchInfo = `
+
+\u{1F195} **Generated new requirement ID:** ${requirementId}`;
+          }
+        } else if (requirementId === "new") {
+          requirementId = generateNextRequirementId(cwd);
+          requirementMatchInfo = `
+
+\u{1F195} **Generated new requirement ID:** ${requirementId}`;
+        }
+        const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
+        const knowledgeInfo = knowledgeResult.isNew ? "Knowledge library initialized." : `Resumed existing requirement: "${knowledgeResult.title}"`;
+        const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
         state.pipeline.stages.product.status = "in_progress";
         state.pipeline.stages.product.started_at = (/* @__PURE__ */ new Date()).toISOString();
         writeProjectState(state, cwd);
@@ -14490,10 +14898,15 @@ Options:
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Current Stage:** product
+**Requirement ID:** ${requirementId}
+**Current Stage:** product${requirementMatchInfo}
+
+### Knowledge Library
+${knowledgeInfo}
 
 The pipeline is ready. Stage "product" is now in progress.
-Use opc_state_write to update progress as you advance through stages.${gitignoreMsg}
+Use \`opc_state_write\` to update progress as you advance through stages.
+Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `
           }]
         };
@@ -14968,6 +15381,208 @@ ${taskList}`;
             text: `## Task Group Status
 
 ${output}`
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_workflows_path": {
+        const workflowsDir = ensureWorkflowsDir(cwd);
+        const gitRoot = getWorktreeRoot(cwd);
+        return {
+          content: [{
+            type: "text",
+            text: `## Workflows Directory
+
+**Path:** ${workflowsDir}
+**Git Root:** ${gitRoot}
+
+All workflow files should be read from/written to this directory.
+This ensures consistency regardless of current working directory.`
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_knowledge_init": {
+        const requirementId = args.requirementId;
+        const title = args.title;
+        try {
+          initKnowledgeLibrary(requirementId, title, cwd);
+          return {
+            content: [{
+              type: "text",
+              text: `## Knowledge Library Initialized
+
+**Requirement ID:** ${requirementId}
+**Title:** ${title}
+**Path:** .opc/knowledgebase/${requirementId}/
+
+Knowledge documents will be created on-demand when writing to each domain.`
+            }]
+          };
+        } catch (error2) {
+          return {
+            content: [{
+              type: "text",
+              text: `Error: ${error2 instanceof Error ? error2.message : String(error2)}`
+            }],
+            isError: true
+          };
+        }
+      }
+      // ============================================================
+      case "opc_knowledge_read": {
+        const requirementId = args.requirementId;
+        const domain = args.domain;
+        const platform = args.platform;
+        const doc = args.doc;
+        if (doc || domain === "platforms" && platform) {
+          const content2 = readKnowledgeDoc(requirementId, domain, platform, doc, cwd);
+          if (!content2) {
+            return {
+              content: [{
+                type: "text",
+                text: `Knowledge document not found: ${requirementId}/${domain}${platform ? `/${platform}` : ""}/${doc}`
+              }]
+            };
+          }
+          return {
+            content: [{
+              type: "text",
+              text: content2
+            }]
+          };
+        }
+        const content = readAllKnowledgeDocs(requirementId, domain, cwd);
+        if (!content) {
+          return {
+            content: [{
+              type: "text",
+              text: `No knowledge documents found for ${requirementId}/${domain}`
+            }]
+          };
+        }
+        return {
+          content: [{
+            type: "text",
+            text: content
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_knowledge_write": {
+        const requirementId = args.requirementId;
+        const domain = args.domain;
+        const platform = args.platform;
+        const doc = args.doc;
+        const content = args.content;
+        const mode = args.mode || "append";
+        const section = args.section;
+        if (domain === "platforms" && !platform) {
+          return {
+            content: [{
+              type: "text",
+              text: 'Error: platform parameter is required when domain is "platforms"'
+            }],
+            isError: true
+          };
+        }
+        const index = readKnowledgeIndex(cwd);
+        if (!index.requirements[requirementId]) {
+          return {
+            content: [{
+              type: "text",
+              text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`
+            }],
+            isError: true
+          };
+        }
+        writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode, section, cwd);
+        const docPath = domain === "platforms" ? `${domain}/${platform}/${doc}.md` : `${domain}/${doc}.md`;
+        return {
+          content: [{
+            type: "text",
+            text: `## Knowledge Written
+
+**Requirement:** ${requirementId}
+**Document:** ${docPath}
+**Mode:** ${mode}${section ? `
+**Section:** ${section}` : ""}
+
+Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.`
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_knowledge_exists": {
+        const requirementId = args.requirementId;
+        const domain = args.domain;
+        const platform = args.platform;
+        const doc = args.doc;
+        const exists = knowledgeExists(requirementId, domain, platform, doc, cwd);
+        return {
+          content: [{
+            type: "text",
+            text: exists ? "true" : "false"
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_knowledge_list": {
+        const status = args.status;
+        const domainFilter = args.domain;
+        const index = readKnowledgeIndex(cwd);
+        let requirements = Object.entries(index.requirements);
+        if (status) {
+          requirements = requirements.filter(([, r]) => r.status === status);
+        }
+        if (domainFilter) {
+          requirements = requirements.filter(([, r]) => r.domains[domainFilter]?.length > 0);
+        }
+        if (requirements.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text: "No requirements found in knowledge library."
+            }]
+          };
+        }
+        const table = requirements.map(([id, r]) => {
+          const domains = Object.keys(r.domains).join(", ") || "-";
+          const platforms = r.domains.platforms?.join(", ") || "";
+          const domainDisplay = platforms ? `${domains} (${platforms})` : domains;
+          return `| ${id} | ${r.title} | ${r.status} | ${domainDisplay} | ${r.updated_at.split("T")[0]} |`;
+        }).join("\n");
+        return {
+          content: [{
+            type: "text",
+            text: `## Knowledge Library
+
+| ID | Title | Status | Domains | Updated |
+|-----|-------|--------|---------|--------|
+${table}`
+          }]
+        };
+      }
+      // ============================================================
+      case "opc_knowledge_docs": {
+        const requirementId = args.requirementId;
+        const domain = args.domain;
+        const docs = listKnowledgeDocs(requirementId, domain, cwd);
+        if (docs.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text: `No documents found for ${requirementId}/${domain}`
+            }]
+          };
+        }
+        const docList = docs.map((d) => `- ${d}`).join("\n");
+        return {
+          content: [{
+            type: "text",
+            text: `## ${requirementId}/${domain} Documents
+
+${docList}`
           }]
         };
       }
