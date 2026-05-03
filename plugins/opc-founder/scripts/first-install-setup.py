@@ -54,7 +54,13 @@ def get_project_root() -> Path:
 
 
 def get_marketplace_root() -> Path:
-    """Get marketplace root (parent of scripts directory)."""
+    """Get marketplace root.
+
+    Script is at: {marketplace}/plugins/opc-founder/scripts/first-install-setup.py
+    Or in cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/scripts/
+
+    Returns the opc-founder directory (which contains workflows/).
+    """
     return get_script_dir().parent
 
 
@@ -67,7 +73,7 @@ def run_first_install_setup(project_root: Path) -> dict:
     """
     marketplace_root = get_marketplace_root()
     marker_file = project_root / ".opc" / ".first-install-done"
-    workflows_source = marketplace_root / "plugins" / "opc-founder" / "workflows" / "built-in"
+    workflows_source = marketplace_root / "workflows" / "built-in"
     workflows_target = project_root / ".opc" / "workflows"
     gitignore_path = project_root / ".gitignore"
 
