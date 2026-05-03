@@ -209,7 +209,7 @@ def update_settings(plugins: list[str]):
 
 def run_first_install_setup(marketplace_path: Path, project_root: Path = None):
     """Run first-install setup script."""
-    setup_script = marketplace_path / 'plugins' / 'opc-founder' / 'scripts' / 'first-install-setup.py'
+    setup_script = marketplace_path / 'plugins' / 'opc-founder' / 'skills' / 'opc-plugin' / 'scripts' / 'first-install-setup.py'
 
     if not setup_script.exists():
         print("  ⚠️  First-install setup script not found, skipping")
