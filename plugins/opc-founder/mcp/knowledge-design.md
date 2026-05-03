@@ -7,7 +7,7 @@ Knowledge library for self-evolving project documentation. Each requirement has 
 ## Directory Structure
 
 ```
-.opc/knowledge/
+.opc/knowledgebase/
 ├── REQ-001/
 │   ├── requirement/
 │   │   └── main.md
@@ -99,7 +99,7 @@ Initialize knowledge library for a requirement.
 {
   content: [{
     type: "text",
-    text: "✅ Knowledge library initialized for REQ-001\nPath: .opc/knowledge/REQ-001/"
+    text: "✅ Knowledge library initialized for REQ-001\nPath: .opc/knowledgebase/REQ-001/"
   }]
 }
 ```

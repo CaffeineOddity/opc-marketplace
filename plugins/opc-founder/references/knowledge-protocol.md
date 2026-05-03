@@ -12,7 +12,7 @@ The knowledge library enables:
 ## Directory Structure
 
 ```
-.opc/knowledge/{REQ-ID}/
+.opc/knowledgebase/{REQ-ID}/
 ├── requirement/
 │   └── main.md                    # User stories, acceptance criteria
 ├── design/

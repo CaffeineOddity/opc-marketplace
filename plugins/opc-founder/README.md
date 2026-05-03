@@ -157,7 +157,7 @@ OPC provides a self-evolving knowledge library that accumulates project knowledg
 ### Directory Structure
 
 ```
-.opc/knowledge/
+.opc/knowledgebase/
 ├── REQ-001/
 │   ├── requirement/
 │   │   └── main.md              # Requirement knowledge
