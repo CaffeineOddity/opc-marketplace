@@ -8,21 +8,14 @@ Runs once on first opc-plugin install:
 3. Create marker file to prevent re-run
 
 Usage:
-    python scripts/first-install-setup.py <project_root> [marketplace_root]
-    python scripts/first-install-setup.py /path/to/project /path/to/marketplace
+    python scripts/first-install-setup.py <project_root> <marketplace_root>
 """
 
 import json
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-
-
-def get_script_dir() -> Path:
-    """Get the directory where this script is located."""
-    return Path(__file__).parent.resolve()
 
 
 def get_git_toplevel(path: Path = None) -> Path | None:
@@ -54,65 +47,32 @@ def get_project_root() -> Path:
     return git_root if git_root else Path.cwd()
 
 
-def get_marketplace_root_from_args() -> Path | None:
-    """Get marketplace root from command line argument if provided."""
-    if len(sys.argv) > 2:
-        return Path(sys.argv[2]).resolve()
-    return None
+def get_opc_founder_path(marketplace_path: Path) -> Path:
+    """Get opc-founder path from marketplace path.
 
+    Args:
+        marketplace_path: Path to opc-marketplace root (e.g. ~/.claude/plugins/marketplaces/opc-marketplace)
 
-def get_marketplace_root() -> Path:
-    """Get marketplace root from args or calculate from script location.
-
-    Script location depends on installation method:
-
-    1. Claude Code install: ~/.claude/plugins/marketplaces/opc-marketplace/plugins/opc-founder/skills/opc-plugin/scripts/
-       - opc-founder is 3 levels up: scripts -> opc-plugin -> skills -> opc-founder
-
-    2. Manual cache: ~/.claude/plugins/cache/opc-marketplace/opc-founder/{version}/skills/opc-plugin/scripts/
-       - opc-founder dir is 3 levels up: scripts -> opc-plugin -> skills -> opc-founder
-
-    Returns the opc-founder directory (which contains workflows/).
+    Returns:
+        Path to opc-founder directory (which contains workflows/)
     """
-    # Check if marketplace root is provided via command line
-    marketplace_from_args = get_marketplace_root_from_args()
-    if marketplace_from_args:
-        # Verify workflows exist at the provided path
-        if (marketplace_from_args / "plugins" / "opc-founder" / "workflows" / "built-in").exists():
-            return marketplace_from_args / "plugins" / "opc-founder"
-
-    script_dir = get_script_dir()
-
-    # Script is at .../opc-founder/skills/opc-plugin/scripts/
-    # Go up 3 levels to reach opc-founder
-    opc_founder_dir = script_dir.parent.parent.parent  # scripts -> opc-plugin -> skills -> opc-founder
-
-    # Check if workflows exists
-    if (opc_founder_dir / "workflows" / "built-in").exists():
-        return opc_founder_dir
-
-    # For marketplaces path, try to find via plugins directory
-    if "plugins" in script_dir.parts:
-        idx = script_dir.parts.index("plugins")
-        marketplace_root = Path(*script_dir.parts[:idx])
-        opc_founder_dir = marketplace_root / "plugins" / "opc-founder"
-        if (opc_founder_dir / "workflows" / "built-in").exists():
-            return opc_founder_dir
-
-    # Fallback: return 3 levels up
-    return script_dir.parent.parent.parent
+    return marketplace_path / "plugins" / "opc-founder"
 
 
-def run_first_install_setup(project_root: Path) -> dict:
+def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
     """
     Run first install setup if not already done.
+
+    Args:
+        project_root: Path to the project where .opc/ will be created
+        marketplace_path: Path to opc-marketplace root
 
     Returns:
         dict with 'executed' (bool) and 'message' (str)
     """
-    marketplace_root = get_marketplace_root()
+    opc_founder_path = get_opc_founder_path(marketplace_path)
     marker_file = project_root / ".opc" / ".first-install-done"
-    workflows_source = marketplace_root / "workflows" / "built-in"
+    workflows_source = opc_founder_path / "workflows" / "built-in"
     workflows_target = project_root / ".opc" / "workflows"
     gitignore_path = project_root / ".gitignore"
 
@@ -175,17 +135,22 @@ def run_first_install_setup(project_root: Path) -> dict:
 
 
 def main():
+    if len(sys.argv) < 3:
+        print("Usage: python first-install-setup.py <project_root> <marketplace_root>")
+        sys.exit(1)
+
     project_root = get_project_root()
+    marketplace_path = Path(sys.argv[2]).resolve()
 
     print(f"OPC First Install Setup")
     print(f"Project root: {project_root}")
-    print(f"Marketplace: {get_marketplace_root()}")
+    print(f"Marketplace: {marketplace_path}")
     print()
 
-    result = run_first_install_setup(project_root)
+    result = run_first_install_setup(project_root, marketplace_path)
     print(result["message"])
 
-    return 0 if result["executed"] or not result["executed"] else 1
+    return 0
 
 
 if __name__ == "__main__":
