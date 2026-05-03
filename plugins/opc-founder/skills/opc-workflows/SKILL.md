@@ -214,8 +214,10 @@ When `/opc <task>` is invoked:
 
 ## File Locations
 
+**Important:** Always use `opc_workflows_path` MCP tool to get the correct workflows directory. This ensures the path is based on git toplevel, providing consistency when running from subdirectories.
+
 ```
-.opc/
+{git-toplevel}/.opc/
 └── workflows/
     ├── feature-development.json
     ├── bug-fix.json
@@ -228,7 +230,7 @@ When `/opc <task>` is invoked:
     └── my-custom-workflow.json   # User-created workflows
 ```
 
-**Note:** Built-in workflows are installed to `.opc/workflows/` when running `/opc-plugin install`. Users can:
+**Note:** Built-in workflows are installed to `{git-toplevel}/.opc/workflows/` when running `/opc-plugin install`. Users can:
 - View and edit any workflow directly
 - Create new workflows with `/opc-workflows create`
 - All workflows in this directory are available for OPC to use

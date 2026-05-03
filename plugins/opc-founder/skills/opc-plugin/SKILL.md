@@ -102,9 +102,11 @@ python {marketplace_path}/scripts/first-install-setup.py {project_root}
 
 This script runs **once** and performs:
 
-1. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `.opc/workflows/`
+1. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `{git-toplevel}/.opc/workflows/`
 2. **Update .gitignore**: Add `.opc/state/` entry (if not exists)
-3. **Create marker file**: `.opc/.first-install-done` to prevent re-run
+3. **Create marker file**: `{git-toplevel}/.opc/.first-install-done` to prevent re-run
+
+**Note:** All paths use git toplevel root for consistency when running from subdirectories.
 
 **Marker file structure:**
 ```json

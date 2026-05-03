@@ -68,10 +68,13 @@ If user says `/opc status`:
 ### Load Workflow Specs
 
 ```
-1. Read all JSON files from .opc/workflows/
-2. Parse each workflow's triggers.keywords and triggers.patterns
-3. Match against user's task description
+1. Call opc_workflows_path to get the correct workflows directory (uses git toplevel)
+2. Read all JSON files from that directory
+3. Parse each workflow's triggers.keywords and triggers.patterns
+4. Match against user's task description
 ```
+
+**Important:** Always use `opc_workflows_path` to get the directory path. This ensures consistency when running from subdirectories.
 
 ### Matching Logic
 

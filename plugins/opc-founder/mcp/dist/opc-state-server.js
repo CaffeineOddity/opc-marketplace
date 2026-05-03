@@ -192,6 +192,7 @@ const OPC_PATHS = {
     MEMORY: '.opc/memory',
     ARTIFACTS: '.opc/artifacts',
     LOGS: '.opc/logs',
+    WORKFLOWS: '.opc/workflows',
 };
 function getWorktreeRoot(cwd) {
     const effectiveCwd = cwd || process.cwd();
@@ -210,6 +211,18 @@ function getWorktreeRoot(cwd) {
 function getOpcRoot(cwd) {
     const root = getWorktreeRoot(cwd);
     return join(root, OPC_PATHS.ROOT);
+}
+function getWorkflowsPath(cwd) {
+    const root = getWorktreeRoot(cwd);
+    return join(root, OPC_PATHS.WORKFLOWS);
+}
+function ensureWorkflowsDir(cwd) {
+    const root = getWorktreeRoot(cwd);
+    const dir = join(root, OPC_PATHS.WORKFLOWS);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+    }
+    return dir;
 }
 function ensureOpcDir(subdir, cwd) {
     const root = getWorktreeRoot(cwd);
@@ -661,6 +674,17 @@ const tools = [
             properties: {
                 stage: { type: 'string', description: 'Stage name' },
                 group_id: { type: 'string', description: 'Group ID (optional, shows all if omitted)' },
+                workingDirectory: { type: 'string' },
+            },
+        },
+    },
+    // opc_workflows_path
+    {
+        name: 'opc_workflows_path',
+        description: 'Get the workflows directory path. Always uses git toplevel root for consistency.',
+        inputSchema: {
+            type: 'object',
+            properties: {
                 workingDirectory: { type: 'string' },
             },
         },
@@ -1267,6 +1291,23 @@ ${taskList}`;
                     content: [{
                             type: 'text',
                             text: `## Task Group Status\n\n${output}`,
+                        }],
+                };
+            }
+            // ============================================================
+            case 'opc_workflows_path': {
+                const workflowsDir = ensureWorkflowsDir(cwd);
+                const gitRoot = getWorktreeRoot(cwd);
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `## Workflows Directory
+
+**Path:** ${workflowsDir}
+**Git Root:** ${gitRoot}
+
+All workflow files should be read from/written to this directory.
+This ensures consistency regardless of current working directory.`,
                         }],
                 };
             }
