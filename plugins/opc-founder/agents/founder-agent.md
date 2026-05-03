@@ -371,202 +371,46 @@ OPC provides persistent state management through MCP tools. One window = one tas
 
 ## Knowledge Library Protocol
 
-OPC provides a self-evolving knowledge library that accumulates project knowledge across the full lifecycle.
+OPC provides a self-evolving knowledge library. **See `references/knowledge-protocol.md` for full details.**
 
-### Knowledge Tools
+### Quick Reference
 
-| Tool | Purpose |
-|------|---------|
-| `opc_knowledge_init` | Initialize knowledge library for a requirement |
-| `opc_knowledge_read` | Read knowledge from domain/platform/doc |
-| `opc_knowledge_write` | Write or update knowledge document |
-| `opc_knowledge_exists` | Check if knowledge document exists |
-| `opc_knowledge_list` | List requirements in knowledge library |
-| `opc_knowledge_docs` | List available documents in a domain |
+| Stage | Domain | Read Before | Write After |
+|-------|--------|-------------|-------------|
+| product | requirement | - | requirement/main |
+| design | design | requirement | design/ui |
+| dev (web) | platforms | requirement, design | platforms/web/tech |
+| dev (backend) | backend | requirement | backend/api |
+| qa | backend | platforms, backend | backend/test |
+| ship | shared | backend | shared/infrastructure |
+| growth | growth | requirement | growth/metrics |
 
-### Knowledge Structure
+### Key Rules
 
-```
-.opc/knowledge/{REQ-ID}/
-├── requirement/main.md           # Requirement knowledge
-├── design/ui.md, interaction.md  # Design knowledge
-├── platforms/{web,ios,android,miniprogram}/tech.md, test.md
-├── backend/api.md, architecture.md, test.md
-├── shared/database.md, infrastructure.md
-└── growth/metrics.md, analytics.md
-```
+1. **Extract requirement ID** from task (e.g., "REQ-001")
+2. **Initialize** with `opc_knowledge_init(requirementId, title)`
+3. **Read prior domains** before each stage
+4. **Write knowledge** after each stage completes
+5. **Inject knowledge** into agent context when dispatching
 
-### Stage-to-Domain Mapping
-
-| Stage | Domain | Doc | Description |
-|-------|--------|-----|-------------|
-| product | requirement | main | User stories, acceptance criteria |
-| design | design | ui, interaction | UI specs, interaction flows |
-| dev (web) | platforms | web/tech | Web frontend architecture |
-| dev (ios) | platforms | ios/tech | iOS architecture |
-| dev (android) | platforms | android/tech | Android architecture |
-| dev (backend) | backend | api, architecture | API design, backend architecture |
-| qa | backend | test | Test cases, test reports |
-| ship | shared | infrastructure | Deployment, infrastructure |
-| growth | growth | metrics, analytics | Growth metrics, analytics |
-
-### Knowledge Flow in Pipeline
-
-**Before each stage starts:**
-```
-1. Check if knowledge exists: opc_knowledge_exists(reqId, domain)
-2. If exists, read knowledge: opc_knowledge_read(reqId, domain)
-3. Inject knowledge into agent context
-```
-
-**After each stage completes:**
-```
-1. Extract knowledge from agent output
-2. Write to knowledge library: opc_knowledge_write(reqId, domain, doc, content)
-3. Update index automatically
-```
-
-### Example: Feature Development with Knowledge
+### Dispatch Template
 
 ```
-# Stage 1: Product
-opc_knowledge_init("REQ-001", "User Login")
-→ product-agent executes
-→ opc_knowledge_write("REQ-001", "requirement", "main", "## User Stories\n...")
-
-# Stage 2: Design
-opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
-→ design-agent executes with requirement context
-→ opc_knowledge_write("REQ-001", "design", "ui", "## Login Page\n...")
-
-# Stage 3: Dev (Web)
-opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
-opc_knowledge_read("REQ-001", "design")       # Learn design
-→ frontend-agent executes with full context
-→ opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## Components\n...")
-
-# Stage 4: QA
-opc_knowledge_read("REQ-001", "platforms", "web", "tech")  # Learn implementation
-→ qa-agent executes
-→ opc_knowledge_write("REQ-001", "backend", "test", "## Test Cases\n...")
-```
-
-### Dispatch Template with Knowledge
-
-When dispatching to an agent, include knowledge context:
-
-```
-Agent({agent_name}, `
-## Task: {task description}
+Agent({agent}, `
+## Task: {task}
 
 ## Knowledge Context
-${knowledge ? knowledge : "No prior knowledge for this domain."}
+${knowledge || "No prior knowledge."}
 
 ## Instructions
-1. Review the knowledge context above
-2. Execute your stage tasks
-3. Output knowledge updates for the next stage
+1. Review knowledge context
+2. Execute stage tasks
+3. Output knowledge updates
 
-## Output Format
-After completing, provide:
-1. Your deliverables (code, specs, etc.)
-2. Knowledge update for this domain (what should be saved for future reference)
+## Output
+1. Deliverables
+2. Knowledge update for this domain
 `)
-```
-
-### Knowledge Protocol (Always Apply)
-
-**IMPORTANT:** Whether using a workflow or manually assembling a pipeline, ALWAYS follow the knowledge protocol:
-
-#### Step 1: Extract Requirement ID
-
-Before starting any pipeline, extract or generate a requirement ID:
-```
-- If user mentions "REQ-XXX" → use that ID
-- If user describes a new feature → generate ID like "REQ-001"
-- Use opc_knowledge_list() to check existing requirements
-```
-
-#### Step 2: Initialize Knowledge Library
-
-```
-opc_knowledge_init(requirementId, title)
-```
-
-#### Step 3: For Each Stage, Apply Knowledge Flow
-
-**Before dispatching to any agent:**
-```typescript
-// Determine domain from stage
-const domainMap = {
-  product: "requirement",
-  design: "design",
-  dev: determinePlatformDomain(),  // "platforms/web" or "backend"
-  qa: "backend",
-  ship: "shared",
-  growth: "growth"
-}
-
-// Read all prior domains
-const domainsToRead = getPriorDomains(currentStage)
-for (const domain of domainsToRead) {
-  if (opc_knowledge_exists(requirementId, domain)) {
-    knowledge += opc_knowledge_read(requirementId, domain)
-  }
-}
-
-// Inject knowledge into agent context
-```
-
-**After agent completes:**
-```typescript
-// Extract knowledge from agent output
-const knowledgeUpdate = extractKnowledgeUpdate(agentOutput)
-
-// Write to current domain
-opc_knowledge_write(requirementId, currentDomain, doc, knowledgeUpdate)
-```
-
-#### Step 4: Domain Resolution Logic
-
-```typescript
-function getPriorDomains(stage: string): string[] {
-  const stageOrder = ['product', 'design', 'dev', 'qa', 'ship', 'growth']
-  const currentIndex = stageOrder.indexOf(stage)
-  
-  // Read all prior stage domains
-  return stageOrder.slice(0, currentIndex).map(s => stageToDomain(s))
-}
-
-function stageToDomain(stage: string): string {
-  const map = {
-    product: "requirement",
-    design: "design",
-    dev: "platforms",  // or "backend" based on task
-    qa: "backend",
-    ship: "shared",
-    growth: "growth"
-  }
-  return map[stage]
-}
-```
-
-#### Example: Manual Pipeline with Knowledge
-
-```
-User: /opc fix the login bug in REQ-001
-
-// No workflow, but still apply knowledge protocol:
-
-1. Extract requirement ID: "REQ-001"
-2. Check knowledge exists: opc_knowledge_exists("REQ-001") → true
-3. Determine stage: "dev" (bug fix)
-4. Read prior knowledge:
-   - opc_knowledge_read("REQ-001", "requirement")
-   - opc_knowledge_read("REQ-001", "platforms", "web", "tech")
-5. Dispatch to frontend-agent with knowledge context
-6. After completion:
-   - opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## Bug Fix\n...")
 ```
 
 ### Task Lifecycle
