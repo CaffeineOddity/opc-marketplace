@@ -1245,22 +1245,31 @@ The current task has been abandoned. You can start a new task with \`opc_state_i
                         state.pipeline.stages[stage].agents_used.push(args.agent);
                     }
                 }
-                // Add artifact
+                // Add artifact (use the stage parameter if provided, otherwise current_stage)
                 if (args.artifact) {
-                    const stage = state.pipeline.current_stage;
+                    const stage = args.stage || state.pipeline.current_stage;
+                    if (!state.pipeline.stages[stage]) {
+                        state.pipeline.stages[stage] = { status: 'pending' };
+                    }
                     if (!state.pipeline.stages[stage].artifacts) {
                         state.pipeline.stages[stage].artifacts = [];
                     }
                     state.pipeline.stages[stage].artifacts.push(args.artifact);
                 }
-                // Update progress
+                // Update progress (use the stage parameter if provided, otherwise current_stage)
                 if (args.progress) {
-                    const stage = state.pipeline.current_stage;
+                    const stage = args.stage || state.pipeline.current_stage;
+                    if (!state.pipeline.stages[stage]) {
+                        state.pipeline.stages[stage] = { status: 'pending' };
+                    }
                     state.pipeline.stages[stage].progress = args.progress;
                 }
-                // Add blocker
+                // Add blocker (use the stage parameter if provided, otherwise current_stage)
                 if (args.blocker) {
-                    const stage = state.pipeline.current_stage;
+                    const stage = args.stage || state.pipeline.current_stage;
+                    if (!state.pipeline.stages[stage]) {
+                        state.pipeline.stages[stage] = { status: 'pending' };
+                    }
                     if (!state.pipeline.stages[stage].blockers) {
                         state.pipeline.stages[stage].blockers = [];
                     }
