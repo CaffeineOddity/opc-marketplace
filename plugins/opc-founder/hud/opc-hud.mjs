@@ -2,7 +2,13 @@
 /**
  * OPC HUD - Statusline Script for opc-marketplace
  *
- * Displays: [OPC#version] | session: Xm | skill:name | ctx:X% | 🔧N ⚡N
+ * Displays: [OPC] | taskName 🔄stage | model | duration | ctx:% | counts
+ *
+ * Stage icons:
+ * - ✅ = completed
+ * - 🔄 = in_progress
+ * - 🚫 = blocked
+ * - ⏳ = pending
  *
  * This script receives stdin JSON from Claude Code and outputs a formatted statusline.
  */
@@ -135,6 +141,125 @@ function getSessionDuration(transcriptPath) {
 }
 
 // ============================================================================
+// OPC State Parsing
+// ============================================================================
+
+/**
+ * Get git toplevel root using spawnSync
+ */
+function getGitToplevel(cwd) {
+  try {
+    const { spawnSync } = require('child_process');
+    const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: cwd || process.cwd(),
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    if (result.status === 0) {
+      return result.stdout.trim();
+    }
+    return cwd || process.cwd();
+  } catch {
+    return cwd || process.cwd();
+  }
+}
+
+/**
+ * Find the most recent project state file
+ */
+function findProjectState(cwd) {
+  const gitRoot = getGitToplevel(cwd);
+  const stateDir = join(gitRoot, '.opc', 'state');
+
+  if (!existsSync(stateDir)) return null;
+
+  try {
+    const entries = readdirSync(stateDir, { withFileTypes: true });
+    const lockDirs = entries
+      .filter(d => d.isDirectory() && d.name.startsWith('pid-'))
+      .map(d => {
+        const stateFile = join(stateDir, d.name, 'project-state.json');
+        if (!existsSync(stateFile)) return null;
+        try {
+          const stat = statSync(stateFile);
+          return { path: stateFile, mtime: stat.mtimeMs };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (lockDirs.length === 0) return null;
+
+    const content = readFileSync(lockDirs[0].path, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get stage status icon
+ */
+function getStageIcon(status) {
+  switch (status) {
+    case 'completed': return '✅';
+    case 'in_progress': return '🔄';
+    case 'blocked': return '🚫';
+    default: return '⏳';
+  }
+}
+
+/**
+ * Format pipeline status - show pipeline flow with current stage highlighted
+ * Returns: "product → dev 🔄 → qa → ship" (arrow flow, current highlighted)
+ */
+function formatPipelineStatus(state) {
+  if (!state?.pipeline?.stages) return null;
+
+  const stages = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
+  const currentStage = state.pipeline.current_stage;
+
+  // Build pipeline flow, only show up to current+1 pending stages
+  const parts = [];
+  let foundCurrent = false;
+
+  for (const stage of stages) {
+    const stageData = state.pipeline.stages[stage];
+    const status = stageData?.status || 'pending';
+    const isCurrent = stage === currentStage;
+
+    if (isCurrent) {
+      // Current stage with icon
+      parts.push(`${stage} 🔄`);
+      foundCurrent = true;
+    } else if (!foundCurrent) {
+      // Completed stages before current
+      if (status === 'completed') {
+        parts.push(stage);
+      }
+    } else {
+      // Show one pending stage after current, then stop
+      if (status === 'pending') {
+        parts.push(stage);
+        break;
+      }
+    }
+  }
+
+  return parts.join(' → ');
+}
+
+/**
+ * Get requirement ID for display
+ */
+function getRequirementId(state) {
+  if (!state?.project?.requirement_id) return null;
+  return state.project.requirement_id;
+}
+
+// ============================================================================
 // OPC Version Detection
 // ============================================================================
 
@@ -183,9 +308,8 @@ function colorize(text, color) {
 function render(context) {
   const elements = [];
 
-  // [OPC#version] label
-  const versionTag = context.opcVersion ? `#${context.opcVersion}` : "";
-  elements.push(colorize(`[OPC${versionTag}]`, "bold"));
+  // [OPC] label
+  elements.push(colorize("[OPC]", "bold"));
 
   // Model name
   if (context.modelName) {
@@ -198,12 +322,7 @@ function render(context) {
     const durationStr = duration >= 60
       ? `${Math.floor(duration / 60)}h${duration % 60}m`
       : `${duration}m`;
-    elements.push(`session:${durationStr}`);
-  }
-
-  // Last skill
-  if (context.lastSkill) {
-    elements.push(colorize(`skill:${context.lastSkill}`, "cyan"));
+    elements.push(`${durationStr}`);
   }
 
   // Context percentage with color
@@ -213,20 +332,29 @@ function render(context) {
   else if (ctxPercent > 70) ctxColor = "yellow";
   elements.push(colorize(`ctx:${ctxPercent}%`, ctxColor));
 
-  // Tool/Agent/Skill counts with icons
-  const toolIcon = "🔧";
-  const agentIcon = "⚡";
-  const skillIcon = "🎯";
+  // Last skill (if any)
+  if (context.lastSkill) {
+    elements.push(colorize(context.lastSkill, "cyan"));
+  }
 
-  // Show counts
+  // Tool/Agent/Skill counts with icons
   if (context.toolCallCount > 0) {
-    elements.push(`${toolIcon}${context.toolCallCount}`);
+    elements.push(`🔧${context.toolCallCount}`);
   }
   if (context.agentCallCount > 0) {
-    elements.push(`${agentIcon}${context.agentCallCount}`);
+    elements.push(`⚡${context.agentCallCount}`);
   }
   if (context.skillCallCount > 0) {
-    elements.push(`${skillIcon}${context.skillCallCount}`);
+    elements.push(`🎯${context.skillCallCount}`);
+  }
+
+  // Orchestration info at the end - requirementId | pipeline flow
+  if (context.requirementId && context.pipelineStatus) {
+    elements.push(colorize(`${context.requirementId} ${context.pipelineStatus}`, "cyan"));
+  } else if (context.requirementId) {
+    elements.push(colorize(context.requirementId, "cyan"));
+  } else if (context.pipelineStatus) {
+    elements.push(colorize(context.pipelineStatus, "cyan"));
   }
 
   // Join with separator
@@ -254,6 +382,9 @@ async function main() {
     const transcriptData = parseTranscript(transcriptPath);
     const sessionDuration = getSessionDuration(transcriptPath);
 
+    // Parse OPC state for orchestration info
+    const opcState = findProjectState(cwd);
+
     // Build context
     const context = {
       contextPercent: getContextPercent(stdin),
@@ -264,6 +395,9 @@ async function main() {
       toolCallCount: transcriptData.toolCallCount,
       agentCallCount: transcriptData.agentCallCount,
       skillCallCount: transcriptData.skillCallCount,
+      // Orchestration info
+      requirementId: getRequirementId(opcState),
+      pipelineStatus: formatPipelineStatus(opcState),
     };
 
     // Render and output

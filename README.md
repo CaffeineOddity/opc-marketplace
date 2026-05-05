@@ -47,7 +47,6 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | Skill | `/opc` | One-command entry point — auto-assess and orchestrate agents |
 | Skill | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
 | Skill | `/opc-workflows` | Manage workflow specs — list, show, create, update, delete |
-| Skill | `/opc-hud` | Configure HUD statusline display |
 | Agent | founder-agent | CEO agent with 4 orchestration modes (single/pipeline/parallel/team) |
 | MCP | opc_state_* | State management tools for cross-session persistence |
 | MCP | opc_checkpoint_* | Checkpoint tools for rollback support |
@@ -275,7 +274,7 @@ OPC installs a HUD (Heads-Up Display) that shows in the statusline:
 | `ctx:X%` | Context window usage (green/yellow/red) |
 | `🔧N ⚡N 🎯N` | Tool/Agent/Skill call counts |
 
-To configure HUD: `/opc-hud`
+The HUD is installed automatically when you run `/opc-plugin install`.
 
 ### Manual Install (Alternative)
 
@@ -300,11 +299,8 @@ To configure HUD: `/opc-hud`
 
 | Command | Removes Plugins | Removes HUD |
 |---------|:----------------:|:-----------:|
-| `/opc-plugin uninstall` | ✅ | ❌ |
-| `/opc-hud uninstall` | ❌ | ✅ |
+| `/opc-plugin uninstall` | ✅ | ✅ |
 | `/plugin remove opc-marketplace` | ✅ | ✅ |
-
-**Note:** HUD is stored in `~/.claude/plugins/cache/opc-marketplace/hud/`, so `/plugin remove opc-marketplace` automatically cleans up both plugins and HUD.
 
 ## Orchestration Modes
 

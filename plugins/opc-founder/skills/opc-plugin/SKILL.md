@@ -97,7 +97,7 @@ For each plugin to install:
 After installing opc-founder plugin, run the first-install setup script:
 
 ```bash
-python {skill_path}/scripts/first-install-setup.py {project_root}
+python {skill_path}/scripts/first-install.py {project_root} {marketplace_root}
 ```
 
 This script runs **once** and performs:
@@ -105,6 +105,7 @@ This script runs **once** and performs:
 1. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `{git-toplevel}/.opc/workflows/`
 2. **Update .gitignore**: Add `.opc/state/` entry (if not exists)
 3. **Create marker file**: `{git-toplevel}/.opc/.first-install-done` to prevent re-run
+4. **Install HUD statusline**: Copy HUD script and configure `settings.json`
 
 **Note:** All paths use git toplevel root for consistency when running from subdirectories.
 
@@ -119,8 +120,6 @@ This script runs **once** and performs:
 
 On subsequent installs, the script checks for this marker and skips if it exists.
 
-### Step 3.6: Install OPC HUD
-
 ### Step 4: File Paths
 
 - Marketplace path: `{marketplace-root}` (detected from `~/.claude/plugins/marketplaces/opc-marketplace/`)
@@ -134,7 +133,7 @@ On subsequent installs, the script checks for this marker and skips if it exists
 When user runs `/opc-plugin install <option>`:
 
 ```bash
-python3 {skill_path}/scripts/install-plugins.py <option>
+python3 {skill_path}/scripts/install.py <option>
 ```
 
 The script handles:
@@ -142,7 +141,7 @@ The script handles:
 2. Reading plugin versions from plugin.json
 3. Creating cache directories and copying files
 4. Updating `installed_plugins.json` and `settings.json`
-5. Running first-install setup for workflows
+5. Running first-install setup for workflows and HUD
 
 After installation, remind user to run `/reload-plugins`.
 
@@ -172,6 +171,10 @@ When called without arguments, use AskUserQuestion to present options:
 
 When user runs `/opc-plugin uninstall`:
 
+```bash
+python3 {skill_path}/scripts/uninstall.py [--all]
+```
+
 ### Remove Plugin Cache
 
 For each installed OPC plugin:
@@ -179,14 +182,20 @@ For each installed OPC plugin:
 2. Update `installed_plugins.json`: Remove the plugin entry
 3. Update `settings.json`: Disable in `enabledPlugins`
 
+### Remove HUD
+
+1. Remove HUD script from both locations:
+   - `~/.claude/plugins/cache/opc-marketplace/hud/`
+   - `~/.claude/plugins/marketplaces/opc-marketplace/.claude/hud/`
+2. Remove `statusLine` from `settings.json`
+
 ### Verify Cleanup
 
 After uninstall:
 1. Verify no OPC plugins remain in `installed_plugins.json`
 2. Verify no OPC entries in `enabledPlugins`
-3. Show summary of what was removed
-
-**Note:** `/opc-plugin uninstall` only removes plugins. To also remove HUD, run `/opc-hud uninstall` or use the `uninstall.sh` script.
+3. Verify HUD script removed
+4. Show summary of what was removed
 
 ## Troubleshooting
 
@@ -200,16 +209,10 @@ To completely remove OPC Marketplace (plugins + HUD):
 
 ```bash
 # Run the uninstall script (removes plugins + HUD)
-{skill_path}/scripts/uninstall.sh
+python3 {skill_path}/scripts/uninstall.py --all
 
 # Then remove the marketplace via Claude Code
 /plugin remove opc-marketplace
 ```
 
-Or use skill commands separately:
-```
-/opc-plugin uninstall    # Remove plugins only
-/opc-hud uninstall       # Remove HUD only
-```
-
-**Note:** Claude Code does not automatically trigger cleanup hooks when removing a marketplace. You must run the uninstall script or skill commands first.
+**Note:** Claude Code does not automatically trigger cleanup hooks when removing a marketplace. You must run the uninstall script first.

@@ -11,7 +11,6 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `/opc` | One-command entry point — auto-assess task and orchestrate agents |
 | `/opc-plugin` | Manage plugins — install, update, uninstall, list, status |
 | `/opc-workflows` | Manage workflow specs — list, show, create, update, delete |
-| `/opc-hud` | Configure HUD statusline display — setup, uninstall, status |
 
 ### Agents
 
@@ -241,7 +240,7 @@ The knowledge library evolves automatically:
 
 ## HUD Statusline
 
-OPC provides a HUD (Heads-Up Display) for the statusline:
+OPC automatically installs a HUD (Heads-Up Display) for the statusline on first plugin install:
 
 ```
 [OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
@@ -256,21 +255,14 @@ OPC provides a HUD (Heads-Up Display) for the statusline:
 | `ctx:X%` | Context window usage (green/yellow/red) |
 | `🔧N ⚡N 🎯N` | Tool/Agent/Skill call counts |
 
-```shell
-/opc-hud setup      # Install HUD
-/opc-hud uninstall  # Remove HUD
-/opc-hud status     # Show HUD status
-```
+The HUD is installed automatically when you run `/opc-plugin install`.
 
 ## Uninstall
 
 | Command | Removes Plugins | Removes HUD |
 |---------|:----------------:|:-----------:|
-| `/opc-plugin uninstall` | ✅ | ❌ |
-| `/opc-hud uninstall` | ❌ | ✅ |
+| `/opc-plugin uninstall` | ✅ | ✅ |
 | `/plugin remove opc-marketplace` | ✅ | ✅ |
-
-**Note:** HUD is stored in `~/.claude/plugins/cache/opc-marketplace/hud/`, so `/plugin remove opc-marketplace` automatically cleans up both plugins and HUD.
 
 ## Orchestration Modes
 

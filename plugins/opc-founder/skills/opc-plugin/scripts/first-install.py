@@ -6,56 +6,28 @@ Runs once on first opc-plugin install:
 1. Copy built-in workflows to .opc/workflows/
 2. Add .opc/state/ to .gitignore
 3. Create marker file to prevent re-run
+4. Install HUD statusline
 
 Usage:
-    python scripts/first-install-setup.py <project_root> <marketplace_root>
+    python first-install.py <project_root> <marketplace_root>
 """
 
 import json
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
+# Add lib to path
+sys.path.insert(0, str(Path(__file__).parent))
 
-def get_git_toplevel(path: Path = None) -> Path | None:
-    """Get git toplevel directory using git rev-parse."""
-    try:
-        cwd = str(path) if path else None
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-
-
-def get_project_root() -> Path:
-    """Get project root from argument, git toplevel, or current working directory."""
-    if len(sys.argv) > 1:
-        arg_path = Path(sys.argv[1]).resolve()
-        # Use git toplevel if the argument is inside a git repo
-        git_root = get_git_toplevel(arg_path)
-        return git_root if git_root else arg_path
-
-    # Try git toplevel from cwd
-    git_root = get_git_toplevel()
-    return git_root if git_root else Path.cwd()
+from lib import (
+    get_git_toplevel,
+    install_hud,
+)
 
 
 def get_opc_founder_path(marketplace_path: Path) -> Path:
-    """Get opc-founder path from marketplace path.
-
-    Args:
-        marketplace_path: Path to opc-marketplace root (e.g. ~/.claude/plugins/marketplaces/opc-marketplace)
-
-    Returns:
-        Path to opc-founder directory (which contains workflows/)
-    """
+    """Get opc-founder path from marketplace path."""
     return marketplace_path / "plugins" / "opc-founder"
 
 
@@ -90,7 +62,6 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
     if workflows_source.exists():
         workflows_target.mkdir(parents=True, exist_ok=True)
 
-        # Copy each JSON file
         for workflow_file in workflows_source.glob("*.json"):
             target_file = workflows_target / workflow_file.name
             shutil.copy2(workflow_file, target_file)
@@ -128,6 +99,13 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
     marker_file.write_text(json.dumps(marker_info, indent=2))
     results.append("✅ Created first-install marker.")
 
+    # 4. Install HUD
+    success, message = install_hud(marketplace_path)
+    if success:
+        results.append(f"✅ {message}")
+    else:
+        results.append(f"⚠️  {message}")
+
     return {
         "executed": True,
         "message": "\n".join(results)
@@ -136,13 +114,17 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python first-install-setup.py <project_root> <marketplace_root>")
+        print("Usage: python first-install.py <project_root> <marketplace_root>")
         sys.exit(1)
 
-    project_root = get_project_root()
+    # Get project root (use git toplevel if available)
+    arg_path = Path(sys.argv[1]).resolve()
+    git_root = get_git_toplevel(arg_path)
+    project_root = git_root if git_root else arg_path
+
     marketplace_path = Path(sys.argv[2]).resolve()
 
-    print(f"OPC First Install Setup")
+    print("OPC First Install Setup")
     print(f"Project root: {project_root}")
     print(f"Marketplace: {marketplace_path}")
     print()

@@ -312,6 +312,18 @@ Reference documents store external resources and third-party documentation:
             └── auth0.md
 ```
 
+## Naming Conventions
+
+### Document Naming
+- Use lowercase letters and hyphens: `user-stories.md`, `api-design.md`
+- Main document: `main.md`
+- Technical document: `tech.md`
+- Test document: `test.md`
+
+### Subdirectory Naming
+- Use lowercase letters and hyphens: `plugins/`, `api/`, `components/`
+- Avoid deep nesting (recommended max 3 levels)
+
 ## Best Practices
 
 1. **Always initialize** before starting a new requirement
@@ -321,3 +333,4 @@ Reference documents store external resources and third-party documentation:
 5. **Commit knowledge** to git for team sharing
 6. **Use subdirectories** to organize related documents
 7. **Keep references** separate from main project knowledge
+8. **Follow naming conventions** for consistency across the team
