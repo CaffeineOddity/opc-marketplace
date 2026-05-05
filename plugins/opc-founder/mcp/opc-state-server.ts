@@ -214,40 +214,32 @@ const OPC_PATHS = {
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',
   WORKFLOWS: '.opc/workflows',
-  KNOWLEDGE: '.opc/knowledgebase',
+  KNOWLEDGE: '.opc/knowledge',
 } as const;
 
 // Knowledge library structure definition
-const KNOWLEDGE_STRUCTURE = {
-  requirement: {
-    docs: ['main'],
-    hasSubdocs: false,
-  },
-  design: {
-    docs: ['ui', 'interaction'],
-    hasSubdocs: false,
-  },
-  platforms: {
-    platforms: ['web', 'ios', 'android', 'miniprogram'],
-    docs: ['tech', 'test'],
-    hasSubdocs: true,
-  },
-  backend: {
-    docs: ['api', 'architecture', 'test'],
-    hasSubdocs: false,
-  },
-  shared: {
-    docs: ['database', 'infrastructure'],
-    hasSubdocs: false,
-  },
-  growth: {
-    docs: ['metrics', 'analytics'],
-    hasSubdocs: false,
-  },
-} as const;
-
-type KnowledgeDomain = keyof typeof KNOWLEDGE_STRUCTURE;
-type KnowledgePlatform = 'web' | 'ios' | 'android' | 'miniprogram';
+// Path format: .opc/knowledge/{requirement_id}/{category}/xxxx.md
+// Categories align with OPC pipeline stages: product → design → dev → qa → ship → growth
+const KNOWLEDGE_CATEGORIES = [
+  // Product stage
+  'requirement',    // Requirement specs, user stories, acceptance criteria
+  // Design stage
+  'design',         // UI/UX design, interaction, visual assets
+  // Dev stage (platforms)
+  'backend',        // Backend API, services, architecture
+  'ios',            // iOS native development
+  'android',        // Android native development
+  'harmony',        // HarmonyOS development
+  'web',            // Web frontend development
+  'miniprogram',    // Mini program development (WeChat, etc.)
+  // QA stage
+  'qa',             // Test plans, test cases, quality assurance
+  // Ship stage
+  'ship',           // Deployment, CI/CD, infrastructure, operations
+  // Growth stage
+  'growth',         // Growth metrics, analytics, marketing
+] as const;
+type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number];
 
 function getWorktreeRoot(cwd?: string): string {
   const effectiveCwd = cwd || process.cwd();
@@ -397,6 +389,7 @@ interface ProjectState {
   project: {
     name: string;
     description: string;
+    requirement_id?: string;  // Associated knowledge library requirement ID
     created_at: string;
     updated_at: string;
   };
@@ -443,6 +436,7 @@ function initializeProjectState(
   name: string,
   description: string,
   lockId: string,
+  requirementId?: string,
   cwd?: string
 ): ProjectState {
   const now = new Date().toISOString();
@@ -452,6 +446,7 @@ function initializeProjectState(
     project: {
       name,
       description,
+      requirement_id: requirementId,
       created_at: now,
       updated_at: now,
     },
@@ -683,19 +678,12 @@ function getRequirementPath(requirementId: string, cwd?: string): string {
 
 function getKnowledgeDocPath(
   requirementId: string,
-  domain: KnowledgeDomain,
-  platform?: KnowledgePlatform,
-  doc?: string,
+  category: KnowledgeCategory,
+  doc: string,
   cwd?: string
 ): string {
   const reqPath = getRequirementPath(requirementId, cwd);
-  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
-
-  if (domain === 'platforms' && platform) {
-    return join(reqPath, 'platforms', platform, `${doc || 'tech'}.md`);
-  }
-
-  return join(reqPath, domain, `${doc || domainConfig.docs[0]}.md`);
+  return join(reqPath, category, `${doc}.md`);
 }
 
 function readKnowledgeIndex(cwd?: string): KnowledgeIndex {
@@ -717,13 +705,18 @@ function initKnowledgeLibrary(
   requirementId: string,
   title: string,
   cwd?: string
-): void {
+): { isNew: boolean; title: string } {
   const index = readKnowledgeIndex(cwd);
 
+  // If requirement already exists, update status and return (idempotent)
   if (index.requirements[requirementId]) {
-    throw new Error(`Requirement ${requirementId} already exists in knowledge library`);
+    index.requirements[requirementId].status = 'in_progress';
+    index.requirements[requirementId].updated_at = new Date().toISOString();
+    writeKnowledgeIndex(index, cwd);
+    return { isNew: false, title: index.requirements[requirementId].title };
   }
 
+  // Create new requirement
   const now = new Date().toISOString();
   index.requirements[requirementId] = {
     title,
@@ -740,57 +733,36 @@ function initKnowledgeLibrary(
   if (!existsSync(reqPath)) {
     mkdirSync(reqPath, { recursive: true });
   }
+
+  return { isNew: true, title };
 }
 
 function readKnowledgeDoc(
   requirementId: string,
-  domain: KnowledgeDomain,
-  platform?: KnowledgePlatform,
-  doc?: string,
+  category: KnowledgeCategory,
+  doc: string,
   cwd?: string
 ): string | null {
-  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
   if (!existsSync(path)) return null;
   return readFileSync(path, 'utf-8');
 }
 
 function readAllKnowledgeDocs(
   requirementId: string,
-  domain: KnowledgeDomain,
+  category: KnowledgeCategory,
   cwd?: string
 ): string | null {
   const reqPath = getRequirementPath(requirementId, cwd);
-  const domainPath = join(reqPath, domain);
+  const categoryPath = join(reqPath, category);
 
-  if (!existsSync(domainPath)) return null;
+  if (!existsSync(categoryPath)) return null;
 
-  const domainConfig = KNOWLEDGE_STRUCTURE[domain];
   const results: string[] = [];
-
-  if (domain === 'platforms') {
-    // Read all platforms
-    const platformsDir = domainPath;
-    if (existsSync(platformsDir)) {
-      for (const platform of readdirSync(platformsDir)) {
-        const platformPath = join(platformsDir, platform);
-        if (!existsSync(platformPath) || !isDirectory(platformPath)) continue;
-
-        for (const docFile of readdirSync(platformPath)) {
-          if (!docFile.endsWith('.md')) continue;
-          const content = readFileSync(join(platformPath, docFile), 'utf-8');
-          results.push(`## ${platform}/${docFile}\n\n${content}`);
-        }
-      }
-    }
-  } else {
-    // Read all docs in domain
-    for (const docName of domainConfig.docs) {
-      const docPath = join(domainPath, `${docName}.md`);
-      if (existsSync(docPath)) {
-        const content = readFileSync(docPath, 'utf-8');
-        results.push(`## ${docName}.md\n\n${content}`);
-      }
-    }
+  for (const docFile of readdirSync(categoryPath)) {
+    if (!docFile.endsWith('.md')) continue;
+    const content = readFileSync(join(categoryPath, docFile), 'utf-8');
+    results.push(`## ${docFile}\n\n${content}`);
   }
 
   return results.length > 0 ? results.join('\n\n---\n\n') : null;
@@ -806,15 +778,14 @@ function isDirectory(path: string): boolean {
 
 function writeKnowledgeDoc(
   requirementId: string,
-  domain: KnowledgeDomain,
+  category: KnowledgeCategory,
+  doc: string,
   content: string,
-  platform?: KnowledgePlatform,
-  doc?: string,
   mode: 'append' | 'update' | 'overwrite' = 'append',
   section?: string,
   cwd?: string
 ): void {
-  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
   const dir = join(path, '..');
 
   // Ensure directory exists
@@ -848,14 +819,13 @@ function writeKnowledgeDoc(
   if (req) {
     req.updated_at = new Date().toISOString();
 
-    // Track which domains/docs have been created
-    if (!req.domains[domain]) {
-      req.domains[domain] = [];
+    // Track which categories/docs have been created
+    if (!req.domains[category]) {
+      req.domains[category] = [];
     }
 
-    const docKey = domain === 'platforms' ? `${platform}/${doc}` : doc || KNOWLEDGE_STRUCTURE[domain].docs[0];
-    if (!req.domains[domain].includes(docKey)) {
-      req.domains[domain].push(docKey);
+    if (!req.domains[category].includes(doc)) {
+      req.domains[category].push(doc);
     }
 
     writeKnowledgeIndex(index, cwd);
@@ -864,54 +834,108 @@ function writeKnowledgeDoc(
 
 function knowledgeExists(
   requirementId: string,
-  domain?: KnowledgeDomain,
-  platform?: KnowledgePlatform,
+  category?: KnowledgeCategory,
   doc?: string,
   cwd?: string
 ): boolean {
-  if (!domain) {
+  if (!category) {
     // Check if requirement exists
     const index = readKnowledgeIndex(cwd);
     return !!index.requirements[requirementId];
   }
 
-  const path = getKnowledgeDocPath(requirementId, domain, platform, doc, cwd);
+  if (!doc) {
+    // Check if category directory exists
+    const reqPath = getRequirementPath(requirementId, cwd);
+    const categoryPath = join(reqPath, category);
+    return existsSync(categoryPath);
+  }
+
+  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
   return existsSync(path);
 }
 
 function listKnowledgeDocs(
   requirementId: string,
-  domain: KnowledgeDomain,
+  category: KnowledgeCategory,
   cwd?: string
 ): string[] {
   const reqPath = getRequirementPath(requirementId, cwd);
-  const domainPath = join(reqPath, domain);
+  const categoryPath = join(reqPath, category);
 
-  if (!existsSync(domainPath)) return [];
+  if (!existsSync(categoryPath)) return [];
 
   const docs: string[] = [];
-
-  if (domain === 'platforms') {
-    const platformsDir = domainPath;
-    for (const platform of readdirSync(platformsDir)) {
-      const platformPath = join(platformsDir, platform);
-      if (!isDirectory(platformPath)) continue;
-
-      for (const docFile of readdirSync(platformPath)) {
-        if (docFile.endsWith('.md')) {
-          docs.push(`${platform}/${docFile.replace('.md', '')}`);
-        }
-      }
-    }
-  } else {
-    for (const docFile of readdirSync(domainPath)) {
-      if (docFile.endsWith('.md')) {
-        docs.push(docFile.replace('.md', ''));
-      }
+  for (const docFile of readdirSync(categoryPath)) {
+    if (docFile.endsWith('.md')) {
+      docs.push(docFile.replace('.md', ''));
     }
   }
 
   return docs;
+}
+
+// ============================================================
+// Requirement ID Helpers
+// ============================================================
+
+/**
+ * Generate the next available requirement ID.
+ * Format: REQ-XXX (zero-padded to 3 digits)
+ */
+function generateNextRequirementId(cwd?: string): string {
+  const index = readKnowledgeIndex(cwd);
+  const existingIds = Object.keys(index.requirements)
+    .filter(id => id.startsWith('REQ-'))
+    .map(id => {
+      const num = parseInt(id.replace('REQ-', ''), 10);
+      return isNaN(num) ? 0 : num;
+    });
+
+  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+  return `REQ-${String(nextNum).padStart(3, '0')}`;
+}
+
+/**
+ * Find candidate requirements that match the given query.
+ * Returns candidates sorted by similarity score (highest first).
+ */
+function findCandidateRequirements(
+  index: KnowledgeIndex,
+  query: string,
+  threshold: number = 0.3
+): Array<{ id: string; title: string; status: string; score: number }> {
+  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  const candidates: Array<{ id: string; title: string; status: string; score: number }> = [];
+
+  for (const [id, req] of Object.entries(index.requirements)) {
+    const titleWords = req.title.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+
+    // Calculate word overlap score
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const titleWord of titleWords) {
+        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+
+    if (score >= threshold) {
+      candidates.push({
+        id,
+        title: req.title,
+        status: req.status,
+        score,
+      });
+    }
+  }
+
+  // Sort by score descending
+  return candidates.sort((a, b) => b.score - a.score);
 }
 
 // ============================================================
@@ -1006,12 +1030,13 @@ const tools = [
   // opc_state_init
   {
     name: 'opc_state_init',
-    description: 'Initialize a new OPC project state. Creates pipeline tracking. One task per window.',
+    description: 'Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.',
     inputSchema: {
       type: 'object',
       properties: {
         project_name: { type: 'string', description: 'Project name' },
         project_description: { type: 'string', description: 'Project description' },
+        requirement_id: { type: 'string', description: 'Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing.' },
         workingDirectory: { type: 'string' },
       },
       required: ['project_name'],
@@ -1196,17 +1221,16 @@ const tools = [
   // opc_knowledge_read
   {
     name: 'opc_knowledge_read',
-    description: 'Read knowledge from knowledge library. Can read specific doc or entire domain.',
+    description: 'Read knowledge from knowledge library. Can read specific doc or all docs in a category.',
     inputSchema: {
       type: 'object',
       properties: {
         requirementId: { type: 'string', description: 'Requirement ID' },
-        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
-        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
-        doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+        category: { type: 'string', enum: ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'], description: 'Knowledge category (pipeline stage)' },
+        doc: { type: 'string', description: 'Document name (without .md extension)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'domain'],
+      required: ['requirementId', 'category'],
     },
   },
   // opc_knowledge_write
@@ -1217,15 +1241,14 @@ const tools = [
       type: 'object',
       properties: {
         requirementId: { type: 'string', description: 'Requirement ID' },
-        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
-        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform (required when domain=platforms)' },
-        doc: { type: 'string', description: 'Document name (e.g., main, ui, api, tech, test)' },
+        category: { type: 'string', enum: ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'], description: 'Knowledge category (pipeline stage)' },
+        doc: { type: 'string', description: 'Document name (without .md extension)' },
         content: { type: 'string', description: 'Content to write' },
         section: { type: 'string', description: 'Section header to update (optional)' },
         mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'domain', 'doc', 'content'],
+      required: ['requirementId', 'category', 'doc', 'content'],
     },
   },
   // opc_knowledge_exists
@@ -1236,8 +1259,7 @@ const tools = [
       type: 'object',
       properties: {
         requirementId: { type: 'string', description: 'Requirement ID' },
-        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
-        platform: { type: 'string', enum: ['web', 'ios', 'android', 'miniprogram'], description: 'Platform' },
+        category: { type: 'string', enum: ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'], description: 'Knowledge category (pipeline stage)' },
         doc: { type: 'string', description: 'Document name' },
         workingDirectory: { type: 'string' },
       },
@@ -1252,7 +1274,7 @@ const tools = [
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['in_progress', 'completed', 'paused'], description: 'Filter by status' },
-        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Filter by domain' },
+        category: { type: 'string', enum: ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'], description: 'Filter by category' },
         workingDirectory: { type: 'string' },
       },
     },
@@ -1260,15 +1282,15 @@ const tools = [
   // opc_knowledge_docs
   {
     name: 'opc_knowledge_docs',
-    description: 'List available documents in a domain for a requirement.',
+    description: 'List available documents in a category for a requirement.',
     inputSchema: {
       type: 'object',
       properties: {
         requirementId: { type: 'string', description: 'Requirement ID' },
-        domain: { type: 'string', enum: ['requirement', 'design', 'platforms', 'backend', 'shared', 'growth'], description: 'Knowledge domain' },
+        category: { type: 'string', enum: ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'], description: 'Knowledge category (pipeline stage)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'domain'],
+      required: ['requirementId', 'category'],
     },
   },
 ];
@@ -1304,12 +1326,16 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
           })
           .join('\n');
 
+        const requirementInfo = state.project.requirement_id
+          ? `\n**Requirement ID:** ${state.project.requirement_id}`
+          : '';
+
         return {
           content: [{
             type: 'text',
             text: `## OPC Project State
 
-**Project:** ${state.project.name}
+**Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}
 **Created:** ${state.project.created_at}
@@ -1333,6 +1359,7 @@ ${Object.entries(state.pipeline.stages)
       case 'opc_state_init': {
         const projectName = args.project_name as string;
         const projectDescription = (args.project_description as string) || '';
+        const providedRequirementId = args.requirement_id as string | undefined;
         const lockId = getCurrentLockId(cwd);
 
         // Check if current window already has a task
@@ -1347,6 +1374,7 @@ ${Object.entries(state.pipeline.stages)
                 text: `## Task Already Exists
 
 **Current Task:** ${existingTask.project.name}
+**Requirement ID:** ${existingTask.project.requirement_id || 'Not set'}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** 🔄 in_progress
 
@@ -1361,8 +1389,62 @@ Options:
           }
         }
 
+        // Determine requirement ID
+        let requirementId = providedRequirementId;
+        let requirementMatchInfo = '';
+
+        if (!requirementId) {
+          // Try to match existing requirements
+          const index = readKnowledgeIndex(cwd);
+          const candidates = findCandidateRequirements(index, projectName);
+
+          if (candidates.length > 0 && candidates[0].score >= 0.5) {
+            // High confidence match - use it
+            requirementId = candidates[0].id;
+            requirementMatchInfo = `\n\n🔗 **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
+          } else if (candidates.length > 0) {
+            // Low confidence matches - show candidates for user to decide
+            const candidateList = candidates.slice(0, 3)
+              .map(c => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`)
+              .join('\n');
+
+            return {
+              content: [{
+                type: 'text',
+                text: `## Similar Requirements Found
+
+The following requirements may be related to your task:
+
+${candidateList}
+
+**Options:**
+1. Specify a requirement ID: \`opc_state_init(project_name, requirement_id="REQ-XXX")\`
+2. Create new: \`opc_state_init(project_name, requirement_id="new")\`
+3. Let system auto-generate: call again without requirement_id (will create REQ-XXX)
+
+Please choose how to proceed.
+`,
+              }],
+            };
+          } else {
+            // No matches - auto-generate new ID
+            requirementId = generateNextRequirementId(cwd);
+            requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
+          }
+        } else if (requirementId === 'new') {
+          // User explicitly wants new
+          requirementId = generateNextRequirementId(cwd);
+          requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
+        }
+
+        // Initialize knowledge library (idempotent)
+        const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
+        const knowledgeInfo = knowledgeResult.isNew
+          ? 'Knowledge library initialized.'
+          : `Resumed existing requirement: "${knowledgeResult.title}"`;
+
         // Initialize new task
-        const state = initializeProjectState(projectName, projectDescription, lockId, cwd);
+        const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
         state.pipeline.stages.product.status = 'in_progress';
         state.pipeline.stages.product.started_at = new Date().toISOString();
         writeProjectState(state, cwd);
@@ -1380,10 +1462,15 @@ Options:
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Current Stage:** product
+**Requirement ID:** ${requirementId}
+**Current Stage:** product${requirementMatchInfo}
+
+### Knowledge Library
+${knowledgeInfo}
 
 The pipeline is ready. Stage "product" is now in progress.
-Use opc_state_write to update progress as you advance through stages.${gitignoreMsg}
+Use \`opc_state_write\` to update progress as you advance through stages.
+Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `,
           }],
         };
@@ -1999,9 +2086,20 @@ This ensures consistency regardless of current working directory.`,
 
 **Requirement ID:** ${requirementId}
 **Title:** ${title}
-**Path:** .opc/knowledgebase/${requirementId}/
+**Path:** .opc/knowledge/${requirementId}/
 
-Knowledge documents will be created on-demand when writing to each domain.`,
+Knowledge documents will be created on-demand when writing to each category.
+
+### Categories (aligned with pipeline stages)
+
+| Stage | Category | Description |
+|-------|----------|-------------|
+| Product | requirement | Requirement specs, user stories |
+| Design | design | UI/UX, interaction, visual assets |
+| Dev | backend, ios, android, harmony, web, miniprogram | Platform-specific implementation |
+| QA | qa | Test plans, test cases |
+| Ship | ship | Deployment, CI/CD, infrastructure |
+| Growth | growth | Metrics, analytics, marketing |`,
             }],
           };
         } catch (error) {
@@ -2018,19 +2116,18 @@ Knowledge documents will be created on-demand when writing to each domain.`,
       // ============================================================
       case 'opc_knowledge_read': {
         const requirementId = args.requirementId as string;
-        const domain = args.domain as KnowledgeDomain;
-        const platform = args.platform as KnowledgePlatform | undefined;
+        const category = args.category as KnowledgeCategory;
         const doc = args.doc as string | undefined;
 
         // If doc specified, read specific doc
-        if (doc || (domain === 'platforms' && platform)) {
-          const content = readKnowledgeDoc(requirementId, domain, platform, doc, cwd);
+        if (doc) {
+          const content = readKnowledgeDoc(requirementId, category, doc, cwd);
 
           if (!content) {
             return {
               content: [{
                 type: 'text',
-                text: `Knowledge document not found: ${requirementId}/${domain}${platform ? `/${platform}` : ''}/${doc}`,
+                text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md`,
               }],
             };
           }
@@ -2043,14 +2140,14 @@ Knowledge documents will be created on-demand when writing to each domain.`,
           };
         }
 
-        // Read all docs in domain
-        const content = readAllKnowledgeDocs(requirementId, domain, cwd);
+        // Read all docs in category
+        const content = readAllKnowledgeDocs(requirementId, category, cwd);
 
         if (!content) {
           return {
             content: [{
               type: 'text',
-              text: `No knowledge documents found for ${requirementId}/${domain}`,
+              text: `No knowledge documents found for ${requirementId}/${category}`,
             }],
           };
         }
@@ -2066,23 +2163,11 @@ Knowledge documents will be created on-demand when writing to each domain.`,
       // ============================================================
       case 'opc_knowledge_write': {
         const requirementId = args.requirementId as string;
-        const domain = args.domain as KnowledgeDomain;
-        const platform = args.platform as KnowledgePlatform | undefined;
+        const category = args.category as KnowledgeCategory;
         const doc = args.doc as string;
         const content = args.content as string;
         const mode = (args.mode as 'append' | 'update' | 'overwrite') || 'append';
         const section = args.section as string | undefined;
-
-        // Validate platform for platforms domain
-        if (domain === 'platforms' && !platform) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: platform parameter is required when domain is "platforms"',
-            }],
-            isError: true,
-          };
-        }
 
         // Check if requirement exists
         const index = readKnowledgeIndex(cwd);
@@ -2096,11 +2181,7 @@ Knowledge documents will be created on-demand when writing to each domain.`,
           };
         }
 
-        writeKnowledgeDoc(requirementId, domain, content, platform, doc, mode, section, cwd);
-
-        const docPath = domain === 'platforms'
-          ? `${domain}/${platform}/${doc}.md`
-          : `${domain}/${doc}.md`;
+        writeKnowledgeDoc(requirementId, category, doc, content, mode, section, cwd);
 
         return {
           content: [{
@@ -2108,7 +2189,7 @@ Knowledge documents will be created on-demand when writing to each domain.`,
             text: `## Knowledge Written
 
 **Requirement:** ${requirementId}
-**Document:** ${docPath}
+**Document:** ${category}/${doc}.md
 **Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
 
 Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.`,
@@ -2119,11 +2200,10 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
       // ============================================================
       case 'opc_knowledge_exists': {
         const requirementId = args.requirementId as string;
-        const domain = args.domain as KnowledgeDomain | undefined;
-        const platform = args.platform as KnowledgePlatform | undefined;
+        const category = args.category as KnowledgeCategory | undefined;
         const doc = args.doc as string | undefined;
 
-        const exists = knowledgeExists(requirementId, domain, platform, doc, cwd);
+        const exists = knowledgeExists(requirementId, category, doc, cwd);
 
         return {
           content: [{
@@ -2136,7 +2216,7 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
       // ============================================================
       case 'opc_knowledge_list': {
         const status = args.status as string | undefined;
-        const domainFilter = args.domain as KnowledgeDomain | undefined;
+        const categoryFilter = args.category as KnowledgeCategory | undefined;
 
         const index = readKnowledgeIndex(cwd);
         let requirements = Object.entries(index.requirements);
@@ -2145,8 +2225,8 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
           requirements = requirements.filter(([, r]) => r.status === status);
         }
 
-        if (domainFilter) {
-          requirements = requirements.filter(([, r]) => r.domains[domainFilter]?.length > 0);
+        if (categoryFilter) {
+          requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
         }
 
         if (requirements.length === 0) {
@@ -2160,10 +2240,8 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
 
         const table = requirements
           .map(([id, r]) => {
-            const domains = Object.keys(r.domains).join(', ') || '-';
-            const platforms = r.domains.platforms?.join(', ') || '';
-            const domainDisplay = platforms ? `${domains} (${platforms})` : domains;
-            return `| ${id} | ${r.title} | ${r.status} | ${domainDisplay} | ${r.updated_at.split('T')[0]} |`;
+            const categories = Object.keys(r.domains).join(', ') || '-';
+            return `| ${id} | ${r.title} | ${r.status} | ${categories} | ${r.updated_at.split('T')[0]} |`;
           })
           .join('\n');
 
@@ -2172,7 +2250,7 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
             type: 'text',
             text: `## Knowledge Library
 
-| ID | Title | Status | Domains | Updated |
+| ID | Title | Status | Categories | Updated |
 |-----|-------|--------|---------|--------|
 ${table}`,
           }],
@@ -2182,25 +2260,25 @@ ${table}`,
       // ============================================================
       case 'opc_knowledge_docs': {
         const requirementId = args.requirementId as string;
-        const domain = args.domain as KnowledgeDomain;
+        const category = args.category as KnowledgeCategory;
 
-        const docs = listKnowledgeDocs(requirementId, domain, cwd);
+        const docs = listKnowledgeDocs(requirementId, category, cwd);
 
         if (docs.length === 0) {
           return {
             content: [{
               type: 'text',
-              text: `No documents found for ${requirementId}/${domain}`,
+              text: `No documents found for ${requirementId}/${category}`,
             }],
           };
         }
 
-        const docList = docs.map(d => `- ${d}`).join('\n');
+        const docList = docs.map(d => `- ${d}.md`).join('\n');
 
         return {
           content: [{
             type: 'text',
-            text: `## ${requirementId}/${domain} Documents
+            text: `## ${requirementId}/${category} Documents
 
 ${docList}`,
           }],
