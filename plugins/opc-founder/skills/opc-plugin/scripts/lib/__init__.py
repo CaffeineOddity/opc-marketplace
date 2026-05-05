@@ -18,14 +18,15 @@ from .settings import (
     read_json,
     write_json,
     update_settings_plugins,
+    update_installed_plugins,
     remove_statusline,
 )
 
 from .plugins import (
     get_plugin_version,
     install_plugin,
-    uninstall_plugin,                                                                                                                                                                                           
-    uninstall_all_plugins,                                                                                                                                                                                      
+    uninstall_plugin,
+    uninstall_all_plugins,
     list_installed_plugins,
 )
 
@@ -47,12 +48,13 @@ __all__ = [
     "read_json",
     "write_json",
     "update_settings_plugins",
+    "update_installed_plugins",
     "remove_statusline",
     # plugins
     "get_plugin_version",
     "install_plugin",
-    "uninstall_plugin",                                                                                                                                                                                           
-    "uninstall_all_plugins",                                                                                                                                                                                      
+    "uninstall_plugin",
+    "uninstall_all_plugins",
     "list_installed_plugins",
     # hud
     "install_hud",
