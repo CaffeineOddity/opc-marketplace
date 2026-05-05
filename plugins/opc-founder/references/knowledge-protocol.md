@@ -9,64 +9,131 @@ The knowledge library enables:
 - **Cross-stage continuity**: Later stages learn from earlier stages
 - **Team memory**: Knowledge persists across sessions and team members
 
-## Directory Structure
+## Path Format
 
 ```
-.opc/knowledgebase/{REQ-ID}/
-├── requirement/
-│   └── main.md                    # User stories, acceptance criteria
-├── design/
-│   ├── ui.md                      # UI specifications
-│   └── interaction.md             # Interaction flows
-├── platforms/
-│   ├── web/
-│   │   ├── tech.md                # Web frontend architecture
-│   │   └── test.md                # Web tests
-│   ├── ios/
-│   │   ├── tech.md                # iOS architecture
-│   │   └── test.md                # iOS tests
-│   ├── android/
-│   │   ├── tech.md                # Android architecture
-│   │   └── test.md                # Android tests
-│   └── miniprogram/
-│       ├── tech.md                # Miniprogram architecture
-│       └── test.md                # Miniprogram tests
-├── backend/
-│   ├── api.md                     # API documentation
-│   ├── architecture.md            # Backend architecture
-│   └── test.md                    # Backend tests
-├── shared/
-│   ├── database.md                # Database schema
-│   └── infrastructure.md          # Infrastructure config
-└── growth/
-    ├── metrics.md                 # Growth metrics
-    └── analytics.md               # Analytics setup
+.opc/knowledgebase/{REQ-ID}/{category}/**/*/xxx.md
 ```
+
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `{REQ-ID}` | Requirement unique ID | REQ-001 |
+| `{category}` | Knowledge category | requirement, design, backend... |
+| `**/*/` | Optional subdirectory hierarchy | plugins/, api/, components/ |
+| `xxx.md` | Markdown document | main.md, tech.md |
+
+## Directory Structure
+
+### Basic Structure
+
+```
+.opc/knowledgebase/REQ-001/
+├── requirement/
+│   └── main.md
+├── design/
+│   └── ui.md
+└── backend/
+    └── api.md
+```
+
+### Extended Structure (With Subdirectories)
+
+```
+.opc/knowledgebase/REQ-001/
+├── requirement/
+│   ├── main.md
+│   ├── user-stories.md
+│   └── plugins/
+│       ├── opc-founder.md
+│       ├── product-kit.md
+│       ├── design-kit.md
+│       ├── dev-kit.md
+│       ├── qa-kit.md
+│       ├── ship-kit.md
+│       ├── growth-kit.md
+│       └── docs-kit.md
+├── design/
+│   ├── ui/
+│   │   ├── main.md
+│   │   └── components.md
+│   └── interaction/
+│       └── flows.md
+├── backend/
+│   ├── api/
+│   │   ├── rest.md
+│   │   └── graphql.md
+│   ├── architecture/
+│   │   └── main.md
+│   └── database/
+│       └── schema.md
+├── web/
+│   ├── tech.md
+│   └── components/
+│       ├── auth.md
+│       └── dashboard.md
+├── qa/
+│   ├── test-plan.md
+│   └── cases/
+│       ├── auth.md
+│       └── api.md
+├── ship/
+│   ├── deployment.md
+│   └── infrastructure/
+│       └── aws.md
+├── growth/
+│   ├── metrics.md
+│   └── analytics/
+│       └── setup.md
+└── references/
+    ├── api-docs.md
+    └── third-party/
+        ├── payment/
+        │   └── stripe.md
+        └── auth/
+            └── auth0.md
+```
+
+## Categories
+
+| Category | Stage | Description |
+|----------|-------|-------------|
+| `requirement` | Product | Requirement specs, user stories |
+| `design` | Design | UI/UX design, interaction flows |
+| `backend` | Dev | Backend API, services, architecture |
+| `ios` | Dev | iOS native development |
+| `android` | Dev | Android native development |
+| `harmony` | Dev | HarmonyOS development |
+| `web` | Dev | Web frontend development |
+| `miniprogram` | Dev | Mini program development |
+| `qa` | QA | Test plans, test cases |
+| `ship` | Ship | Deployment, CI/CD, infrastructure |
+| `growth` | Growth | Growth metrics, analytics |
 
 ## MCP Tools
 
 | Tool | Purpose |
 |------|---------|
 | `opc_knowledge_init` | Initialize knowledge library for a requirement |
-| `opc_knowledge_read` | Read knowledge from domain/platform/doc |
+| `opc_knowledge_read` | Read knowledge from category/doc |
 | `opc_knowledge_write` | Write or update knowledge document |
 | `opc_knowledge_exists` | Check if knowledge document exists |
 | `opc_knowledge_list` | List requirements in knowledge library |
-| `opc_knowledge_docs` | List available documents in a domain |
+| `opc_knowledge_docs` | List available documents in a category |
 
 ## Stage-to-Domain Mapping
 
-| Stage | Domain | Doc | Description |
-|-------|--------|-----|-------------|
+| Stage | Category | Doc | Description |
+|-------|----------|-----|-------------|
 | product | requirement | main | User stories, acceptance criteria |
 | design | design | ui, interaction | UI specs, interaction flows |
-| dev (web) | platforms | web/tech | Web frontend architecture |
-| dev (ios) | platforms | ios/tech | iOS architecture |
-| dev (android) | platforms | android/tech | Android architecture |
-| dev (miniprogram) | platforms | miniprogram/tech | Miniprogram architecture |
+| dev (web) | web | tech | Web frontend architecture |
+| dev (ios) | ios | tech | iOS architecture |
+| dev (android) | android | tech | Android architecture |
+| dev (harmony) | harmony | tech | HarmonyOS architecture |
+| dev (miniprogram) | miniprogram | tech | Miniprogram architecture |
 | dev (backend) | backend | api, architecture | API design, backend architecture |
-| qa | backend | test | Test cases, test reports |
-| ship | shared | infrastructure | Deployment, infrastructure |
+| qa | qa | test-plan, cases | Test cases, test reports |
+| ship | ship | deployment, infrastructure | Deployment, infrastructure |
 | growth | growth | metrics, analytics | Growth metrics, analytics |
 
 ## Knowledge Protocol (Always Apply)
@@ -92,21 +159,21 @@ opc_knowledge_init(requirementId, title)
 
 **Before dispatching to any agent:**
 ```typescript
-// Determine domain from stage
-const domainMap = {
+// Determine category from stage
+const categoryMap = {
   product: "requirement",
   design: "design",
-  dev: determinePlatformDomain(),  // "platforms/web" or "backend"
-  qa: "backend",
-  ship: "shared",
+  dev: determinePlatformCategory(),  // "web" or "backend"
+  qa: "qa",
+  ship: "ship",
   growth: "growth"
 }
 
-// Read all prior domains
-const domainsToRead = getPriorDomains(currentStage)
-for (const domain of domainsToRead) {
-  if (opc_knowledge_exists(requirementId, domain)) {
-    knowledge += opc_knowledge_read(requirementId, domain)
+// Read all prior categories
+const categoriesToRead = getPriorCategories(currentStage)
+for (const category of categoriesToRead) {
+  if (opc_knowledge_exists(requirementId, category)) {
+    knowledge += opc_knowledge_read(requirementId, category)
   }
 }
 
@@ -118,28 +185,28 @@ for (const domain of domainsToRead) {
 // Extract knowledge from agent output
 const knowledgeUpdate = extractKnowledgeUpdate(agentOutput)
 
-// Write to current domain
-opc_knowledge_write(requirementId, currentDomain, doc, knowledgeUpdate)
+// Write to current category
+opc_knowledge_write(requirementId, currentCategory, doc, knowledgeUpdate)
 ```
 
-### Step 4: Domain Resolution Logic
+### Step 4: Category Resolution Logic
 
 ```typescript
-function getPriorDomains(stage: string): string[] {
+function getPriorCategories(stage: string): string[] {
   const stageOrder = ['product', 'design', 'dev', 'qa', 'ship', 'growth']
   const currentIndex = stageOrder.indexOf(stage)
 
-  // Read all prior stage domains
-  return stageOrder.slice(0, currentIndex).map(s => stageToDomain(s))
+  // Read all prior stage categories
+  return stageOrder.slice(0, currentIndex).map(s => stageToCategory(s))
 }
 
-function stageToDomain(stage: string): string {
+function stageToCategory(stage: string): string {
   const map = {
     product: "requirement",
     design: "design",
-    dev: "platforms",  // or "backend" based on task
-    qa: "backend",
-    ship: "shared",
+    dev: "web",  // or "backend" based on task
+    qa: "qa",
+    ship: "ship",
     growth: "growth"
   }
   return map[stage]
@@ -159,18 +226,18 @@ opc_knowledge_init("REQ-001", "User Login")
 # Stage 2: Design
 opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
 → design-agent executes with requirement context
-→ opc_knowledge_write("REQ-001", "design", "ui", "## Login Page\n...")
+→ opc_knowledge_write("REQ-001", "design", "ui/main", "## Login Page\n...")
 
 # Stage 3: Dev (Web)
 opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
 opc_knowledge_read("REQ-001", "design")       # Learn design
 → frontend-agent executes with full context
-→ opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## Components\n...")
+→ opc_knowledge_write("REQ-001", "web", "tech", "## Components\n...")
 
 # Stage 4: QA
-opc_knowledge_read("REQ-001", "platforms", "web", "tech")  # Learn implementation
+opc_knowledge_read("REQ-001", "web/tech")  # Learn implementation
 → qa-agent executes
-→ opc_knowledge_write("REQ-001", "backend", "test", "## Test Cases\n...")
+→ opc_knowledge_write("REQ-001", "qa", "test-plan", "## Test Cases\n...")
 ```
 
 ### Bug Fix (No Workflow)
@@ -183,10 +250,10 @@ User: /opc fix the login bug in REQ-001
 3. Determine stage: "dev" (bug fix)
 4. Read prior knowledge:
    - opc_knowledge_read("REQ-001", "requirement")
-   - opc_knowledge_read("REQ-001", "platforms", "web", "tech")
+   - opc_knowledge_read("REQ-001", "web/tech")
 5. Dispatch to frontend-agent with knowledge context
 6. After completion:
-   - opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## Bug Fix\n...")
+   - opc_knowledge_write("REQ-001", "web", "tech", "## Bug Fix\n...")
 ```
 
 ### Requirement Adjustment
@@ -198,7 +265,7 @@ User: /opc add third-party login to REQ-001
 2. Read all existing knowledge:
    - opc_knowledge_read("REQ-001", "requirement")
    - opc_knowledge_read("REQ-001", "design")
-   - opc_knowledge_read("REQ-001", "platforms", "web", "tech")
+   - opc_knowledge_read("REQ-001", "web/tech")
 3. Determine starting stage: "design" (requirement already clear)
 4. Dispatch to design-agent with full context
 5. Continue pipeline with knowledge updates
@@ -227,10 +294,30 @@ After completing, provide:
 `)
 ```
 
+## Reference Documents
+
+Reference documents store external resources and third-party documentation:
+
+```
+.opc/knowledgebase/REQ-001/
+└── references/
+    ├── api-docs.md              # External API docs
+    ├── design-systems/          # Design system references
+    │   ├── material.md
+    │   └── ant-design.md
+    └── third-party/             # Third-party services
+        ├── payment/
+        │   └── stripe.md
+        └── auth/
+            └── auth0.md
+```
+
 ## Best Practices
 
 1. **Always initialize** before starting a new requirement
-2. **Always read** prior domain knowledge before dispatching agents
+2. **Always read** prior category knowledge before dispatching agents
 3. **Always write** knowledge updates after stage completion
 4. **Use append mode** by default to preserve history
 5. **Commit knowledge** to git for team sharing
+6. **Use subdirectories** to organize related documents
+7. **Keep references** separate from main project knowledge
