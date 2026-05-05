@@ -179,7 +179,7 @@ def run_uninstall_marketplace():
         print("  ℹ️  No OPC-related settings found")
 
     # Step 4: Remove marketplace directory
-    print("\n[4/4] Removing marketplace directory...")
+    print("\n[4/5] Removing marketplace directory...")
     marketplace_dir = Path.home() / ".claude" / "plugins" / "marketplaces" / "opc-marketplace"
     if marketplace_dir.exists():
         import shutil
@@ -187,6 +187,16 @@ def run_uninstall_marketplace():
         print(f"  ✅ Removed marketplace directory: {marketplace_dir}")
     else:
         print("  ℹ️  Marketplace directory not found")
+
+    # Step 5: Remove plugin data directory
+    print("\n[5/5] Removing plugin data directory...")
+    data_dir = Path.home() / ".claude" / "plugins" / "data" / "opc-founder-opc-marketplace"
+    if data_dir.exists():
+        import shutil
+        shutil.rmtree(data_dir)
+        print(f"  ✅ Removed data directory: {data_dir}")
+    else:
+        print("  ℹ️  Data directory not found")
 
     print()
     print("=" * 50)
