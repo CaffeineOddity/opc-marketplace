@@ -179,7 +179,7 @@ def run_uninstall_marketplace():
         print("  ℹ️  No OPC-related settings found")
 
     # Step 4: Remove marketplace directory
-    print("\n[4/5] Removing marketplace directory...")
+    print("\n[4/6] Removing marketplace directory...")
     marketplace_dir = Path.home() / ".claude" / "plugins" / "marketplaces" / "opc-marketplace"
     if marketplace_dir.exists():
         import shutil
@@ -189,7 +189,7 @@ def run_uninstall_marketplace():
         print("  ℹ️  Marketplace directory not found")
 
     # Step 5: Remove plugin data directory
-    print("\n[5/5] Removing plugin data directory...")
+    print("\n[5/6] Removing plugin data directory...")
     data_dir = Path.home() / ".claude" / "plugins" / "data" / "opc-founder-opc-marketplace"
     if data_dir.exists():
         import shutil
@@ -197,6 +197,20 @@ def run_uninstall_marketplace():
         print(f"  ✅ Removed data directory: {data_dir}")
     else:
         print("  ℹ️  Data directory not found")
+
+    # Step 6: Update known_marketplaces.json
+    print("\n[6/6] Updating known_marketplaces.json...")
+    known_marketplaces_path = Path.home() / ".claude" / "plugins" / "known_marketplaces.json"
+    if known_marketplaces_path.exists():
+        known = read_json(known_marketplaces_path)
+        if known and "opc-marketplace" in known:
+            del known["opc-marketplace"]
+            write_json(known_marketplaces_path, known)
+            print(f"  ✅ Removed opc-marketplace from known_marketplaces.json")
+        else:
+            print("  ℹ️  opc-marketplace not found in known_marketplaces.json")
+    else:
+        print("  ℹ️  known_marketplaces.json not found")
 
     print()
     print("=" * 50)
