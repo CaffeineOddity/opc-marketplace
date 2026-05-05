@@ -51,8 +51,9 @@ __all__ = [
     # plugins
     "get_plugin_version",
     "install_plugin",
-    "update_installed_plugins",
-    "remove_installed_plugins",
+    "uninstall_plugin",                                                                                                                                                                                           
+    "uninstall_all_plugins",                                                                                                                                                                                      
+    "list_installed_plugins",
     # hud
     "install_hud",
     "uninstall_hud",

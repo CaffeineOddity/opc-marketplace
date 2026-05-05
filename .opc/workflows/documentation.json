@@ -1,0 +1,25 @@
+{
+  "name": "documentation",
+  "description": "Documentation update",
+  "triggers": {
+    "keywords": ["文档", "说明", "readme", "document", "docs", "文档更新"],
+    "patterns": []
+  },
+  "pipeline": [
+    {
+      "stage": "docs",
+      "required": true,
+      "outputs": ["documentation"],
+      "agents": ["docs-agent"],
+      "skills": ["baoyu-format-markdown", "baoyu-markdown-to-html"],
+      "description": "编写/更新文档"
+    }
+  ],
+  "gates": [],
+  "rules": {
+    "tdd": false,
+    "sdd": false,
+    "parallel_allowed": false,
+    "no_code_changes": true
+  }
+}
