@@ -259,10 +259,28 @@ The HUD is installed automatically when you run `/opc-plugin install`.
 
 ## Uninstall
 
-| Command | Removes Plugins | Removes HUD |
-|---------|:----------------:|:-----------:|
-| `/opc-plugin uninstall` | ✅ | ✅ |
-| `/plugin remove opc-marketplace` | ✅ | ✅ |
+**⚠️ Important: Claude Code does not automatically trigger cleanup when removing a marketplace.**
+
+You must run the uninstall script **before** removing the marketplace:
+
+```shell
+# Step 1: Run OPC uninstall script (removes plugins + HUD)
+/opc-plugin uninstall
+
+# Step 2: Then remove the marketplace via Claude Code
+/plugin remove opc-marketplace
+```
+
+| Command | Removes Plugins | Removes HUD | Removes Marketplace |
+|---------|:----------------:|:-----------:|:-------------------:|
+| `/opc-plugin uninstall` | ✅ | ✅ | ❌ |
+| `/plugin remove opc-marketplace` | ❌ | ❌ | ✅ |
+| **Both (in order)** | ✅ | ✅ | ✅ |
+
+**Note:** If you run `/plugin remove` first, the uninstall script becomes unavailable. You'll need to manually clean up:
+- Remove `~/.claude/plugins/cache/opc-marketplace/`
+- Remove `statusLine` from `~/.claude/settings.json`
+- Remove OPC entries from `~/.claude/plugins/installed_plugins.json`
 
 ## Orchestration Modes
 
