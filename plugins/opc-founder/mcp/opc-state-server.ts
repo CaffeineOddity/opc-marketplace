@@ -1530,6 +1530,19 @@ The current task has been abandoned. You can start a new task with \`opc_state_i
           if (stageStatus === 'completed') {
             state.pipeline.stages[stage].completed_at = new Date().toISOString();
             state.pipeline.stages[stage].verification_passed = true;
+
+            // Auto-advance to next stage when current stage completes
+            // Use the actual stages from the pipeline (from workflow definition)
+            const stageOrder = Object.keys(state.pipeline.stages);
+            const currentIndex = stageOrder.indexOf(stage);
+            if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
+              const nextStage = stageOrder[currentIndex + 1];
+              // Only advance if next stage is pending (not already in progress or completed)
+              if (state.pipeline.stages[nextStage]?.status === 'pending' || !state.pipeline.stages[nextStage]) {
+                state.pipeline.current_stage = nextStage;
+                state.pipeline.stages[nextStage] = { status: 'pending' };
+              }
+            }
           }
 
           // Update current stage if starting a new one
