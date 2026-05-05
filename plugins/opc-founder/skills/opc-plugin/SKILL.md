@@ -21,8 +21,10 @@ Install, update, and manage plugins from opc-marketplace.
 | `install [option]` | Install plugins |
 | `update` | Update marketplace and all installed plugins |
 | `update <plugin>` | Update specific plugin |
-| `uninstall` | Uninstall all OPC plugins |
+| `uninstall` | Uninstall all OPC plugins (interactive) |
+| `uninstall --all` | Uninstall all OPC plugins without prompt |
 | `uninstall <plugin>` | Uninstall specific plugin |
+| `uninstall marketplace` | **Full uninstall**: plugins + HUD + marketplace |
 | `list` | List installed plugins |
 | `status` | Show marketplace and plugin status |
 
@@ -56,8 +58,10 @@ When this skill is invoked, execute the appropriate action based on arguments:
 - If `install <option>`: Install the specified plugin set
 - If `update`: Update all installed plugins
 - If `update <plugin>`: Update specific plugin
-- If `uninstall`: Uninstall all OPC plugins
+- If `uninstall`: Uninstall all OPC plugins (interactive)
+- If `uninstall --all`: Uninstall all without prompt
 - If `uninstall <plugin>`: Uninstall specific plugin
+- If `uninstall marketplace`: Full uninstall (plugins + HUD + marketplace)
 - If `list` or `status`: Show plugin status
 
 ### Step 2: Define Plugin Sets
@@ -197,22 +201,37 @@ After uninstall:
 3. Verify HUD script removed
 4. Show summary of what was removed
 
+## Full Uninstall (marketplace)
+
+When user runs `/opc-plugin uninstall marketplace`:
+
+```bash
+python3 {skill_path}/scripts/uninstall.py marketplace
+```
+
+This performs a **complete removal** in one command:
+
+1. **Remove cache directory**: `~/.claude/plugins/cache/opc-marketplace/`
+2. **Update installed_plugins.json**: Remove all OPC plugin entries
+3. **Update settings.json**:
+   - Remove all `enabledPlugins` entries for OPC
+   - Remove `statusLine` if it's OPC HUD
+   - Remove `opc-marketplace` from `extraKnownMarketplaces`
+4. **Remove marketplace directory**: `~/.claude/plugins/marketplaces/opc-marketplace/`
+
+After completion, remind user to run `/reload-plugins` to refresh the plugin system.
+
 ## Troubleshooting
 
 - If marketplace not found: Add it first via settings.json extraKnownMarketplaces
 - If plugin already installed: Skip or update depending on context
 - If version mismatch: Read actual version from source plugin.json
 
-## Full Uninstall (Manual)
+## Quick Reference
 
-To completely remove OPC Marketplace (plugins + HUD):
-
-```bash
-# Run the uninstall script (removes plugins + HUD)
-python3 {skill_path}/scripts/uninstall.py --all
-
-# Then remove the marketplace via Claude Code
-/plugin remove opc-marketplace
-```
-
-**Note:** Claude Code does not automatically trigger cleanup hooks when removing a marketplace. You must run the uninstall script first.
+| Scenario | Command |
+|----------|---------|
+| Install all plugins | `/opc-plugin install all` |
+| Install web preset | `/opc-plugin install web` |
+| Uninstall plugins only | `/opc-plugin uninstall --all` |
+| **Complete removal** | `/opc-plugin uninstall marketplace` |

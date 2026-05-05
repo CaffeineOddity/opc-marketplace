@@ -106,6 +106,7 @@ The founder-agent automatically manages state for multi-stage projects. You can 
 /opc-plugin install designer # Product & Design focus (product + design + docs)
 /opc-plugin update           # Update marketplace + all plugins
 /opc-plugin uninstall        # Uninstall all OPC plugins
+/opc-plugin uninstall marketplace  # Complete removal: plugins + HUD + marketplace
 /opc-plugin list             # List installed plugins
 ```
 
@@ -259,25 +260,31 @@ The HUD is installed automatically when you run `/opc-plugin install`.
 
 ## Uninstall
 
-**⚠️ Important: Claude Code does not automatically trigger cleanup when removing a marketplace.**
+### Option 1: Complete Removal (Recommended)
 
-You must run the uninstall script **before** removing the marketplace:
+One command removes everything:
 
 ```shell
-# Step 1: Run OPC uninstall script (removes plugins + HUD)
-/opc-plugin uninstall
-
-# Step 2: Then remove the marketplace via Claude Code
-/plugin remove opc-marketplace
+/opc-plugin uninstall marketplace
 ```
+
+This removes:
+- All OPC plugins from cache
+- HUD statusline
+- Marketplace registration from settings.json
+- Marketplace directory
+
+After running, execute `/reload-plugins` to refresh.
+
+### Option 2: Step-by-Step
 
 | Command | Removes Plugins | Removes HUD | Removes Marketplace |
 |---------|:----------------:|:-----------:|:-------------------:|
 | `/opc-plugin uninstall` | ✅ | ✅ | ❌ |
 | `/plugin remove opc-marketplace` | ❌ | ❌ | ✅ |
-| **Both (in order)** | ✅ | ✅ | ✅ |
+| `/opc-plugin uninstall marketplace` | ✅ | ✅ | ✅ |
 
-**Note:** If you run `/plugin remove` first, the uninstall script becomes unavailable. You'll need to manually clean up:
+**Note:** If you accidentally ran `/plugin remove` first, manually clean up:
 - Remove `~/.claude/plugins/cache/opc-marketplace/`
 - Remove `statusLine` from `~/.claude/settings.json`
 - Remove OPC entries from `~/.claude/plugins/installed_plugins.json`
