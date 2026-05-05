@@ -101,8 +101,10 @@ For each plugin to install:
 After installing opc-founder plugin, run the first-install setup script:
 
 ```bash
-python {skill_path}/scripts/first-install.py {project_root} {marketplace_root}
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/first-install.py {project_root} {marketplace_root}
 ```
+
+Where `{marketplace_root}` is the opc-marketplace source directory.
 
 This script runs **once** and performs:
 
@@ -137,8 +139,10 @@ On subsequent installs, the script checks for this marker and skips if it exists
 When user runs `/opc-plugin install <option>`:
 
 ```bash
-python3 {skill_path}/scripts/install.py <option>
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/install.py <option>
 ```
+
+Where `{marketplace_root}` is the opc-marketplace source directory (detected from `~/.claude/plugins/marketplaces/opc-marketplace/` or the current project if it is opc-marketplace itself).
 
 The script handles:
 1. Finding marketplace path from `~/.claude/plugins/marketplaces/opc-marketplace/`
@@ -176,7 +180,7 @@ When called without arguments, use AskUserQuestion to present options:
 When user runs `/opc-plugin uninstall`:
 
 ```bash
-python3 {skill_path}/scripts/uninstall.py [--all]
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/uninstall.py [--all]
 ```
 
 ### Remove Plugin Cache
@@ -206,8 +210,12 @@ After uninstall:
 When user runs `/opc-plugin uninstall marketplace`:
 
 ```bash
-python3 {skill_path}/scripts/uninstall.py marketplace
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/uninstall.py marketplace
 ```
+
+Where `{marketplace_root}` is detected from:
+1. `~/.claude/plugins/marketplaces/opc-marketplace/` (if marketplace is registered)
+2. The current project directory if it contains `plugins/opc-founder/`
 
 This performs a **complete removal** in one command:
 
