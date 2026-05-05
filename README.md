@@ -24,6 +24,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | `/opc-plugin install web` | Install for web product |
 | `/opc-plugin install designer` | Install for product & design focus |
 | `/opc-plugin update` | Update marketplace + all plugins |
+| `/opc-plugin uninstall marketplace` | Complete removal |
 
 ## Architecture
 
@@ -297,10 +298,29 @@ The HUD is installed automatically when you run `/opc-plugin install`.
 
 ### Uninstall
 
-| Command | Removes Plugins | Removes HUD |
-|---------|:----------------:|:-----------:|
-| `/opc-plugin uninstall` | ✅ | ✅ |
-| `/plugin remove opc-marketplace` | ✅ | ✅ |
+#### Option 1: Complete Removal (Recommended)
+
+One command removes everything:
+
+```shell
+/opc-plugin uninstall marketplace
+```
+
+This removes:
+- All OPC plugins from cache
+- HUD statusline
+- Marketplace registration from settings.json
+- Marketplace directory
+
+After running, execute `/reload-plugins` to refresh.
+
+#### Option 2: Step-by-Step
+
+| Command | Removes Plugins | Removes HUD | Removes Marketplace |
+|---------|:----------------:|:-----------:|:-------------------:|
+| `/opc-plugin uninstall` | ✅ | ✅ | ❌ |
+| `/plugin remove opc-marketplace` | ❌ | ❌ | ✅ |
+| `/opc-plugin uninstall marketplace` | ✅ | ✅ | ✅ |
 
 ## Orchestration Modes
 

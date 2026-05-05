@@ -95,6 +95,7 @@ founder-agent 自动为多阶段项目管理状态。你也可以使用命令：
 /opc-plugin install designer # 产品设计专注 (product + design + docs)
 /opc-plugin update           # 更新市场 + 所有插件
 /opc-plugin uninstall        # 卸载所有 OPC 插件
+/opc-plugin uninstall marketplace  # 完整卸载：插件 + HUD + 市场
 /opc-plugin list             # 列出已安装插件
 ```
 
@@ -123,13 +124,29 @@ OPC 提供 HUD（状态栏显示）：
 
 ## 卸载
 
-| 命令 | 删除插件 | 删除 HUD |
-|------|:--------:|:--------:|
-| `/opc-plugin uninstall` | ✅ | ❌ |
-| `/opc-hud uninstall` | ❌ | ✅ |
-| `/plugin remove opc-marketplace` | ✅ | ✅ |
+### 方式一：完整卸载（推荐）
 
-**注意：** HUD 存储在 `~/.claude/plugins/cache/opc-marketplace/hud/`，因此 `/plugin remove opc-marketplace` 会自动清理插件和 HUD。
+一条命令删除所有内容：
+
+```shell
+/opc-plugin uninstall marketplace
+```
+
+这会删除：
+- 缓存中的所有 OPC 插件
+- HUD 状态栏
+- settings.json 中的市场注册信息
+- 市场目录
+
+执行后运行 `/reload-plugins` 刷新即可。
+
+### 方式二：分步卸载
+
+| 命令 | 删除插件 | 删除 HUD | 删除市场 |
+|------|:--------:|:--------:|:--------:|
+| `/opc-plugin uninstall` | ✅ | ✅ | ❌ |
+| `/plugin remove opc-marketplace` | ❌ | ❌ | ✅ |
+| `/opc-plugin uninstall marketplace` | ✅ | ✅ | ✅ |
 
 ## 编排模式
 
