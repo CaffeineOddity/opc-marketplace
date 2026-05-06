@@ -16,7 +16,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 import { tools } from './tools.js';
-import { handleToolCall } from './handlers.js';
+import { handleToolCall } from './handlers/index.js';
 
 // ============================================================
 // Server Setup

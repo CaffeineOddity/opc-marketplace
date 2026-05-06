@@ -14272,8 +14272,10 @@ var tools = [
   ...knowledgeTools
 ];
 
-// dist/handlers.js
-var import_fs9 = require("fs");
+// dist/lock.js
+var import_fs2 = require("fs");
+var import_path2 = require("path");
+var import_fs3 = require("fs");
 
 // dist/paths.js
 var import_path = require("path");
@@ -14327,47 +14329,7 @@ function generateCheckpointId() {
   return `cp-${timestamp}`;
 }
 
-// dist/io.js
-var import_fs2 = require("fs");
-var import_path2 = require("path");
-function atomicWriteJson(filePath, data) {
-  const tempPath = `${filePath}.tmp-${process.pid}`;
-  (0, import_fs2.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 384 });
-  (0, import_fs2.renameSync)(tempPath, filePath);
-}
-function readJsonFile(filePath) {
-  if (!(0, import_fs2.existsSync)(filePath))
-    return null;
-  try {
-    const content = (0, import_fs2.readFileSync)(filePath, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-function updateGitignore(cwd) {
-  const root = getWorktreeRoot(cwd);
-  const gitignorePath = (0, import_path2.join)(root, ".gitignore");
-  const OPC_GITIGNORE_ENTRY = `
-# OPC state - personal session data, don't commit
-.opc/state/
-`;
-  if (!(0, import_fs2.existsSync)(gitignorePath)) {
-    (0, import_fs2.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
-    return true;
-  }
-  const content = (0, import_fs2.readFileSync)(gitignorePath, "utf-8");
-  if (content.includes(".opc/state/")) {
-    return false;
-  }
-  (0, import_fs2.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
-  return true;
-}
-
 // dist/lock.js
-var import_fs3 = require("fs");
-var import_path3 = require("path");
-var import_fs4 = require("fs");
 var processSessionId = null;
 function getProcessSessionId() {
   if (!processSessionId) {
@@ -14390,23 +14352,23 @@ function isProcessAlive(pid) {
     return false;
   }
 }
-var O_CREAT = import_fs4.constants.O_CREAT;
-var O_EXCL = import_fs4.constants.O_EXCL;
-var O_WRONLY = import_fs4.constants.O_WRONLY;
+var O_CREAT = import_fs3.constants.O_CREAT;
+var O_EXCL = import_fs3.constants.O_EXCL;
+var O_WRONLY = import_fs3.constants.O_WRONLY;
 var DEFAULT_STALE_LOCK_MS = 3e4;
 var currentLockId = null;
 function getLockPath(lockId, cwd) {
   const lockDir = ensureOpcDir("state/locks", cwd);
-  return (0, import_path3.join)(lockDir, `${lockId}.lock`);
+  return (0, import_path2.join)(lockDir, `${lockId}.lock`);
 }
 function isLockStale(lockPath, staleLockMs = DEFAULT_STALE_LOCK_MS) {
   try {
-    const stat = (0, import_fs3.statSync)(lockPath);
+    const stat = (0, import_fs2.statSync)(lockPath);
     const ageMs = Date.now() - stat.mtimeMs;
     if (ageMs < staleLockMs)
       return false;
     try {
-      const raw = (0, import_fs3.readFileSync)(lockPath, "utf-8");
+      const raw = (0, import_fs2.readFileSync)(lockPath, "utf-8");
       const payload = JSON.parse(raw);
       if (payload.pid && isProcessAlive(payload.pid)) {
         return false;
@@ -14424,26 +14386,26 @@ function acquireWindowLock(cwd) {
   }
   const lockId = getProcessSessionId();
   const lockPath = getLockPath(lockId, cwd);
-  const lockDir = (0, import_path3.dirname)(lockPath);
-  if (!(0, import_fs3.existsSync)(lockDir)) {
-    (0, import_fs3.mkdirSync)(lockDir, { recursive: true });
+  const lockDir = (0, import_path2.dirname)(lockPath);
+  if (!(0, import_fs2.existsSync)(lockDir)) {
+    (0, import_fs2.mkdirSync)(lockDir, { recursive: true });
   }
   try {
-    const fd = (0, import_fs3.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 384);
+    const fd = (0, import_fs2.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 384);
     const payload = JSON.stringify({
       lockId,
       pid: process.pid,
       timestamp: Date.now()
     });
-    (0, import_fs3.writeSync)(fd, payload, null, "utf-8");
-    (0, import_fs3.closeSync)(fd);
+    (0, import_fs2.writeSync)(fd, payload, null, "utf-8");
+    (0, import_fs2.closeSync)(fd);
     currentLockId = lockId;
     return lockId;
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && err.code === "EEXIST") {
       if (isLockStale(lockPath)) {
         try {
-          (0, import_fs3.unlinkSync)(lockPath);
+          (0, import_fs2.unlinkSync)(lockPath);
           return acquireWindowLock(cwd);
         } catch {
           currentLockId = lockId;
@@ -14466,6 +14428,45 @@ function getCurrentLockId(cwd) {
 // dist/workflow.js
 var import_fs5 = require("fs");
 var import_path4 = require("path");
+
+// dist/io.js
+var import_fs4 = require("fs");
+var import_path3 = require("path");
+function atomicWriteJson(filePath, data) {
+  const tempPath = `${filePath}.tmp-${process.pid}`;
+  (0, import_fs4.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 384 });
+  (0, import_fs4.renameSync)(tempPath, filePath);
+}
+function readJsonFile(filePath) {
+  if (!(0, import_fs4.existsSync)(filePath))
+    return null;
+  try {
+    const content = (0, import_fs4.readFileSync)(filePath, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+function updateGitignore(cwd) {
+  const root = getWorktreeRoot(cwd);
+  const gitignorePath = (0, import_path3.join)(root, ".gitignore");
+  const OPC_GITIGNORE_ENTRY = `
+# OPC state - personal session data, don't commit
+.opc/state/
+`;
+  if (!(0, import_fs4.existsSync)(gitignorePath)) {
+    (0, import_fs4.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
+    return true;
+  }
+  const content = (0, import_fs4.readFileSync)(gitignorePath, "utf-8");
+  if (content.includes(".opc/state/")) {
+    return false;
+  }
+  (0, import_fs4.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
+  return true;
+}
+
+// dist/workflow.js
 function readAllWorkflows(cwd) {
   const workflowsDir = getWorkflowsPath(cwd);
   if (!(0, import_fs5.existsSync)(workflowsDir))
@@ -15194,7 +15195,7 @@ function clearCurrentTask(cwd) {
   return false;
 }
 
-// dist/handlers.js
+// dist/handlers/state.js
 function handleStateRead(cwd) {
   const state = getCurrentTask(cwd);
   if (!state) {
@@ -15410,10 +15411,7 @@ function handleStateWrite(args, cwd) {
   const state = getCurrentTask(cwd);
   if (!state) {
     return {
-      content: [{
-        type: "text",
-        text: "No active task. Use opc_state_init to start a new project."
-      }],
+      content: [{ type: "text", text: "No active task. Use opc_state_init to start a new project." }],
       isError: true
     };
   }
@@ -15493,14 +15491,13 @@ function handleStateWrite(args, cwd) {
     }]
   };
 }
+
+// dist/handlers/checkpoint.js
 function handleCheckpointCreate(args, cwd) {
   const state = getCurrentTask(cwd);
   if (!state) {
     return {
-      content: [{
-        type: "text",
-        text: "No active task to checkpoint."
-      }],
+      content: [{ type: "text", text: "No active task to checkpoint." }],
       isError: true
     };
   }
@@ -15523,12 +15520,7 @@ Use \`opc_checkpoint_rollback\` with the checkpoint ID to restore this state.
 function handleCheckpointList(cwd) {
   const checkpoints = listCheckpoints(cwd);
   if (checkpoints.length === 0) {
-    return {
-      content: [{
-        type: "text",
-        text: "No checkpoints found."
-      }]
-    };
+    return { content: [{ type: "text", text: "No checkpoints found." }] };
   }
   const list = checkpoints.map((cp) => `- **${cp.checkpoint_id}**: ${cp.description} (${cp.stage}) - ${cp.created_at}`).join("\n");
   return {
@@ -15545,10 +15537,7 @@ function handleCheckpointRollback(args, cwd) {
   const checkpoint = readCheckpoint(args.checkpoint_id, cwd);
   if (!checkpoint) {
     return {
-      content: [{
-        type: "text",
-        text: `Checkpoint not found: ${args.checkpoint_id}`
-      }],
+      content: [{ type: "text", text: `Checkpoint not found: ${args.checkpoint_id}` }],
       isError: true
     };
   }
@@ -15567,14 +15556,13 @@ The project state has been restored to the checkpoint.
     }]
   };
 }
+
+// dist/handlers/handoff.js
 function handleHandoff(args, cwd) {
   const state = getCurrentTask(cwd);
   if (!state) {
     return {
-      content: [{
-        type: "text",
-        text: "No active task for handoff."
-      }],
+      content: [{ type: "text", text: "No active task for handoff." }],
       isError: true
     };
   }
@@ -15594,6 +15582,8 @@ The receiving agent should check constraints and artifacts before starting work.
     }]
   };
 }
+
+// dist/handlers/memory.js
 function handleMemory(args, cwd) {
   const action = args.action;
   if (action === "read") {
@@ -15622,19 +15612,13 @@ ${output || "No entries yet."}
   if (action === "write") {
     if (!args.category || !args.content) {
       return {
-        content: [{
-          type: "text",
-          text: "category and content are required for write action."
-        }],
+        content: [{ type: "text", text: "category and content are required for write action." }],
         isError: true
       };
     }
     const entry = addMemoryEntry(args.category, args.content, void 0, cwd);
     return {
-      content: [{
-        type: "text",
-        text: `Memory entry added: [${entry.category}] ${entry.content}`
-      }]
+      content: [{ type: "text", text: `Memory entry added: [${entry.category}] ${entry.content}` }]
     };
   }
   if (action === "search") {
@@ -15651,13 +15635,13 @@ ${output || "No matches found."}
     };
   }
   return {
-    content: [{
-      type: "text",
-      text: "Invalid action. Use read, write, or search."
-    }],
+    content: [{ type: "text", text: "Invalid action. Use read, write, or search." }],
     isError: true
   };
 }
+
+// dist/handlers/session.js
+var import_fs9 = require("fs");
 function handleSessionsList(cwd) {
   const lockId = getCurrentLockId(cwd);
   const currentSession = getCurrentSession(lockId, cwd);
@@ -15665,10 +15649,7 @@ function handleSessionsList(cwd) {
   const allTaskDirs = (0, import_fs9.existsSync)(stateDir) ? (0, import_fs9.readdirSync)(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/)) : [];
   if (allTaskDirs.length === 0) {
     return {
-      content: [{
-        type: "text",
-        text: "No tasks found. Use opc_state_init to start a new project."
-      }]
+      content: [{ type: "text", text: "No tasks found. Use opc_state_init to start a new project." }]
     };
   }
   const taskList = allTaskDirs.map((dirName) => {
@@ -15698,6 +15679,8 @@ Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`
     }]
   };
 }
+
+// dist/handlers/task.js
 function handleTaskGroupCreate(args, cwd) {
   const state = getCurrentTask(cwd);
   if (!state) {
@@ -15765,9 +15748,7 @@ function handleTaskGroupStatus(args, cwd) {
   const groupId = args.group_id;
   const groups = getTaskGroups(state, stage, groupId);
   if (groups.length === 0) {
-    return {
-      content: [{ type: "text", text: "No task groups found." }]
-    };
+    return { content: [{ type: "text", text: "No task groups found." }] };
   }
   const output = groups.map((group) => {
     const completed = group.tasks.filter((t) => t.status === "completed").length;
@@ -15786,14 +15767,13 @@ ${group.completed_at ? `**Completed:** ${group.completed_at}` : ""}
 ${taskList}`;
   }).join("\n\n");
   return {
-    content: [{
-      type: "text",
-      text: `## Task Group Status
+    content: [{ type: "text", text: `## Task Group Status
 
-${output}`
-    }]
+${output}` }]
   };
 }
+
+// dist/handlers/workflow.js
 function handleWorkflowsPath(cwd) {
   const workflowsDir = ensureWorkflowsDir(cwd);
   const gitRoot = getWorktreeRoot(cwd);
@@ -15810,6 +15790,8 @@ This ensures consistency regardless of current working directory.`
     }]
   };
 }
+
+// dist/handlers/knowledge.js
 function handleKnowledgeInit(args, cwd) {
   const requirementId = args.requirementId;
   const title = args.title;
@@ -15856,34 +15838,18 @@ function handleKnowledgeRead(args, cwd) {
     const content2 = readKnowledgeDoc(requirementId, category, doc, cwd);
     if (!content2) {
       return {
-        content: [{
-          type: "text",
-          text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md`
-        }]
+        content: [{ type: "text", text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md` }]
       };
     }
-    return {
-      content: [{
-        type: "text",
-        text: content2
-      }]
-    };
+    return { content: [{ type: "text", text: content2 }] };
   }
   const content = readAllKnowledgeDocs(requirementId, category, cwd);
   if (!content) {
     return {
-      content: [{
-        type: "text",
-        text: `No knowledge documents found for ${requirementId}/${category}`
-      }]
+      content: [{ type: "text", text: `No knowledge documents found for ${requirementId}/${category}` }]
     };
   }
-  return {
-    content: [{
-      type: "text",
-      text: content
-    }]
-  };
+  return { content: [{ type: "text", text: content }] };
 }
 function handleKnowledgeWrite(args, cwd) {
   const requirementId = args.requirementId;
@@ -15923,10 +15889,7 @@ function handleKnowledgeExists(args, cwd) {
   const doc = args.doc;
   const exists = knowledgeExists(requirementId, category, doc, cwd);
   return {
-    content: [{
-      type: "text",
-      text: exists ? "true" : "false"
-    }]
+    content: [{ type: "text", text: exists ? "true" : "false" }]
   };
 }
 function handleKnowledgeList(args, cwd) {
@@ -15941,12 +15904,7 @@ function handleKnowledgeList(args, cwd) {
     requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
   }
   if (requirements.length === 0) {
-    return {
-      content: [{
-        type: "text",
-        text: "No requirements found in knowledge library."
-      }]
-    };
+    return { content: [{ type: "text", text: "No requirements found in knowledge library." }] };
   }
   const table = requirements.map(([id, r]) => {
     const categories = Object.keys(r.domains).join(", ") || "-";
@@ -15969,10 +15927,7 @@ function handleKnowledgeDocs(args, cwd) {
   const docs = listKnowledgeDocs(requirementId, category, cwd);
   if (docs.length === 0) {
     return {
-      content: [{
-        type: "text",
-        text: `No documents found for ${requirementId}/${category}`
-      }]
+      content: [{ type: "text", text: `No documents found for ${requirementId}/${category}` }]
     };
   }
   const docList = docs.map((d) => `- ${d}.md`).join("\n");
@@ -15985,6 +15940,8 @@ ${docList}`
     }]
   };
 }
+
+// dist/handlers/index.js
 var handlers = {
   opc_state_read: (_, cwd) => handleStateRead(cwd),
   opc_state_init: (args, cwd) => handleStateInit(args, cwd),
