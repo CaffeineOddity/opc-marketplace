@@ -560,15 +560,16 @@ function buildDefaultGates(stages) {
     return gates.length > 0 ? gates : undefined;
 }
 /**
- * Get project state path for a requirement ID.
- * Each requirement has its own state file for history tracking.
+ * Get project state path for a requirement ID with workflow source.
+ * Path format: .opc/state/{requirementId}_{source}/project-state.json
+ * This allows tracking multiple pipeline attempts for the same requirement.
  */
-function getProjectStatePath(requirementId, cwd) {
+function getProjectStatePath(requirementId, source, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return join(stateDir, requirementId, 'project-state.json');
+    return join(stateDir, `${requirementId}_${source}`, 'project-state.json');
 }
-function readProjectState(requirementId, cwd) {
-    const path = getProjectStatePath(requirementId, cwd);
+function readProjectState(requirementId, source, cwd) {
+    const path = getProjectStatePath(requirementId, source, cwd);
     return readJsonFile(path);
 }
 function writeProjectState(state, cwd) {
@@ -576,7 +577,8 @@ function writeProjectState(state, cwd) {
     if (!requirementId) {
         throw new Error('Cannot write project state without requirement_id');
     }
-    const path = getProjectStatePath(requirementId, cwd);
+    const source = state.workflow?.source || 'auto_assembled';
+    const path = getProjectStatePath(requirementId, source, cwd);
     const dir = join(path, '..');
     if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -957,18 +959,22 @@ function writeSessionIndex(index, cwd) {
     atomicWriteJson(path, index);
 }
 /**
- * Bind current window to a requirement.
+ * Bind current window to a requirement with workflow source.
  */
-function bindSessionToRequirement(lockId, requirementId, cwd) {
+function bindSessionToRequirement(lockId, requirementId, source, workflowName, cwd) {
     const index = readSessionIndex(cwd);
     const now = new Date().toISOString();
     if (index.sessions[lockId]) {
         index.sessions[lockId].requirement_id = requirementId;
+        index.sessions[lockId].source = source;
+        index.sessions[lockId].workflow_name = workflowName;
         index.sessions[lockId].updated_at = now;
     }
     else {
         index.sessions[lockId] = {
             requirement_id: requirementId,
+            source: source,
+            workflow_name: workflowName,
             created_at: now,
             updated_at: now,
         };
@@ -976,31 +982,41 @@ function bindSessionToRequirement(lockId, requirementId, cwd) {
     writeSessionIndex(index, cwd);
 }
 /**
+ * Get session info for current window.
+ */
+function getCurrentSession(lockId, cwd) {
+    const index = readSessionIndex(cwd);
+    return index.sessions[lockId] || null;
+}
+/**
  * Get requirement_id for current window.
  */
 function getCurrentRequirementId(lockId, cwd) {
-    const index = readSessionIndex(cwd);
-    return index.sessions[lockId]?.requirement_id || null;
+    const session = getCurrentSession(lockId, cwd);
+    return session?.requirement_id || null;
 }
 /**
- * List all task directories (requirement IDs) in state.
+ * List all task directories in state.
+ * Format: {requirementId}_{source}
+ * Example: REQ-001_matched, REQ-002_auto_assembled
  */
 function listAllTasks(cwd) {
     const stateDir = ensureOpcDir('state', cwd);
     if (!existsSync(stateDir))
         return [];
-    return readdirSync(stateDir).filter(f => f.startsWith('REQ-'));
+    // Match both old format (REQ-XXX) and new format (REQ-XXX_matched/auto_assembled)
+    return readdirSync(stateDir).filter(f => f.startsWith('REQ-') || f.match(/^REQ-\d+_(matched|auto_assembled)$/));
 }
 /**
  * Get current window's task state.
  */
 function getCurrentTask(cwd) {
     const lockId = getCurrentLockId(cwd);
-    const requirementId = getCurrentRequirementId(lockId, cwd);
-    if (!requirementId) {
+    const session = getCurrentSession(lockId, cwd);
+    if (!session) {
         return null;
     }
-    return readProjectState(requirementId, cwd);
+    return readProjectState(session.requirement_id, session.source, cwd);
 }
 /**
  * Clear current window's task binding (abandon).
@@ -1405,9 +1421,9 @@ ${Object.entries(state.pipeline.stages)
                 const providedRequirementId = args.requirement_id;
                 const lockId = getCurrentLockId(cwd);
                 // Check if current window already has a task bound
-                const currentRequirementId = getCurrentRequirementId(lockId, cwd);
-                if (currentRequirementId) {
-                    const existingTask = readProjectState(currentRequirementId, cwd);
+                const currentSession = getCurrentSession(lockId, cwd);
+                if (currentSession) {
+                    const existingTask = readProjectState(currentSession.requirement_id, currentSession.source, cwd);
                     if (existingTask) {
                         const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
                         if (currentStatus === 'in_progress') {
@@ -1484,9 +1500,7 @@ Please choose how to proceed.
                 const knowledgeInfo = knowledgeResult.isNew
                     ? 'Knowledge library initialized.'
                     : `Resumed existing requirement: "${knowledgeResult.title}"`;
-                // Bind current session to this requirement
-                bindSessionToRequirement(lockId, requirementId, cwd);
-                // Try to match workflow
+                // Try to match workflow FIRST (before binding session)
                 const taskDescription = `${projectName} ${projectDescription}`.trim();
                 const workflows = readAllWorkflows(cwd);
                 const workflowMatch = matchWorkflow(taskDescription, workflows);
@@ -1503,6 +1517,8 @@ Please choose how to proceed.
                 else {
                     workflowInfo = '\n\n🔧 **Pipeline:** Auto-assembled based on task analysis';
                 }
+                // Bind current session to this requirement (with workflow source)
+                bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
                 // Initialize new task with workflow
                 const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
                 // Mark first stage as in_progress
@@ -1854,13 +1870,13 @@ ${output || 'No matches found.'}
             // ============================================================
             case 'opc_sessions_list': {
                 const lockId = getCurrentLockId(cwd);
-                const currentRequirementId = getCurrentRequirementId(lockId, cwd);
+                const currentSession = getCurrentSession(lockId, cwd);
                 const stateDir = ensureOpcDir('state', cwd);
-                // List all requirement state directories
-                const allRequirements = existsSync(stateDir)
-                    ? readdirSync(stateDir).filter(f => f.startsWith('REQ-'))
+                // List all requirement state directories (new format: REQ-XXX_source)
+                const allTaskDirs = existsSync(stateDir)
+                    ? readdirSync(stateDir).filter(f => f.match(/^REQ-\d+_(matched|auto_assembled)$/))
                     : [];
-                if (allRequirements.length === 0) {
+                if (allTaskDirs.length === 0) {
                     return {
                         content: [{
                                 type: 'text',
@@ -1869,25 +1885,34 @@ ${output || 'No matches found.'}
                     };
                 }
                 // Build task list with status
-                const taskList = allRequirements
-                    .map(reqId => {
-                    const state = readProjectState(reqId, cwd);
+                const taskList = allTaskDirs
+                    .map(dirName => {
+                    // Parse: REQ-001_matched -> { id: REQ-001, source: matched }
+                    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
+                    if (!match)
+                        return null;
+                    const reqId = match[1];
+                    const source = match[2];
+                    const state = readProjectState(reqId, source, cwd);
                     if (!state)
                         return null;
-                    const isCurrent = reqId === currentRequirementId;
+                    const isCurrent = currentSession &&
+                        currentSession.requirement_id === reqId &&
+                        currentSession.source === source;
                     const status = state.pipeline.stages[state.pipeline.current_stage]?.status || 'pending';
                     const icon = status === 'in_progress' ? '🔄' :
                         status === 'completed' ? '✅' :
                             status === 'blocked' ? '🚫' : '⏳';
                     const currentMarker = isCurrent ? ' ← **current**' : '';
-                    return `${icon} **${reqId}**: ${state.project.name} (${status})${currentMarker}`;
+                    const workflowTag = state.workflow?.name || source;
+                    return `${icon} **${reqId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
                 })
                     .filter(Boolean)
                     .join('\n');
                 return {
                     content: [{
                             type: 'text',
-                            text: `## All Tasks (${allRequirements.length})
+                            text: `## All Tasks (${allTaskDirs.length})
 
 ${taskList}
 
