@@ -23,6 +23,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 52
 | `/opc-plugin install all` | Install all 7 plugins |
 | `/opc-plugin install web` | Install for web product |
 | `/opc-plugin install designer` | Install for product & design focus |
+| `/opc-plugin init` | Initialize project (workflows + .gitignore) |
 | `/opc-plugin update` | Update marketplace + all plugins |
 | `/opc-plugin uninstall marketplace` | Complete removal |
 
@@ -73,7 +74,7 @@ OPC provides cross-session state persistence via MCP tools:
 │   ├── sessions/              # Session states (personal, don't commit)
 │   └── checkpoints/           # Rollback points (optional)
 ├── artifacts/                 # Produced files (optional)
-└── .first-install-done        # Marker file (prevents re-copy)
+└── .project-init              # Marker file (prevents re-copy)
 ```
 
 ### Git Recommendations
@@ -84,13 +85,13 @@ OPC provides cross-session state persistence via MCP tools:
 | `.opc/state/` | ❌ | Personal session data |
 | `.opc/state/checkpoints/` | Optional | Rollback points |
 | `.opc/artifacts/` | Optional | Depends on project |
-| `.opc/.first-install-done` | ❌ | Local install marker |
+| `.opc/.project-init` | ❌ | Local install marker |
 
 ### Auto Gitignore
-On first `/opc-plugin install`, OPC automatically:
+On first `/opc-plugin init`, OPC automatically:
 1. Copies built-in workflows to `.opc/workflows/`
 2. Adds `.opc/state/` to `.gitignore`
-3. Creates `.opc/.first-install-done` marker to prevent re-run
+3. Creates `.opc/.project-init` marker to prevent re-run
 
 ## Task Queue System
 
@@ -252,11 +253,12 @@ OPC manages tasks with a queue system:
 /plugin install opc-founder@opc-marketplace
 
 # 3. Use /opc-plugin to manage other plugins
-/opc-plugin install all        # Install all 7 plugins
-/opc-plugin install web        # Web product
-/opc-plugin install designer   # Product & design focus
-/opc-plugin update             # Update all plugins
-/opc-plugin list               # List installed plugins
+/opc-plugin init              # Initialize project (workflows + .gitignore)
+/opc-plugin install all       # Install all 7 plugins
+/opc-plugin install web       # Web product
+/opc-plugin install designer  # Product & design focus
+/opc-plugin update            # Update all plugins
+/opc-plugin list              # List installed plugins
 ```
 
 ### HUD Statusline

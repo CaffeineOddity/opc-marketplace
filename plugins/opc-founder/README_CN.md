@@ -102,15 +102,17 @@ founder-agent 自动为多阶段项目管理状态。你也可以使用命令：
 ## 插件管理
 
 ```shell
-/opc-plugin install          # 交互式安装
-/opc-plugin install all      # 安装全部 7 个插件
-/opc-plugin install web      # Web 产品 (product + design + dev + qa + ship + growth)
-/opc-plugin install mobile   # Mobile App (product + design + dev + qa + ship)
-/opc-plugin install designer # 产品设计专注 (product + design + docs)
-/opc-plugin update           # 更新市场 + 所有插件
-/opc-plugin uninstall        # 卸载所有 OPC 插件
+/opc-plugin init              # 初始化项目：.gitignore + workflows + marker
+/opc-plugin init --force      # 强制重新初始化
+/opc-plugin install           # 交互式安装
+/opc-plugin install all       # 安装全部 7 个插件
+/opc-plugin install web       # Web 产品 (product + design + dev + qa + ship + growth)
+/opc-plugin install mobile    # Mobile App (product + design + dev + qa + ship)
+/opc-plugin install designer  # 产品设计专注 (product + design + docs)
+/opc-plugin update            # 更新市场 + 所有插件
+/opc-plugin uninstall         # 卸载所有 OPC 插件
 /opc-plugin uninstall marketplace  # 完整卸载：插件 + HUD + 市场
-/opc-plugin list             # 列出已安装插件
+/opc-plugin list              # 列出已安装插件
 ```
 
 ## HUD 状态栏

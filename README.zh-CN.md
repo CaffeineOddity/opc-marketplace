@@ -23,6 +23,7 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、52 个 Sk
 | `/opc-plugin install all` | 安装全部 7 个插件 |
 | `/opc-plugin install web` | 安装 Web 产品所需插件 |
 | `/opc-plugin install designer` | 安装产品设计专注插件 |
+| `/opc-plugin init` | 初始化项目（workflows + .gitignore） |
 | `/opc-plugin update` | 更新所有插件 |
 | `/opc-plugin uninstall marketplace` | 完整卸载 |
 
@@ -72,7 +73,7 @@ OPC 通过 MCP 工具提供跨会话状态持久化：
 │   ├── sessions/              # 会话状态（个人数据，不提交）
 │   └── checkpoints/           # 回滚点（可选）
 ├── artifacts/                 # 产物文件（可选）
-└── .first-install-done        # 标记文件（防止重复复制）
+└── .project-init              # 标记文件（防止重复复制）
 ```
 
 ### Git 提交建议
@@ -83,13 +84,13 @@ OPC 通过 MCP 工具提供跨会话状态持久化：
 | `.opc/state/` | ❌ | 个人会话数据 |
 | `.opc/state/checkpoints/` | 可选 | 回滚点 |
 | `.opc/artifacts/` | 可选 | 视项目而定 |
-| `.opc/.first-install-done` | ❌ | 本地安装标记 |
+| `.opc/.project-init` | ❌ | 本地安装标记 |
 
 ### 自动初始化
-首次运行 `/opc-plugin install` 时，OPC 自动：
+首次运行 `/opc-plugin init` 时，OPC 自动：
 1. 复制内置工作流到 `.opc/workflows/`
 2. 添加 `.opc/state/` 到 `.gitignore`
-3. 创建 `.opc/.first-install-done` 标记防止重复执行
+3. 创建 `.opc/.project-init` 标记防止重复执行
 
 ## 任务队列系统
 
@@ -249,11 +250,12 @@ OPC 通过任务队列系统管理任务：
 /plugin install opc-founder@opc-marketplace
 
 # 3. 使用 /opc-plugin 管理其他插件
-/opc-plugin install all        # 安装全部 7 个插件
-/opc-plugin install web        # Web 产品
-/opc-plugin install designer   # 产品设计专注
-/opc-plugin update             # 更新所有插件
-/opc-plugin list               # 列出已安装插件
+/opc-plugin init              # 初始化项目（workflows + .gitignore）
+/opc-plugin install all       # 安装全部 7 个插件
+/opc-plugin install web       # Web 产品
+/opc-plugin install designer  # 产品设计专注
+/opc-plugin update            # 更新所有插件
+/opc-plugin list              # 列出已安装插件
 ```
 
 ### HUD 状态栏

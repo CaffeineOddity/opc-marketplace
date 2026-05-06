@@ -25,7 +25,6 @@ from lib import (
     update_settings_plugins,
     install_hud,
 )
-from lib.paths import get_project_root
 
 
 # Plugin sets definition
@@ -114,38 +113,18 @@ def main():
     # Update settings.json
     update_settings_plugins(installed, enable=True)
 
-    # Run first-install setup
-    print("\nRunning first-install setup...")
-    project_root = get_project_root()
-    run_first_install_setup(project_root, marketplace_path)
+    # Install HUD statusline
+    print("\nInstalling HUD statusline...")
+    success, message = install_hud(marketplace_path)
+    if success:
+        print(f"✅ {message}")
+    else:
+        print(f"⚠️  {message}")
 
     print()
     print(f"✅ Installed {len(installed)} plugin(s)")
     print()
     print("Run /reload-plugins to activate the new plugins")
-
-
-def run_first_install_setup(project_root: Path, marketplace_path: Path):
-    """Run first-install setup script."""
-    setup_script = marketplace_path / "plugins" / "opc-founder" / "skills" / "opc-plugin" / "scripts" / "first-install.py"
-
-    if not setup_script.exists():
-        print("  ⚠️  First-install setup script not found, skipping")
-        return
-
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["python3", str(setup_script), str(project_root), str(marketplace_path)],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode == 0:
-            print(result.stdout.strip())
-        else:
-            print(f"  ⚠️  First-install setup warning: {result.stderr.strip()}")
-    except Exception as e:
-        print(f"  ⚠️  First-install setup error: {e}")
 
 
 if __name__ == "__main__":

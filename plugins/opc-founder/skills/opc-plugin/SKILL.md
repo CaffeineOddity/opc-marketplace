@@ -18,6 +18,9 @@ Install, update, and manage plugins from opc-marketplace.
 
 | Command | Description |
 |---------|-------------|
+| `init` | Initialize project: configure .gitignore, copy workflows, install HUD |
+| `init --force` | Force re-run initialization even if already done |
+| `init --dry-run` | Show what would happen without making changes |
 | `install [option]` | Install plugins |
 | `install hud` | Install HUD statusline only |
 | `update` | Update marketplace and all installed plugins |
@@ -57,6 +60,9 @@ When this skill is invoked, execute the appropriate action based on arguments:
 ### Step 1: Parse Arguments
 
 - If no arguments: Show interactive menu
+- If `init`: Initialize project configuration
+- If `init --force`: Force re-run initialization
+- If `init --dry-run`: Show what would happen without making changes
 - If `install all`: Install all 7 plugins
 - If `install <option>`: Install the specified plugin set
 - If `install hud`: Install HUD statusline only
@@ -102,35 +108,39 @@ For each plugin to install:
 6. **Update settings.json**: Enable the plugin in `enabledPlugins`
 7. **Run first-install setup**: Execute Python script for one-time setup
 
-### Step 3.5: First Install Setup
+### Step 3.5: Project Init
 
-After installing opc-founder plugin, run the first-install setup script:
+After installing opc-founder plugin, run the project init script:
 
 ```bash
-python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/first-install.py {project_root} {marketplace_root}
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/init.py
 ```
 
 Where `{marketplace_root}` is the opc-marketplace source directory.
 
-This script runs **once** and performs:
+This script performs:
 
-1. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `{git-toplevel}/.opc/workflows/`
-2. **Update .gitignore**: Add `.opc/state/` entry (if not exists)
-3. **Create marker file**: `{git-toplevel}/.opc/.first-install-done` to prevent re-run
-4. **Install HUD statusline**: Copy HUD script and configure `settings.json`
+1. **Configure .gitignore**: Add `.opc/state/` entry (if not exists)
+2. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `{git-toplevel}/.opc/workflows/`
+3. **Create marker file**: `{git-toplevel}/.opc/.project-init` to prevent re-run
 
-**Note:** All paths use git toplevel root for consistency when running from subdirectories.
+**Note:** HUD statusline is installed separately via `install.py` or `/opc-plugin install hud`.
 
 **Marker file structure:**
 ```json
 {
   "version": "1.0.0",
-  "installed_at": "2026-05-02T10:30:00",
-  "workflows_copied": 7
+  "initialized_at": "2026-05-06T10:30:00",
+  "workflows_count": 8,
+  "force_mode": false
 }
 ```
 
-On subsequent installs, the script checks for this marker and skips if it exists.
+On subsequent runs, the script checks for this marker and skips if it exists. Use `--force` to re-run.
+
+**Options:**
+- `--force`: Force re-run even if already initialized
+- `--dry-run`: Show what would happen without making changes
 
 ### Step 4: File Paths
 
@@ -245,6 +255,9 @@ After completion, remind user to run `/reload-plugins` to refresh the plugin sys
 
 | Scenario | Command |
 |----------|---------|
+| Initialize project | `/opc-plugin init` |
+| Force re-init | `/opc-plugin init --force` |
+| Dry-run init | `/opc-plugin init --dry-run` |
 | Install all plugins | `/opc-plugin install all` |
 | Install web preset | `/opc-plugin install web` |
 | Install HUD only | `/opc-plugin install hud` |

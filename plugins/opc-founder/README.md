@@ -102,15 +102,17 @@ The founder-agent automatically manages state for multi-stage projects. You can 
 ## Plugin Management
 
 ```shell
-/opc-plugin install          # Interactive install
-/opc-plugin install all      # Install all 7 plugins
-/opc-plugin install web      # Web product (product + design + dev + qa + ship + growth)
-/opc-plugin install mobile   # Mobile app (product + design + dev + qa + ship)
-/opc-plugin install designer # Product & Design focus (product + design + docs)
-/opc-plugin update           # Update marketplace + all plugins
-/opc-plugin uninstall        # Uninstall all OPC plugins
+/opc-plugin init              # Initialize project: .gitignore + workflows + marker
+/opc-plugin init --force      # Force re-run initialization
+/opc-plugin install           # Interactive install
+/opc-plugin install all       # Install all 7 plugins
+/opc-plugin install web       # Web product (product + design + dev + qa + ship + growth)
+/opc-plugin install mobile    # Mobile app (product + design + dev + qa + ship)
+/opc-plugin install designer  # Product & Design focus (product + design + docs)
+/opc-plugin update            # Update marketplace + all plugins
+/opc-plugin uninstall         # Uninstall all OPC plugins
 /opc-plugin uninstall marketplace  # Complete removal: plugins + HUD + marketplace
-/opc-plugin list             # List installed plugins
+/opc-plugin list              # List installed plugins
 ```
 
 ## Workflow Specs
@@ -148,10 +150,10 @@ Workflows are stored in `.opc/workflows/`:
 │   ├── bug-fix.json
 │   ├── security-fix.json
 │   └── my-custom-workflow.json   # User-created workflows
-└── .first-install-done           # Marker (prevents re-copy)
+└── .project-init                 # Marker (prevents re-copy)
 ```
 
-**Note:** Workflows are copied on first `/opc-plugin install` and should be committed to git for team sharing.
+**Note:** Workflows are copied on first `/opc-plugin init` and should be committed to git for team sharing.
 
 ## Knowledge Library
 
@@ -244,7 +246,7 @@ The knowledge library evolves automatically:
 
 ## HUD Statusline
 
-OPC automatically installs a HUD (Heads-Up Display) for the statusline on first plugin install:
+OPC provides a HUD (Heads-Up Display) for the statusline:
 
 ```
 [OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
