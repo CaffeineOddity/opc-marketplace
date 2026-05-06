@@ -1,0 +1,13 @@
+/**
+ * OPC Session Management
+ *
+ * Session index maps lock_id to requirement_id with workflow source.
+ */
+import type { SessionIndex, ProjectState } from './types.js';
+export declare function readSessionIndex(cwd?: string): SessionIndex;
+export declare function bindSessionToRequirement(lockId: string, requirementId: string, source: 'matched' | 'auto_assembled', workflowName?: string, cwd?: string): void;
+export declare function getCurrentSession(lockId: string, cwd?: string): SessionIndex['sessions'][string] | null;
+export declare function getCurrentRequirementId(lockId: string, cwd?: string): string | null;
+export declare function listAllTasks(cwd?: string): string[];
+export declare function getCurrentTask(cwd?: string): ProjectState | null;
+export declare function clearCurrentTask(cwd?: string): boolean;

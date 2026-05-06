@@ -3105,6 +3105,9 @@ var require_utils = __commonJS({
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
+    var isHexPair = RegExp.prototype.test.bind(/^[\da-f]{2}$/iu);
+    var isUnreserved = RegExp.prototype.test.bind(/^[\da-z\-._~]$/iu);
+    var isPathCharacter = RegExp.prototype.test.bind(/^[\da-z\-._~!$&'()*+,;=:@/]$/iu);
     function stringArrayToHexStripped(input) {
       let acc = "";
       let code = 0;
@@ -3297,27 +3300,77 @@ var require_utils = __commonJS({
       }
       return output.join("");
     }
-    function normalizeComponentEncoding(component, esc2) {
-      const func = esc2 !== true ? escape : unescape;
-      if (component.scheme !== void 0) {
-        component.scheme = func(component.scheme);
+    var HOST_DELIMS = { "@": "%40", "/": "%2F", "?": "%3F", "#": "%23", ":": "%3A" };
+    var HOST_DELIM_RE = /[@/?#:]/g;
+    var HOST_DELIM_NO_COLON_RE = /[@/?#]/g;
+    function reescapeHostDelimiters(host, isIP) {
+      const re = isIP ? HOST_DELIM_NO_COLON_RE : HOST_DELIM_RE;
+      re.lastIndex = 0;
+      return host.replace(re, (ch) => HOST_DELIMS[ch]);
+    }
+    function normalizePercentEncoding(input, decodeUnreserved = false) {
+      if (input.indexOf("%") === -1) {
+        return input;
       }
-      if (component.userinfo !== void 0) {
-        component.userinfo = func(component.userinfo);
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        if (input[i] === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            const normalizedHex = hex.toUpperCase();
+            const decoded = String.fromCharCode(parseInt(normalizedHex, 16));
+            if (decodeUnreserved && isUnreserved(decoded)) {
+              output += decoded;
+            } else {
+              output += "%" + normalizedHex;
+            }
+            i += 2;
+            continue;
+          }
+        }
+        output += input[i];
       }
-      if (component.host !== void 0) {
-        component.host = func(component.host);
+      return output;
+    }
+    function normalizePathEncoding(input) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        if (input[i] === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            const normalizedHex = hex.toUpperCase();
+            const decoded = String.fromCharCode(parseInt(normalizedHex, 16));
+            if (decoded !== "." && isUnreserved(decoded)) {
+              output += decoded;
+            } else {
+              output += "%" + normalizedHex;
+            }
+            i += 2;
+            continue;
+          }
+        }
+        if (isPathCharacter(input[i])) {
+          output += input[i];
+        } else {
+          output += escape(input[i]);
+        }
       }
-      if (component.path !== void 0) {
-        component.path = func(component.path);
+      return output;
+    }
+    function escapePreservingEscapes(input) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        if (input[i] === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            output += "%" + hex.toUpperCase();
+            i += 2;
+            continue;
+          }
+        }
+        output += escape(input[i]);
       }
-      if (component.query !== void 0) {
-        component.query = func(component.query);
-      }
-      if (component.fragment !== void 0) {
-        component.fragment = func(component.fragment);
-      }
-      return component;
+      return output;
     }
     function recomposeAuthority(component) {
       const uriTokens = [];
@@ -3332,7 +3385,7 @@ var require_utils = __commonJS({
           if (ipV6res.isIPV6 === true) {
             host = `[${ipV6res.escapedHost}]`;
           } else {
-            host = component.host;
+            host = reescapeHostDelimiters(host, false);
           }
         }
         uriTokens.push(host);
@@ -3346,7 +3399,10 @@ var require_utils = __commonJS({
     module2.exports = {
       nonSimpleDomain,
       recomposeAuthority,
-      normalizeComponentEncoding,
+      reescapeHostDelimiters,
+      normalizePercentEncoding,
+      normalizePathEncoding,
+      escapePreservingEscapes,
       removeDotSegments,
       isIPv4,
       isUUID,
@@ -3570,12 +3626,12 @@ var require_schemes = __commonJS({
 var require_fast_uri = __commonJS({
   "node_modules/fast-uri/index.js"(exports2, module2) {
     "use strict";
-    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils();
+    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
     function normalize(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
-        serialize(parse3(uri, options), options);
+        normalizeString(uri, options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
         parse3(serialize(uri, options), options);
@@ -3642,19 +3698,9 @@ var require_fast_uri = __commonJS({
       return target;
     }
     function equal(uriA, uriB, options) {
-      if (typeof uriA === "string") {
-        uriA = unescape(uriA);
-        uriA = serialize(normalizeComponentEncoding(parse3(uriA, options), true), { ...options, skipEscape: true });
-      } else if (typeof uriA === "object") {
-        uriA = serialize(normalizeComponentEncoding(uriA, true), { ...options, skipEscape: true });
-      }
-      if (typeof uriB === "string") {
-        uriB = unescape(uriB);
-        uriB = serialize(normalizeComponentEncoding(parse3(uriB, options), true), { ...options, skipEscape: true });
-      } else if (typeof uriB === "object") {
-        uriB = serialize(normalizeComponentEncoding(uriB, true), { ...options, skipEscape: true });
-      }
-      return uriA.toLowerCase() === uriB.toLowerCase();
+      const normalizedA = normalizeComparableURI(uriA, options);
+      const normalizedB = normalizeComparableURI(uriB, options);
+      return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA.toLowerCase() === normalizedB.toLowerCase();
     }
     function serialize(cmpts, opts) {
       const component = {
@@ -3679,12 +3725,12 @@ var require_fast_uri = __commonJS({
       if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
       if (component.path !== void 0) {
         if (!options.skipEscape) {
-          component.path = escape(component.path);
+          component.path = escapePreservingEscapes(component.path);
           if (component.scheme !== void 0) {
             component.path = component.path.split("%3A").join(":");
           }
         } else {
-          component.path = unescape(component.path);
+          component.path = normalizePercentEncoding(component.path);
         }
       }
       if (options.reference !== "suffix" && component.scheme) {
@@ -3719,7 +3765,16 @@ var require_fast_uri = __commonJS({
       return uriTokens.join("");
     }
     var URI_PARSE = /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
-    function parse3(uri, opts) {
+    function getParseError(parsed, matches) {
+      if (matches[2] !== void 0 && parsed.path && parsed.path[0] !== "/") {
+        return 'URI path must start with "/" when authority is present.';
+      }
+      if (typeof parsed.port === "number" && (parsed.port < 0 || parsed.port > 65535)) {
+        return "URI port is malformed.";
+      }
+      return void 0;
+    }
+    function parseWithStatus(uri, opts) {
       const options = Object.assign({}, opts);
       const parsed = {
         scheme: void 0,
@@ -3730,6 +3785,7 @@ var require_fast_uri = __commonJS({
         query: void 0,
         fragment: void 0
       };
+      let malformedAuthorityOrPort = false;
       let isIP = false;
       if (options.reference === "suffix") {
         if (options.scheme) {
@@ -3749,6 +3805,11 @@ var require_fast_uri = __commonJS({
         parsed.fragment = matches[8];
         if (isNaN(parsed.port)) {
           parsed.port = matches[5];
+        }
+        const parseError = getParseError(parsed, matches);
+        if (parseError !== void 0) {
+          parsed.error = parsed.error || parseError;
+          malformedAuthorityOrPort = true;
         }
         if (parsed.host) {
           const ipv4result = isIPv4(parsed.host);
@@ -3788,14 +3849,18 @@ var require_fast_uri = __commonJS({
               parsed.scheme = unescape(parsed.scheme);
             }
             if (parsed.host !== void 0) {
-              parsed.host = unescape(parsed.host);
+              parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP);
             }
           }
           if (parsed.path) {
-            parsed.path = escape(unescape(parsed.path));
+            parsed.path = normalizePathEncoding(parsed.path);
           }
           if (parsed.fragment) {
-            parsed.fragment = encodeURI(decodeURIComponent(parsed.fragment));
+            try {
+              parsed.fragment = encodeURI(decodeURIComponent(parsed.fragment));
+            } catch {
+              parsed.error = parsed.error || "URI malformed";
+            }
           }
         }
         if (schemeHandler && schemeHandler.parse) {
@@ -3804,7 +3869,29 @@ var require_fast_uri = __commonJS({
       } else {
         parsed.error = parsed.error || "URI can not be parsed.";
       }
-      return parsed;
+      return { parsed, malformedAuthorityOrPort };
+    }
+    function parse3(uri, opts) {
+      return parseWithStatus(uri, opts).parsed;
+    }
+    function normalizeString(uri, opts) {
+      return normalizeStringWithStatus(uri, opts).normalized;
+    }
+    function normalizeStringWithStatus(uri, opts) {
+      const { parsed, malformedAuthorityOrPort } = parseWithStatus(uri, opts);
+      return {
+        normalized: malformedAuthorityOrPort ? uri : serialize(parsed, opts),
+        malformedAuthorityOrPort
+      };
+    }
+    function normalizeComparableURI(uri, opts) {
+      if (typeof uri === "string") {
+        const { normalized, malformedAuthorityOrPort } = normalizeStringWithStatus(uri, opts);
+        return malformedAuthorityOrPort ? void 0 : normalized;
+      }
+      if (typeof uri === "object") {
+        return serialize(uri, opts);
+      }
     }
     var fastUri = {
       SCHEMES,
@@ -13880,104 +13967,9 @@ var StdioServerTransport = class {
   }
 };
 
-// dist/opc-state-server.js
-var import_fs = require("fs");
+// dist/paths.js
 var import_path = require("path");
-var import_fs2 = require("fs");
-var processSessionId = null;
-function getProcessSessionId() {
-  if (!processSessionId) {
-    const pid = process.pid;
-    const startTime = Date.now();
-    processSessionId = `pid-${pid}-${startTime}`;
-  }
-  return processSessionId;
-}
-function isProcessAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0)
-    return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    if (e && typeof e === "object" && "code" in e && e.code === "EPERM") {
-      return true;
-    }
-    return false;
-  }
-}
-var O_CREAT = import_fs2.constants.O_CREAT;
-var O_EXCL = import_fs2.constants.O_EXCL;
-var O_WRONLY = import_fs2.constants.O_WRONLY;
-var DEFAULT_STALE_LOCK_MS = 3e4;
-var currentLockId = null;
-function getLockPath(lockId, cwd) {
-  const lockDir = ensureOpcDir("state/locks", cwd);
-  return (0, import_path.join)(lockDir, `${lockId}.lock`);
-}
-function isLockStale(lockPath, staleLockMs = DEFAULT_STALE_LOCK_MS) {
-  try {
-    const stat = (0, import_fs.statSync)(lockPath);
-    const ageMs = Date.now() - stat.mtimeMs;
-    if (ageMs < staleLockMs)
-      return false;
-    try {
-      const raw = (0, import_fs.readFileSync)(lockPath, "utf-8");
-      const payload = JSON.parse(raw);
-      if (payload.pid && isProcessAlive(payload.pid)) {
-        return false;
-      }
-    } catch {
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-function acquireWindowLock(cwd) {
-  if (currentLockId) {
-    return currentLockId;
-  }
-  const lockId = getProcessSessionId();
-  const lockPath = getLockPath(lockId, cwd);
-  const lockDir = (0, import_path.dirname)(lockPath);
-  if (!(0, import_fs.existsSync)(lockDir)) {
-    (0, import_fs.mkdirSync)(lockDir, { recursive: true });
-  }
-  try {
-    const fd = (0, import_fs.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 384);
-    const payload = JSON.stringify({
-      lockId,
-      pid: process.pid,
-      timestamp: Date.now()
-    });
-    (0, import_fs.writeSync)(fd, payload, null, "utf-8");
-    (0, import_fs.closeSync)(fd);
-    currentLockId = lockId;
-    return lockId;
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "EEXIST") {
-      if (isLockStale(lockPath)) {
-        try {
-          (0, import_fs.unlinkSync)(lockPath);
-          return acquireWindowLock(cwd);
-        } catch {
-          currentLockId = lockId;
-          return lockId;
-        }
-      }
-      currentLockId = lockId;
-      return lockId;
-    }
-    throw err;
-  }
-}
-function getCurrentLockId(cwd) {
-  if (!currentLockId) {
-    currentLockId = acquireWindowLock(cwd);
-  }
-  return currentLockId;
-}
+var import_fs = require("fs");
 var OPC_PATHS = {
   ROOT: ".opc",
   STATE: ".opc/state",
@@ -14002,9 +13994,9 @@ function getWorktreeRoot(cwd) {
     return effectiveCwd;
   }
 }
-function getOpcRoot(cwd) {
+function getWorkflowsPath(cwd) {
   const root = getWorktreeRoot(cwd);
-  return (0, import_path.join)(root, OPC_PATHS.ROOT);
+  return (0, import_path.join)(root, OPC_PATHS.WORKFLOWS);
 }
 function ensureWorkflowsDir(cwd) {
   const root = getWorktreeRoot(cwd);
@@ -14026,189 +14018,381 @@ function generateCheckpointId() {
   const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").substring(0, 19);
   return `cp-${timestamp}`;
 }
+
+// dist/io.js
+var import_fs2 = require("fs");
+var import_path2 = require("path");
 function atomicWriteJson(filePath, data) {
   const tempPath = `${filePath}.tmp-${process.pid}`;
-  (0, import_fs.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 384 });
-  const { renameSync } = require("fs");
-  renameSync(tempPath, filePath);
-}
-function updateGitignore(cwd) {
-  const root = getWorktreeRoot(cwd);
-  const gitignorePath = (0, import_path.join)(root, ".gitignore");
-  const OPC_GITIGNORE_ENTRY = `
-# OPC state - personal session data, don't commit
-.opc/state/
-`;
-  if (!(0, import_fs.existsSync)(gitignorePath)) {
-    (0, import_fs.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
-    return true;
-  }
-  const content = (0, import_fs.readFileSync)(gitignorePath, "utf-8");
-  if (content.includes(".opc/state/")) {
-    return false;
-  }
-  (0, import_fs.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
-  return true;
+  (0, import_fs2.writeFileSync)(tempPath, JSON.stringify(data, null, 2), { mode: 384 });
+  (0, import_fs2.renameSync)(tempPath, filePath);
 }
 function readJsonFile(filePath) {
-  if (!(0, import_fs.existsSync)(filePath))
+  if (!(0, import_fs2.existsSync)(filePath))
     return null;
   try {
-    const content = (0, import_fs.readFileSync)(filePath, "utf-8");
+    const content = (0, import_fs2.readFileSync)(filePath, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
   }
 }
-function getProjectStatePath(lockId, cwd) {
-  const stateDir = ensureOpcDir("state", cwd);
-  return (0, import_path.join)(stateDir, lockId, "project-state.json");
-}
-function readProjectState(lockId, cwd) {
-  const path = getProjectStatePath(lockId, cwd);
-  return readJsonFile(path);
-}
-function writeProjectState(state, cwd) {
-  const path = getProjectStatePath(state.context.lock_id, cwd);
-  const dir = (0, import_path.join)(path, "..");
-  if (!(0, import_fs.existsSync)(dir)) {
-    (0, import_fs.mkdirSync)(dir, { recursive: true });
+function updateGitignore(cwd) {
+  const root = getWorktreeRoot(cwd);
+  const gitignorePath = (0, import_path2.join)(root, ".gitignore");
+  const OPC_GITIGNORE_ENTRY = `
+# OPC state - personal session data, don't commit
+.opc/state/
+`;
+  if (!(0, import_fs2.existsSync)(gitignorePath)) {
+    (0, import_fs2.writeFileSync)(gitignorePath, OPC_GITIGNORE_ENTRY);
+    return true;
   }
-  state.project.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-  state._meta.updated_by = "opc_state_write";
-  atomicWriteJson(path, state);
+  const content = (0, import_fs2.readFileSync)(gitignorePath, "utf-8");
+  if (content.includes(".opc/state/")) {
+    return false;
+  }
+  (0, import_fs2.writeFileSync)(gitignorePath, content + OPC_GITIGNORE_ENTRY);
+  return true;
 }
-function initializeProjectState(name, description, lockId, requirementId, cwd) {
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const stages = ["product", "design", "dev", "qa", "ship", "growth"];
-  return {
-    project: {
-      name,
-      description,
-      requirement_id: requirementId,
-      created_at: now,
-      updated_at: now
-    },
-    pipeline: {
-      current_stage: "product",
-      stages: stages.reduce((acc, stage) => {
-        acc[stage] = { status: "pending" };
-        return acc;
-      }, {})
-    },
-    context: {
-      lock_id: lockId,
-      worktree: getWorktreeRoot(cwd)
-    },
-    _meta: {
-      version: "3.0.0",
-      // Single-task model
-      updated_by: "opc_state_init"
+
+// dist/lock.js
+var import_fs3 = require("fs");
+var import_path3 = require("path");
+var import_fs4 = require("fs");
+var processSessionId = null;
+function getProcessSessionId() {
+  if (!processSessionId) {
+    const pid = process.pid;
+    const startTime = Date.now();
+    processSessionId = `pid-${pid}-${startTime}`;
+  }
+  return processSessionId;
+}
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0)
+    return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && e.code === "EPERM") {
+      return true;
     }
-  };
-}
-function getCheckpointPath(checkpointId, cwd) {
-  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
-  return (0, import_path.join)(checkpointsDir, `${checkpointId}.json`);
-}
-function createCheckpoint(state, description, cwd) {
-  const checkpointId = generateCheckpointId();
-  const checkpoint = {
-    checkpoint_id: checkpointId,
-    created_at: (/* @__PURE__ */ new Date()).toISOString(),
-    stage: state.pipeline.current_stage,
-    description,
-    snapshot: {
-      files_changed: [],
-      tests_status: "unknown",
-      git_status: "unknown"
-    },
-    state_snapshot: JSON.parse(JSON.stringify(state)),
-    can_rollback: true
-  };
-  const path = getCheckpointPath(checkpointId, cwd);
-  atomicWriteJson(path, checkpoint);
-  return checkpoint;
-}
-function readCheckpoint(checkpointId, cwd) {
-  const path = getCheckpointPath(checkpointId, cwd);
-  return readJsonFile(path);
-}
-function listCheckpoints(cwd) {
-  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
-  if (!(0, import_fs.existsSync)(checkpointsDir))
-    return [];
-  const files = (0, import_fs.readdirSync)(checkpointsDir).filter((f) => f.endsWith(".json"));
-  return files.map((f) => readJsonFile((0, import_path.join)(checkpointsDir, f))).filter((c) => c !== null).sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
-function getHandoffPath(lockId, cwd) {
-  const stateDir = ensureOpcDir("state", cwd);
-  return (0, import_path.join)(stateDir, lockId, "handoffs.json");
-}
-function recordHandoff(fromAgent, toAgent, artifacts, constraints, context, lockId, cwd) {
-  const handoff = {
-    handoff_id: `handoff-${Date.now().toString(36)}`,
-    created_at: (/* @__PURE__ */ new Date()).toISOString(),
-    from_agent: fromAgent,
-    to_agent: toAgent,
-    artifacts,
-    constraints,
-    context,
-    lock_id: lockId
-  };
-  const path = getHandoffPath(lockId, cwd);
-  let handoffs = readJsonFile(path) || [];
-  handoffs.push(handoff);
-  atomicWriteJson(path, handoffs);
-  return handoff;
-}
-function getMemoryPath(cwd) {
-  return (0, import_path.join)(getOpcRoot(cwd), "memory", "project-memory.json");
-}
-function readProjectMemory(cwd) {
-  const path = getMemoryPath(cwd);
-  const memory = readJsonFile(path);
-  return memory || { entries: [], updated_at: (/* @__PURE__ */ new Date()).toISOString() };
-}
-function writeProjectMemory(memory, cwd) {
-  const path = getMemoryPath(cwd);
-  const dir = (0, import_path.join)(path, "..");
-  if (!(0, import_fs.existsSync)(dir)) {
-    (0, import_fs.mkdirSync)(dir, { recursive: true });
+    return false;
   }
-  memory.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-  atomicWriteJson(path, memory);
 }
-function addMemoryEntry(category, content, metadata, cwd) {
-  const memory = readProjectMemory(cwd);
-  const entry = {
-    id: `mem-${Date.now().toString(36)}`,
-    created_at: (/* @__PURE__ */ new Date()).toISOString(),
-    category,
-    content,
-    metadata
+var O_CREAT = import_fs4.constants.O_CREAT;
+var O_EXCL = import_fs4.constants.O_EXCL;
+var O_WRONLY = import_fs4.constants.O_WRONLY;
+var DEFAULT_STALE_LOCK_MS = 3e4;
+var currentLockId = null;
+function getLockPath(lockId, cwd) {
+  const lockDir = ensureOpcDir("state/locks", cwd);
+  return (0, import_path3.join)(lockDir, `${lockId}.lock`);
+}
+function isLockStale(lockPath, staleLockMs = DEFAULT_STALE_LOCK_MS) {
+  try {
+    const stat = (0, import_fs3.statSync)(lockPath);
+    const ageMs = Date.now() - stat.mtimeMs;
+    if (ageMs < staleLockMs)
+      return false;
+    try {
+      const raw = (0, import_fs3.readFileSync)(lockPath, "utf-8");
+      const payload = JSON.parse(raw);
+      if (payload.pid && isProcessAlive(payload.pid)) {
+        return false;
+      }
+    } catch {
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+function acquireWindowLock(cwd) {
+  if (currentLockId) {
+    return currentLockId;
+  }
+  const lockId = getProcessSessionId();
+  const lockPath = getLockPath(lockId, cwd);
+  const lockDir = (0, import_path3.dirname)(lockPath);
+  if (!(0, import_fs3.existsSync)(lockDir)) {
+    (0, import_fs3.mkdirSync)(lockDir, { recursive: true });
+  }
+  try {
+    const fd = (0, import_fs3.openSync)(lockPath, O_CREAT | O_EXCL | O_WRONLY, 384);
+    const payload = JSON.stringify({
+      lockId,
+      pid: process.pid,
+      timestamp: Date.now()
+    });
+    (0, import_fs3.writeSync)(fd, payload, null, "utf-8");
+    (0, import_fs3.closeSync)(fd);
+    currentLockId = lockId;
+    return lockId;
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "EEXIST") {
+      if (isLockStale(lockPath)) {
+        try {
+          (0, import_fs3.unlinkSync)(lockPath);
+          return acquireWindowLock(cwd);
+        } catch {
+          currentLockId = lockId;
+          return lockId;
+        }
+      }
+      currentLockId = lockId;
+      return lockId;
+    }
+    throw err;
+  }
+}
+function getCurrentLockId(cwd) {
+  if (!currentLockId) {
+    currentLockId = acquireWindowLock(cwd);
+  }
+  return currentLockId;
+}
+
+// dist/workflow.js
+var import_fs5 = require("fs");
+var import_path4 = require("path");
+function readAllWorkflows(cwd) {
+  const workflowsDir = getWorkflowsPath(cwd);
+  if (!(0, import_fs5.existsSync)(workflowsDir))
+    return [];
+  const workflows = [];
+  const files = (0, import_fs5.readdirSync)(workflowsDir).filter((f) => f.endsWith(".json"));
+  for (const file of files) {
+    const path = (0, import_path4.join)(workflowsDir, file);
+    const spec = readJsonFile(path);
+    if (spec) {
+      workflows.push(spec);
+    }
+  }
+  return workflows;
+}
+function matchWorkflow(taskDescription, workflows) {
+  const lowerTask = taskDescription.toLowerCase();
+  let bestMatch = null;
+  for (const workflow of workflows) {
+    let score = 0;
+    for (const keyword of workflow.triggers.keywords) {
+      if (lowerTask.includes(keyword.toLowerCase())) {
+        score += 1;
+      }
+    }
+    for (const pattern of workflow.triggers.patterns) {
+      try {
+        const regex = new RegExp(pattern, "i");
+        if (regex.test(taskDescription)) {
+          score += 2;
+        }
+      } catch {
+      }
+    }
+    const totalTriggers = workflow.triggers.keywords.length + workflow.triggers.patterns.length;
+    const normalizedScore = totalTriggers > 0 ? score / totalTriggers : 0;
+    if (normalizedScore > 0 && (!bestMatch || normalizedScore > bestMatch.score)) {
+      bestMatch = { workflow, score: normalizedScore };
+    }
+  }
+  return bestMatch;
+}
+function buildStagesFromWorkflow(workflow) {
+  const stages = {};
+  for (const stageDef of workflow.pipeline) {
+    stages[stageDef.stage] = {
+      status: "pending",
+      config: {
+        required: stageDef.required,
+        outputs: stageDef.outputs,
+        optional_outputs: stageDef.optional_outputs,
+        agents: stageDef.agents,
+        agent_mode: stageDef.agent_mode,
+        skills: stageDef.skills,
+        skip_conditions: stageDef.skip_conditions,
+        constraints: stageDef.constraints,
+        description: stageDef.description,
+        knowledge: stageDef.knowledge
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  return stages;
+}
+function buildStagesAuto(taskDescription) {
+  const lowerTask = taskDescription.toLowerCase();
+  const stages = {};
+  stages.product = {
+    status: "pending",
+    config: {
+      required: true,
+      outputs: ["spec.md"],
+      agents: ["product-agent"],
+      skills: ["spec-driven-development"],
+      description: "\u9700\u6C42\u5206\u6790\u548C\u89C4\u683C\u5B9A\u4E49",
+      knowledge: {
+        domain: "requirement",
+        doc: "main",
+        read_before: false,
+        write_after: true
+      }
+    },
+    gates_passed: [],
+    gates_blocked: []
   };
-  memory.entries.push(entry);
-  writeProjectMemory(memory, cwd);
-  return entry;
+  const designKeywords = ["ui", "\u754C\u9762", "\u8BBE\u8BA1", "\u9875\u9762", "landing", "dashboard", "\u524D\u7AEF", "web", "app", "\u79FB\u52A8"];
+  const needsDesign = designKeywords.some((kw) => lowerTask.includes(kw));
+  if (needsDesign) {
+    stages.design = {
+      status: "pending",
+      config: {
+        required: false,
+        outputs: ["design-spec.md"],
+        agents: ["web-agent", "mobile-agent"],
+        skills: ["ui-design"],
+        description: "UI/UX \u8BBE\u8BA1",
+        knowledge: {
+          domain: "design",
+          doc: "ui",
+          read_before: ["requirement"],
+          write_after: true
+        }
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  const devKeywords = ["\u5B9E\u73B0", "\u5F00\u53D1", "\u6DFB\u52A0", "\u65B0\u589E", "\u529F\u80FD", "build", "create", "implement", "feature"];
+  const backendKeywords = ["api", "\u540E\u7AEF", "backend", "\u670D\u52A1", "server", "\u63A5\u53E3"];
+  const needsDev = devKeywords.some((kw) => lowerTask.includes(kw)) || backendKeywords.some((kw) => lowerTask.includes(kw));
+  if (needsDev) {
+    stages.dev = {
+      status: "pending",
+      config: {
+        required: true,
+        outputs: ["tests/", "implementation"],
+        agents: backendKeywords.some((kw) => lowerTask.includes(kw)) ? ["backend-agent"] : ["frontend-agent", "backend-agent"],
+        agent_mode: "parallel",
+        skills: ["test-driven-development"],
+        constraints: ["tdd_red_first"],
+        description: "TDD \u5F00\u53D1",
+        knowledge: {
+          frontend: {
+            domain: "platforms",
+            platform: "web",
+            doc: "tech",
+            read_before: ["requirement", "design"],
+            write_after: true
+          },
+          backend: {
+            domain: "backend",
+            doc: "api",
+            read_before: ["requirement"],
+            write_after: true
+          }
+        }
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  const qaKeywords = ["\u6D4B\u8BD5", "test", "qa", "\u9A8C\u8BC1"];
+  const needsQa = qaKeywords.some((kw) => lowerTask.includes(kw)) || needsDev;
+  if (needsQa) {
+    stages.qa = {
+      status: "pending",
+      config: {
+        required: true,
+        outputs: ["test-report.md"],
+        agents: ["qa-agent"],
+        skills: ["test-plan"],
+        description: "\u6D4B\u8BD5\u9A8C\u8BC1",
+        knowledge: {
+          domain: "backend",
+          doc: "test",
+          read_before: ["platforms/web/tech", "backend/api"],
+          write_after: true
+        }
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  const shipKeywords = ["\u90E8\u7F72", "deploy", "\u53D1\u5E03", "release", "\u4E0A\u7EBF"];
+  const needsShip = shipKeywords.some((kw) => lowerTask.includes(kw));
+  if (needsShip) {
+    stages.ship = {
+      status: "pending",
+      config: {
+        required: false,
+        outputs: ["deployment"],
+        agents: ["devops-agent"],
+        skills: ["deploy"],
+        description: "\u90E8\u7F72",
+        knowledge: {
+          domain: "shared",
+          doc: "infrastructure",
+          read_before: ["backend/api"],
+          write_after: true
+        }
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  if (Object.keys(stages).length === 0) {
+    stages.product = {
+      status: "pending",
+      config: {
+        required: true,
+        description: "\u4EFB\u52A1\u5206\u6790"
+      },
+      gates_passed: [],
+      gates_blocked: []
+    };
+  }
+  return stages;
 }
-function searchMemory(query, cwd) {
-  const memory = readProjectMemory(cwd);
-  const lowerQuery = query.toLowerCase();
-  return memory.entries.filter((e) => e.content.toLowerCase().includes(lowerQuery) || e.category.toLowerCase().includes(lowerQuery));
+function buildDefaultGates(stages) {
+  const gates = [];
+  if (stages.product) {
+    gates.push({
+      name: "sdd_spec_required",
+      description: "Product \u5FC5\u987B\u4EA7\u51FA Spec\uFF0C\u5426\u5219 Dev \u65E0\u6CD5\u5F00\u59CB",
+      check: "stages.product.artifacts.includes('spec.md')",
+      blocker: "Dev \u963B\u6B62\uFF1A\u7F3A\u5C11 Spec\u3002\u8BF7\u5148\u5728 Product \u9636\u6BB5\u5B8C\u6210\u89C4\u683C\u5B9A\u4E49\u3002"
+    });
+  }
+  if (stages.dev?.config?.constraints?.includes("tdd_red_first")) {
+    gates.push({
+      name: "tdd_red_first",
+      description: "\u5FC5\u987B\u5148\u5199\u5931\u8D25\u6D4B\u8BD5",
+      check: "stages.dev.progress.red_complete === true",
+      blocker: "\u5B9E\u73B0\u963B\u6B62\uFF1A\u8BF7\u5148\u5199\u5931\u8D25\u6D4B\u8BD5\uFF08RED \u9636\u6BB5\uFF09\u3002"
+    });
+  }
+  return gates.length > 0 ? gates : void 0;
 }
+
+// dist/knowledge.js
+var import_fs6 = require("fs");
+var import_path5 = require("path");
 function getKnowledgePath(cwd) {
-  return (0, import_path.join)(getOpcRoot(cwd), "knowledge");
+  return (0, import_path5.join)(ensureOpcDir("", cwd), "knowledge");
 }
 function getKnowledgeIndexPath(cwd) {
-  return (0, import_path.join)(getKnowledgePath(cwd), "index.json");
+  return (0, import_path5.join)(getKnowledgePath(cwd), "index.json");
 }
 function getRequirementPath(requirementId, cwd) {
-  return (0, import_path.join)(getKnowledgePath(cwd), requirementId);
+  return (0, import_path5.join)(getKnowledgePath(cwd), requirementId);
 }
 function getKnowledgeDocPath(requirementId, category, doc, cwd) {
   const reqPath = getRequirementPath(requirementId, cwd);
-  return (0, import_path.join)(reqPath, category, `${doc}.md`);
+  return (0, import_path5.join)(reqPath, category, `${doc}.md`);
 }
 function readKnowledgeIndex(cwd) {
   const path = getKnowledgeIndexPath(cwd);
@@ -14217,9 +14401,9 @@ function readKnowledgeIndex(cwd) {
 }
 function writeKnowledgeIndex(index, cwd) {
   const path = getKnowledgeIndexPath(cwd);
-  const dir = (0, import_path.join)(path, "..");
-  if (!(0, import_fs.existsSync)(dir)) {
-    (0, import_fs.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_path5.join)(path, "..");
+  if (!(0, import_fs6.existsSync)(dir)) {
+    (0, import_fs6.mkdirSync)(dir, { recursive: true });
   }
   atomicWriteJson(path, index);
 }
@@ -14241,27 +14425,27 @@ function initKnowledgeLibrary(requirementId, title, cwd) {
   };
   writeKnowledgeIndex(index, cwd);
   const reqPath = getRequirementPath(requirementId, cwd);
-  if (!(0, import_fs.existsSync)(reqPath)) {
-    (0, import_fs.mkdirSync)(reqPath, { recursive: true });
+  if (!(0, import_fs6.existsSync)(reqPath)) {
+    (0, import_fs6.mkdirSync)(reqPath, { recursive: true });
   }
   return { isNew: true, title };
 }
 function readKnowledgeDoc(requirementId, category, doc, cwd) {
   const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
-  if (!(0, import_fs.existsSync)(path))
+  if (!(0, import_fs6.existsSync)(path))
     return null;
-  return (0, import_fs.readFileSync)(path, "utf-8");
+  return (0, import_fs6.readFileSync)(path, "utf-8");
 }
 function readAllKnowledgeDocs(requirementId, category, cwd) {
   const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = (0, import_path.join)(reqPath, category);
-  if (!(0, import_fs.existsSync)(categoryPath))
+  const categoryPath = (0, import_path5.join)(reqPath, category);
+  if (!(0, import_fs6.existsSync)(categoryPath))
     return null;
   const results = [];
-  for (const docFile of (0, import_fs.readdirSync)(categoryPath)) {
+  for (const docFile of (0, import_fs6.readdirSync)(categoryPath)) {
     if (!docFile.endsWith(".md"))
       continue;
-    const content = (0, import_fs.readFileSync)((0, import_path.join)(categoryPath, docFile), "utf-8");
+    const content = (0, import_fs6.readFileSync)((0, import_path5.join)(categoryPath, docFile), "utf-8");
     results.push(`## ${docFile}
 
 ${content}`);
@@ -14270,21 +14454,21 @@ ${content}`);
 }
 function writeKnowledgeDoc(requirementId, category, doc, content, mode = "append", section, cwd) {
   const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
-  const dir = (0, import_path.join)(path, "..");
-  if (!(0, import_fs.existsSync)(dir)) {
-    (0, import_fs.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_path5.join)(path, "..");
+  if (!(0, import_fs6.existsSync)(dir)) {
+    (0, import_fs6.mkdirSync)(dir, { recursive: true });
   }
   let finalContent = content;
-  if (mode === "append" && (0, import_fs.existsSync)(path)) {
-    const existing = (0, import_fs.readFileSync)(path, "utf-8");
+  if (mode === "append" && (0, import_fs6.existsSync)(path)) {
+    const existing = (0, import_fs6.readFileSync)(path, "utf-8");
     const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     finalContent = `${existing}
 
 ## ${timestamp}
 
 ${content}`;
-  } else if (mode === "update" && section && (0, import_fs.existsSync)(path)) {
-    const existing = (0, import_fs.readFileSync)(path, "utf-8");
+  } else if (mode === "update" && section && (0, import_fs6.existsSync)(path)) {
+    const existing = (0, import_fs6.readFileSync)(path, "utf-8");
     const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, "g");
     if (sectionRegex.test(existing)) {
       finalContent = existing.replace(sectionRegex, `$1${content}
@@ -14298,7 +14482,7 @@ ${content}`;
 ${content}`;
     }
   }
-  (0, import_fs.writeFileSync)(path, finalContent, "utf-8");
+  (0, import_fs6.writeFileSync)(path, finalContent, "utf-8");
   const index = readKnowledgeIndex(cwd);
   const req = index.requirements[requirementId];
   if (req) {
@@ -14319,19 +14503,19 @@ function knowledgeExists(requirementId, category, doc, cwd) {
   }
   if (!doc) {
     const reqPath = getRequirementPath(requirementId, cwd);
-    const categoryPath = (0, import_path.join)(reqPath, category);
-    return (0, import_fs.existsSync)(categoryPath);
+    const categoryPath = (0, import_path5.join)(reqPath, category);
+    return (0, import_fs6.existsSync)(categoryPath);
   }
   const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
-  return (0, import_fs.existsSync)(path);
+  return (0, import_fs6.existsSync)(path);
 }
 function listKnowledgeDocs(requirementId, category, cwd) {
   const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = (0, import_path.join)(reqPath, category);
-  if (!(0, import_fs.existsSync)(categoryPath))
+  const categoryPath = (0, import_path5.join)(reqPath, category);
+  if (!(0, import_fs6.existsSync)(categoryPath))
     return [];
   const docs = [];
-  for (const docFile of (0, import_fs.readdirSync)(categoryPath)) {
+  for (const docFile of (0, import_fs6.readdirSync)(categoryPath)) {
     if (docFile.endsWith(".md")) {
       docs.push(docFile.replace(".md", ""));
     }
@@ -14373,32 +14557,336 @@ function findCandidateRequirements(index, query, threshold = 0.3) {
   }
   return candidates.sort((a, b) => b.score - a.score);
 }
+
+// dist/session.js
+var import_fs8 = require("fs");
+var import_path7 = require("path");
+
+// dist/state.js
+var import_fs7 = require("fs");
+var import_path6 = require("path");
+function getProjectStatePath(requirementId, source, cwd) {
+  const stateDir = ensureOpcDir("state", cwd);
+  return (0, import_path6.join)(stateDir, `${requirementId}_${source}`, "project-state.json");
+}
+function readProjectState(requirementId, source, cwd) {
+  const path = getProjectStatePath(requirementId, source, cwd);
+  return readJsonFile(path);
+}
+function writeProjectState(state, cwd) {
+  const requirementId = state.project.requirement_id;
+  if (!requirementId) {
+    throw new Error("Cannot write project state without requirement_id");
+  }
+  const source = state.workflow?.source || "auto_assembled";
+  const path = getProjectStatePath(requirementId, source, cwd);
+  const dir = (0, import_path6.join)(path, "..");
+  if (!(0, import_fs7.existsSync)(dir)) {
+    (0, import_fs7.mkdirSync)(dir, { recursive: true });
+  }
+  state.project.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+  state._meta.updated_by = "opc_state_write";
+  atomicWriteJson(path, state);
+}
+function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  let stages;
+  let gates;
+  let rules;
+  let workflowMeta;
+  if (workflow) {
+    stages = buildStagesFromWorkflow(workflow);
+    gates = workflow.gates;
+    rules = workflow.rules;
+    workflowMeta = {
+      name: workflow.name,
+      source: workflowSource || "matched",
+      matched_at: now,
+      confidence: workflowConfidence
+    };
+  } else {
+    stages = buildStagesAuto(description);
+    gates = buildDefaultGates(stages);
+    rules = {
+      tdd: !!stages.dev?.config?.constraints?.includes("tdd_red_first"),
+      sdd: !!stages.product,
+      parallel_allowed: stages.dev?.config?.agent_mode === "parallel",
+      knowledge_enabled: true
+    };
+    workflowMeta = {
+      name: "auto-assembled",
+      source: "auto_assembled",
+      matched_at: now
+    };
+  }
+  const stageOrder = Object.keys(stages);
+  const firstStage = stageOrder[0] || "product";
+  return {
+    project: {
+      name,
+      description,
+      requirement_id: requirementId,
+      created_at: now,
+      updated_at: now
+    },
+    pipeline: {
+      current_stage: firstStage,
+      stages
+    },
+    workflow: workflowMeta,
+    gates,
+    rules,
+    context: {
+      lock_id: lockId,
+      worktree: getWorktreeRoot(cwd)
+    },
+    _meta: {
+      version: "3.1.0",
+      updated_by: "opc_state_init"
+    }
+  };
+}
+function getCheckpointPath(checkpointId, cwd) {
+  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
+  return (0, import_path6.join)(checkpointsDir, `${checkpointId}.json`);
+}
+function createCheckpoint(state, description, cwd) {
+  const checkpointId = generateCheckpointId();
+  const checkpoint = {
+    checkpoint_id: checkpointId,
+    created_at: (/* @__PURE__ */ new Date()).toISOString(),
+    stage: state.pipeline.current_stage,
+    description,
+    snapshot: {
+      files_changed: [],
+      tests_status: "unknown",
+      git_status: "unknown"
+    },
+    state_snapshot: JSON.parse(JSON.stringify(state)),
+    can_rollback: true
+  };
+  const path = getCheckpointPath(checkpointId, cwd);
+  atomicWriteJson(path, checkpoint);
+  return checkpoint;
+}
+function readCheckpoint(checkpointId, cwd) {
+  const path = getCheckpointPath(checkpointId, cwd);
+  return readJsonFile(path);
+}
+function listCheckpoints(cwd) {
+  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
+  if (!(0, import_fs7.existsSync)(checkpointsDir))
+    return [];
+  const files = (0, import_fs7.readdirSync)(checkpointsDir).filter((f) => f.endsWith(".json"));
+  return files.map((f) => readJsonFile((0, import_path6.join)(checkpointsDir, f))).filter((c) => c !== null).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+function getHandoffPath(lockId, cwd) {
+  const stateDir = ensureOpcDir("state", cwd);
+  return (0, import_path6.join)(stateDir, lockId, "handoffs.json");
+}
+function recordHandoff(fromAgent, toAgent, artifacts, constraints, context, lockId, cwd) {
+  const handoff = {
+    handoff_id: `handoff-${Date.now().toString(36)}`,
+    created_at: (/* @__PURE__ */ new Date()).toISOString(),
+    from_agent: fromAgent,
+    to_agent: toAgent,
+    artifacts,
+    constraints,
+    context,
+    lock_id: lockId
+  };
+  const path = getHandoffPath(lockId, cwd);
+  let handoffs = readJsonFile(path) || [];
+  handoffs.push(handoff);
+  atomicWriteJson(path, handoffs);
+  return handoff;
+}
+function getMemoryPath(cwd) {
+  return (0, import_path6.join)(ensureOpcDir("", cwd), "memory", "project-memory.json");
+}
+function readProjectMemory(cwd) {
+  const path = getMemoryPath(cwd);
+  const memory = readJsonFile(path);
+  return memory || { entries: [], updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+}
+function writeProjectMemory(memory, cwd) {
+  const path = getMemoryPath(cwd);
+  const dir = (0, import_path6.join)(path, "..");
+  if (!(0, import_fs7.existsSync)(dir)) {
+    (0, import_fs7.mkdirSync)(dir, { recursive: true });
+  }
+  memory.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+  atomicWriteJson(path, memory);
+}
+function addMemoryEntry(category, content, metadata, cwd) {
+  const memory = readProjectMemory(cwd);
+  const entry = {
+    id: `mem-${Date.now().toString(36)}`,
+    created_at: (/* @__PURE__ */ new Date()).toISOString(),
+    category,
+    content,
+    metadata
+  };
+  memory.entries.push(entry);
+  writeProjectMemory(memory, cwd);
+  return entry;
+}
+function searchMemory(query, cwd) {
+  const memory = readProjectMemory(cwd);
+  const lowerQuery = query.toLowerCase();
+  return memory.entries.filter((e) => e.content.toLowerCase().includes(lowerQuery) || e.category.toLowerCase().includes(lowerQuery));
+}
+function createTaskGroup(state, stage, groupName, tasks, parallel, completionCondition, threshold, cwd) {
+  const groupId = `tg-${Date.now().toString(36)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const taskGroup = {
+    group_id: groupId,
+    name: groupName,
+    tasks: tasks.map((t, i) => ({
+      task_id: `${groupId}-task-${i}`,
+      agent: t.agent,
+      description: t.description,
+      status: "pending",
+      progress: 0,
+      dependencies: t.dependencies
+    })),
+    parallel,
+    completion_condition: completionCondition,
+    threshold,
+    started_at: now
+  };
+  if (!state.pipeline.stages[stage]) {
+    state.pipeline.stages[stage] = { status: "pending" };
+  }
+  if (!state.pipeline.stages[stage].task_groups) {
+    state.pipeline.stages[stage].task_groups = [];
+  }
+  state.pipeline.stages[stage].task_groups.push(taskGroup);
+  writeProjectState(state, cwd);
+  return { state, groupId };
+}
+function updateTask(state, taskId, status, progress, artifact, cwd) {
+  let found = false;
+  for (const stageName of Object.keys(state.pipeline.stages)) {
+    const stage = state.pipeline.stages[stageName];
+    if (!stage.task_groups)
+      continue;
+    for (const group of stage.task_groups) {
+      const task = group.tasks.find((t) => t.task_id === taskId);
+      if (task) {
+        task.status = status;
+        if (progress !== void 0)
+          task.progress = progress;
+        if (status === "in_progress" && !task.started_at) {
+          task.started_at = (/* @__PURE__ */ new Date()).toISOString();
+        }
+        if (status === "completed" || status === "failed") {
+          task.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+          task.progress = 100;
+        }
+        if (artifact) {
+          if (!task.artifacts)
+            task.artifacts = [];
+          task.artifacts.push(artifact);
+        }
+        found = true;
+        const completedCount = group.tasks.filter((t) => t.status === "completed").length;
+        if (group.completion_condition === "all" && completedCount === group.tasks.length) {
+          group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+        } else if (group.completion_condition === "any" && completedCount > 0) {
+          group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+        } else if (group.completion_condition === "threshold" && group.threshold && completedCount >= group.threshold) {
+          group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+        }
+        break;
+      }
+    }
+    if (found)
+      break;
+  }
+  if (found) {
+    writeProjectState(state, cwd);
+  }
+  return state;
+}
+function getTaskGroups(state, stage, groupId) {
+  const groups = [];
+  for (const stageName of Object.keys(state.pipeline.stages)) {
+    if (stage && stageName !== stage)
+      continue;
+    const stageData = state.pipeline.stages[stageName];
+    if (!stageData.task_groups)
+      continue;
+    for (const group of stageData.task_groups) {
+      if (groupId && group.group_id !== groupId)
+        continue;
+      groups.push(group);
+    }
+  }
+  return groups;
+}
+
+// dist/session.js
+function getSessionIndexPath(cwd) {
+  const stateDir = ensureOpcDir("state", cwd);
+  return (0, import_path7.join)(stateDir, "sessions.json");
+}
+function readSessionIndex(cwd) {
+  const path = getSessionIndexPath(cwd);
+  const index = readJsonFile(path);
+  return index || { sessions: {} };
+}
+function writeSessionIndex(index, cwd) {
+  const path = getSessionIndexPath(cwd);
+  atomicWriteJson(path, index);
+}
+function bindSessionToRequirement(lockId, requirementId, source, workflowName, cwd) {
+  const index = readSessionIndex(cwd);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  if (index.sessions[lockId]) {
+    index.sessions[lockId].requirement_id = requirementId;
+    index.sessions[lockId].source = source;
+    index.sessions[lockId].workflow_name = workflowName;
+    index.sessions[lockId].updated_at = now;
+  } else {
+    index.sessions[lockId] = {
+      requirement_id: requirementId,
+      source,
+      workflow_name: workflowName,
+      created_at: now,
+      updated_at: now
+    };
+  }
+  writeSessionIndex(index, cwd);
+}
+function getCurrentSession(lockId, cwd) {
+  const index = readSessionIndex(cwd);
+  return index.sessions[lockId] || null;
+}
 function getCurrentTask(cwd) {
   const lockId = getCurrentLockId(cwd);
-  return readProjectState(lockId, cwd);
+  const session = getCurrentSession(lockId, cwd);
+  if (!session) {
+    return null;
+  }
+  return readProjectState(session.requirement_id, session.source, cwd);
 }
 function clearCurrentTask(cwd) {
   const lockId = getCurrentLockId(cwd);
-  const statePath = getProjectStatePath(lockId, cwd);
-  const handoffPath = getHandoffPath(lockId, cwd);
-  let cleared = false;
-  if ((0, import_fs.existsSync)(statePath)) {
-    (0, import_fs.unlinkSync)(statePath);
-    cleared = true;
-  }
-  if ((0, import_fs.existsSync)(handoffPath)) {
-    (0, import_fs.unlinkSync)(handoffPath);
-  }
-  const stateDir = (0, import_path.join)(statePath, "..");
-  try {
-    const remaining = (0, import_fs.readdirSync)(stateDir);
-    if (remaining.length === 0) {
-      (0, import_fs.unlinkSync)(stateDir);
+  const index = readSessionIndex(cwd);
+  if (index.sessions[lockId]) {
+    delete index.sessions[lockId];
+    writeSessionIndex(index, cwd);
+    const handoffPath = getHandoffPath(lockId, cwd);
+    if ((0, import_fs8.existsSync)(handoffPath)) {
+      (0, import_fs8.unlinkSync)(handoffPath);
     }
-  } catch {
+    return true;
   }
-  return cleared;
+  return false;
 }
+
+// dist/index.js
 var tools = [
   // opc_state_read
   {
@@ -14714,10 +15202,25 @@ async function handleToolCall(name, args) {
         }
         const stageStatus = Object.entries(state.pipeline.stages).map(([stage, data]) => {
           const icon = data.status === "completed" ? "\u2705" : data.status === "in_progress" ? "\u{1F504}" : data.status === "blocked" ? "\u{1F6AB}" : "\u23F3";
-          return `${icon} **${stage}**: ${data.status}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(", ")})` : ""}`;
+          const required2 = data.config?.required === false ? " (optional)" : "";
+          const desc = data.config?.description ? ` \u2014 ${data.config.description}` : "";
+          return `${icon} **${stage}**${required2}: ${data.status}${desc}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(", ")})` : ""}`;
         }).join("\n");
         const requirementInfo = state.project.requirement_id ? `
 **Requirement ID:** ${state.project.requirement_id}` : "";
+        const workflowInfo = state.workflow ? `
+**Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ""})` : "";
+        const rulesInfo = state.rules ? `
+
+### Rules
+${state.rules.tdd ? "- \u2705 TDD enabled\n" : ""}${state.rules.sdd ? "- \u2705 SDD enabled\n" : ""}${state.rules.parallel_allowed ? "- \u2705 Parallel execution allowed\n" : ""}${state.rules.knowledge_enabled ? "- \u2705 Knowledge flow enabled\n" : ""}` : "";
+        const currentStage = state.pipeline.stages[state.pipeline.current_stage];
+        const knowledgeInfo = currentStage?.config?.knowledge ? `
+
+### Current Stage Knowledge
+` + (currentStage.config.knowledge.read_before ? `- **Read before:** ${Array.isArray(currentStage.config.knowledge.read_before) ? currentStage.config.knowledge.read_before.join(", ") : "none"}
+` : "") + (currentStage.config.knowledge.write_after ? `- **Write after:** ${currentStage.config.knowledge.domain}/${currentStage.config.knowledge.doc}
+` : "") : "";
         return {
           content: [{
             type: "text",
@@ -14725,13 +15228,13 @@ async function handleToolCall(name, args) {
 
 **Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
-**Current Stage:** ${state.pipeline.current_stage}
+**Current Stage:** ${state.pipeline.current_stage}${workflowInfo}
 **Created:** ${state.project.created_at}
 **Updated:** ${state.project.updated_at}
 
 ### Pipeline Progress
 
-${stageStatus}
+${stageStatus}${rulesInfo}${knowledgeInfo}
 
 ### Artifacts
 ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.length).map(([stage, data]) => `- **${stage}**: ${data.artifacts?.join(", ")}`).join("\n") || "No artifacts recorded yet."}
@@ -14745,28 +15248,31 @@ ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.len
         const projectDescription = args.project_description || "";
         const providedRequirementId = args.requirement_id;
         const lockId = getCurrentLockId(cwd);
-        const existingTask = readProjectState(lockId, cwd);
-        if (existingTask) {
-          const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
-          if (currentStatus === "in_progress") {
-            return {
-              content: [{
-                type: "text",
-                text: `## Task Already Exists
+        const currentSession = getCurrentSession(lockId, cwd);
+        if (currentSession) {
+          const existingTask = readProjectState(currentSession.requirement_id, currentSession.source, cwd);
+          if (existingTask) {
+            const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
+            if (currentStatus === "in_progress") {
+              return {
+                content: [{
+                  type: "text",
+                  text: `## Task Already Bound
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || "Not set"}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** \u{1F504} in_progress
 
-One window can only have one task at a time.
+One window can only have one active task at a time.
 
 Options:
 1. Continue the current task with \`opc_state_read\`
-2. Abandon current task with \`opc_state_clear\` and start fresh
+2. Unbind from current task with \`opc_state_clear\` and start fresh
 `
-              }]
-            };
+                }]
+              };
+            }
           }
         }
         let requirementId = providedRequirementId;
@@ -14813,12 +15319,38 @@ Please choose how to proceed.
         }
         const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
         const knowledgeInfo = knowledgeResult.isNew ? "Knowledge library initialized." : `Resumed existing requirement: "${knowledgeResult.title}"`;
-        const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
-        state.pipeline.stages.product.status = "in_progress";
-        state.pipeline.stages.product.started_at = (/* @__PURE__ */ new Date()).toISOString();
+        const taskDescription = `${projectName} ${projectDescription}`.trim();
+        const workflows = readAllWorkflows(cwd);
+        const workflowMatch = matchWorkflow(taskDescription, workflows);
+        let workflowInfo = "";
+        let matchedWorkflow = null;
+        let workflowSource = "auto_assembled";
+        let workflowConfidence;
+        if (workflowMatch && workflowMatch.score >= 0.3) {
+          matchedWorkflow = workflowMatch.workflow;
+          workflowSource = "matched";
+          workflowConfidence = workflowMatch.score;
+          workflowInfo = `
+
+\u{1F4CB} **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowMatch.score * 100)}% confidence)`;
+        } else {
+          workflowInfo = "\n\n\u{1F527} **Pipeline:** Auto-assembled based on task analysis";
+        }
+        bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
+        const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
+        const firstStage = state.pipeline.current_stage;
+        if (state.pipeline.stages[firstStage]) {
+          state.pipeline.stages[firstStage].status = "in_progress";
+          state.pipeline.stages[firstStage].started_at = (/* @__PURE__ */ new Date()).toISOString();
+        }
         writeProjectState(state, cwd);
         const gitignoreUpdated = updateGitignore(cwd);
         const gitignoreMsg = gitignoreUpdated ? "\n\n\u{1F4DD} **.gitignore updated**: Added `.opc/state/` to ignore personal session data." : "";
+        const stageList = Object.entries(state.pipeline.stages).map(([stageName, stageData]) => {
+          const required2 = stageData.config?.required ? " (required)" : "";
+          const desc = stageData.config?.description ? ` - ${stageData.config.description}` : "";
+          return `- **${stageName}**${required2}${desc}`;
+        }).join("\n");
         return {
           content: [{
             type: "text",
@@ -14826,13 +15358,16 @@ Please choose how to proceed.
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}
-**Current Stage:** product${requirementMatchInfo}
+**Requirement ID:** ${requirementId}${requirementMatchInfo}${workflowInfo}
+
+### Pipeline Stages
+
+${stageList}
 
 ### Knowledge Library
 ${knowledgeInfo}
 
-The pipeline is ready. Stage "product" is now in progress.
+The pipeline is ready. Stage "${firstStage}" is now in progress.
 Use \`opc_state_write\` to update progress as you advance through stages.
 Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `
@@ -14841,14 +15376,22 @@ Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${git
       }
       // ============================================================
       case "opc_state_clear": {
+        const lockId = getCurrentLockId(cwd);
+        const session = getCurrentSession(lockId, cwd);
         const cleared = clearCurrentTask(cwd);
         if (cleared) {
           return {
             content: [{
               type: "text",
-              text: `## Task Cleared
+              text: `## Task Unbound
 
-The current task has been abandoned. You can start a new task with \`opc_state_init\`.`
+**Previous Requirement:** ${session?.requirement_id}
+
+The current window has been unbound from this requirement.
+You can start a new task with \`opc_state_init\`.
+
+**Note:** The requirement's state file is preserved for history.
+Use \`opc_state_init(requirement_id="${session?.requirement_id}")\` to resume.`
             }]
           };
         } else {
@@ -14909,18 +15452,27 @@ The current task has been abandoned. You can start a new task with \`opc_state_i
           }
         }
         if (args.artifact) {
-          const stage = state.pipeline.current_stage;
+          const stage = args.stage || state.pipeline.current_stage;
+          if (!state.pipeline.stages[stage]) {
+            state.pipeline.stages[stage] = { status: "pending" };
+          }
           if (!state.pipeline.stages[stage].artifacts) {
             state.pipeline.stages[stage].artifacts = [];
           }
           state.pipeline.stages[stage].artifacts.push(args.artifact);
         }
         if (args.progress) {
-          const stage = state.pipeline.current_stage;
+          const stage = args.stage || state.pipeline.current_stage;
+          if (!state.pipeline.stages[stage]) {
+            state.pipeline.stages[stage] = { status: "pending" };
+          }
           state.pipeline.stages[stage].progress = args.progress;
         }
         if (args.blocker) {
-          const stage = state.pipeline.current_stage;
+          const stage = args.stage || state.pipeline.current_stage;
+          if (!state.pipeline.stages[stage]) {
+            state.pipeline.stages[stage] = { status: "pending" };
+          }
           if (!state.pipeline.stages[stage].blockers) {
             state.pipeline.stages[stage].blockers = [];
           }
@@ -15111,32 +15663,43 @@ ${output || "No matches found."}
       }
       // ============================================================
       case "opc_sessions_list": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
+        const lockId = getCurrentLockId(cwd);
+        const currentSession = getCurrentSession(lockId, cwd);
+        const stateDir = ensureOpcDir("state", cwd);
+        const { existsSync: existsSync8, readdirSync: readdirSync5 } = require("fs");
+        const allTaskDirs = existsSync8(stateDir) ? readdirSync5(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/)) : [];
+        if (allTaskDirs.length === 0) {
           return {
             content: [{
               type: "text",
-              text: "No active task. Use opc_state_init to start a new project."
+              text: "No tasks found. Use opc_state_init to start a new project."
             }]
           };
         }
-        const status = state.pipeline.stages[state.pipeline.current_stage]?.status;
-        const icon = status === "in_progress" ? "\u{1F504}" : status === "completed" ? "\u2705" : "\u23F3";
-        const stageStatus = Object.entries(state.pipeline.stages).map(([stage, data]) => {
-          const stageIcon = data.status === "completed" ? "\u2705" : data.status === "in_progress" ? "\u{1F504}" : data.status === "blocked" ? "\u{1F6AB}" : "\u23F3";
-          return `${stageIcon} ${stage}: ${data.status}`;
-        }).join("\n");
+        const taskList = allTaskDirs.map((dirName) => {
+          const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
+          if (!match)
+            return null;
+          const reqId = match[1];
+          const source = match[2];
+          const state = readProjectState(reqId, source, cwd);
+          if (!state)
+            return null;
+          const isCurrent = currentSession && currentSession.requirement_id === reqId && currentSession.source === source;
+          const status = state.pipeline.stages[state.pipeline.current_stage]?.status || "pending";
+          const icon = status === "in_progress" ? "\u{1F504}" : status === "completed" ? "\u2705" : status === "blocked" ? "\u{1F6AB}" : "\u23F3";
+          const currentMarker = isCurrent ? " \u2190 **current**" : "";
+          const workflowTag = state.workflow?.name || source;
+          return `${icon} **${reqId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
+        }).filter(Boolean).join("\n");
         return {
           content: [{
             type: "text",
-            text: `## Current Task
+            text: `## All Tasks (${allTaskDirs.length})
 
-${icon} **${state.project.name}** - ${status}
+${taskList}
 
-### Pipeline Status
-
-${stageStatus}
-`
+Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`
           }]
         };
       }
@@ -15155,39 +15718,14 @@ ${stageStatus}
         const parallel = args.parallel !== false;
         const completionCondition = args.completion_condition || "all";
         const threshold = args.threshold;
-        const groupId = `tg-${Date.now().toString(36)}`;
-        const now = (/* @__PURE__ */ new Date()).toISOString();
-        const taskGroup = {
-          group_id: groupId,
-          name: groupName,
-          tasks: tasks.map((t, i) => ({
-            task_id: `${groupId}-task-${i}`,
-            agent: t.agent,
-            description: t.description,
-            status: "pending",
-            progress: 0,
-            dependencies: t.dependencies
-          })),
-          parallel,
-          completion_condition: completionCondition,
-          threshold,
-          started_at: now
-        };
-        if (!state.pipeline.stages[stage]) {
-          state.pipeline.stages[stage] = { status: "pending" };
-        }
-        if (!state.pipeline.stages[stage].task_groups) {
-          state.pipeline.stages[stage].task_groups = [];
-        }
-        state.pipeline.stages[stage].task_groups.push(taskGroup);
-        writeProjectState(state, cwd);
-        const taskList = taskGroup.tasks.map((t) => `- **${t.task_id}**: ${t.agent} - ${t.description}`).join("\n");
+        const result = createTaskGroup(state, stage, groupName, tasks, parallel, completionCondition, threshold, cwd);
+        const taskList = result.state.pipeline.stages[stage].task_groups.find((g) => g.group_id === result.groupId).tasks.map((t) => `- **${t.task_id}**: ${t.agent} - ${t.description}`).join("\n");
         return {
           content: [{
             type: "text",
             text: `## Task Group Created
 
-**Group ID:** ${groupId}
+**Group ID:** ${result.groupId}
 **Stage:** ${stage}
 **Parallel:** ${parallel}
 **Completion:** ${completionCondition}${threshold ? ` (threshold: ${threshold})` : ""}
@@ -15214,52 +15752,7 @@ Use \`opc_task_update\` to update task progress.
         const status = args.status;
         const progress = args.progress;
         const artifact = args.artifact;
-        let found = false;
-        for (const stageName of Object.keys(state.pipeline.stages)) {
-          const stage = state.pipeline.stages[stageName];
-          if (!stage.task_groups)
-            continue;
-          for (const group of stage.task_groups) {
-            const task = group.tasks.find((t) => t.task_id === taskId);
-            if (task) {
-              task.status = status;
-              if (progress !== void 0)
-                task.progress = progress;
-              if (status === "in_progress" && !task.started_at) {
-                task.started_at = (/* @__PURE__ */ new Date()).toISOString();
-              }
-              if (status === "completed" || status === "failed") {
-                task.completed_at = (/* @__PURE__ */ new Date()).toISOString();
-                task.progress = 100;
-              }
-              if (artifact) {
-                if (!task.artifacts)
-                  task.artifacts = [];
-                task.artifacts.push(artifact);
-              }
-              found = true;
-              const completedCount = group.tasks.filter((t) => t.status === "completed").length;
-              const failedCount = group.tasks.filter((t) => t.status === "failed").length;
-              if (group.completion_condition === "all" && completedCount === group.tasks.length) {
-                group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
-              } else if (group.completion_condition === "any" && completedCount > 0) {
-                group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
-              } else if (group.completion_condition === "threshold" && group.threshold && completedCount >= group.threshold) {
-                group.completed_at = (/* @__PURE__ */ new Date()).toISOString();
-              }
-              break;
-            }
-          }
-          if (found)
-            break;
-        }
-        if (!found) {
-          return {
-            content: [{ type: "text", text: `Task not found: ${taskId}` }],
-            isError: true
-          };
-        }
-        writeProjectState(state, cwd);
+        const updatedState = updateTask(state, taskId, status, progress, artifact, cwd);
         return {
           content: [{
             type: "text",
@@ -15278,19 +15771,7 @@ Use \`opc_task_update\` to update task progress.
         }
         const stage = args.stage;
         const groupId = args.group_id;
-        const groups = [];
-        for (const stageName of Object.keys(state.pipeline.stages)) {
-          if (stage && stageName !== stage)
-            continue;
-          const stageData = state.pipeline.stages[stageName];
-          if (!stageData.task_groups)
-            continue;
-          for (const group of stageData.task_groups) {
-            if (groupId && group.group_id !== groupId)
-              continue;
-            groups.push(group);
-          }
-        }
+        const groups = getTaskGroups(state, stage, groupId);
         if (groups.length === 0) {
           return {
             content: [{ type: "text", text: "No task groups found." }]
@@ -15539,7 +16020,7 @@ ${docList}`
     };
   }
 }
-var server = new Server({ name: "opc-state", version: "3.0.0" }, { capabilities: { tools: {} } });
+var server = new Server({ name: "opc-state", version: "3.1.0" }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;

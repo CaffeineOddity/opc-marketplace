@@ -8,9 +8,6 @@
  * - Each requirement has its own state file (preserves history)
  * - One window = one active task (via session binding)
  * - Session index maps lock_id → requirement_id
- * - All task history is preserved in .opc/state/{requirement_id}/
- *
- * Window detection uses PID + O_CREAT|O_EXCL atomic file creation
- * (adopted from OMC's approach - no external dependencies).
+ * - All task history is preserved in .opc/state/{requirement_id}_{source}/
  */
 export {};

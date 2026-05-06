@@ -1,0 +1,20 @@
+{
+  "name": "opc-state-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "bundle": "esbuild dist/index.js --bundle --platform=node --format=cjs --outfile=../../plugins/opc-founder/mcp/dist/opc-state-server.bundle.cjs --external:fs --external:path --external:crypto --external:child_process --external:os",
+    "copy-declarations": "cp dist/*.d.ts ../../plugins/opc-founder/mcp/dist/",
+    "build:release": "npm run build && npm run bundle && npm run copy-declarations"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.0.0"
+  }
+}
