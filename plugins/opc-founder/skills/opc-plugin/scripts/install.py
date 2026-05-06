@@ -8,6 +8,7 @@ Usage:
     python install.py all              # Install all 7 plugins
     python install.py web              # Install web preset
     python install.py mobile           # Install mobile preset
+    python install.py hud              # Install HUD statusline only
     python install.py <plugin-name>    # Install specific plugin
 """
 
@@ -55,6 +56,7 @@ def main():
         print("  designer  - Install designer preset (3 plugins)")
         print("  content   - Install content preset (3 plugins)")
         print("  minimal   - Install minimal preset (2 plugins)")
+        print("  hud       - Install HUD statusline only")
         print("  <plugin>  - Install specific plugin")
         sys.exit(1)
 
@@ -66,6 +68,18 @@ def main():
         print("❌ opc-marketplace not found")
         print("   Please install the marketplace first via /plugin command")
         sys.exit(1)
+
+    # Handle HUD-only install
+    if option == "hud":
+        print("Installing HUD statusline...")
+        success, message = install_hud(marketplace_path)
+
+        if success:
+            print(f"✅ {message}")
+            print("\nRun /reload-plugins to activate the HUD")
+        else:
+            print(f"⚠️  {message}")
+        return
 
     print("OPC Plugin Installer")
     print(f"Marketplace: {marketplace_path}")

@@ -19,14 +19,17 @@ Install, update, and manage plugins from opc-marketplace.
 | Command | Description |
 |---------|-------------|
 | `install [option]` | Install plugins |
+| `install hud` | Install HUD statusline only |
 | `update` | Update marketplace and all installed plugins |
 | `update <plugin>` | Update specific plugin |
 | `uninstall` | Uninstall all OPC plugins (interactive) |
 | `uninstall --all` | Uninstall all OPC plugins without prompt |
 | `uninstall <plugin>` | Uninstall specific plugin |
 | `uninstall marketplace` | **Full uninstall**: plugins + HUD + marketplace |
+| `uninstall hud` | Uninstall HUD statusline only |
 | `list` | List installed plugins |
 | `status` | Show marketplace and plugin status |
+| `hud status` | Show HUD statusline status |
 
 ## Install Options
 
@@ -56,13 +59,16 @@ When this skill is invoked, execute the appropriate action based on arguments:
 - If no arguments: Show interactive menu
 - If `install all`: Install all 7 plugins
 - If `install <option>`: Install the specified plugin set
+- If `install hud`: Install HUD statusline only
 - If `update`: Update all installed plugins
 - If `update <plugin>`: Update specific plugin
 - If `uninstall`: Uninstall all OPC plugins (interactive)
 - If `uninstall --all`: Uninstall all without prompt
 - If `uninstall <plugin>`: Uninstall specific plugin
 - If `uninstall marketplace`: Full uninstall (plugins + HUD + marketplace)
+- If `uninstall hud`: Uninstall HUD statusline only
 - If `list` or `status`: Show plugin status
+- If `hud status`: Show HUD statusline status
 
 ### Step 2: Define Plugin Sets
 
@@ -241,5 +247,46 @@ After completion, remind user to run `/reload-plugins` to refresh the plugin sys
 |----------|---------|
 | Install all plugins | `/opc-plugin install all` |
 | Install web preset | `/opc-plugin install web` |
+| Install HUD only | `/opc-plugin install hud` |
 | Uninstall plugins only | `/opc-plugin uninstall --all` |
+| Uninstall HUD only | `/opc-plugin uninstall hud` |
 | **Complete removal** | `/opc-plugin uninstall marketplace` |
+| Check HUD status | `/opc-plugin hud status` |
+
+## HUD Management
+
+OPC provides a HUD (Heads-Up Display) statusline that shows useful information:
+
+```
+[OPC#1.0] | Opus | session:5m | skill:opc-plugin | ctx:45% | 🔧3 ⚡1 🎯2
+```
+
+### Install HUD
+
+When user runs `/opc-plugin install hud`:
+
+```bash
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/hud.py install
+```
+
+This installs the HUD statusline without installing any plugins.
+
+### Uninstall HUD
+
+When user runs `/opc-plugin uninstall hud`:
+
+```bash
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/hud.py uninstall
+```
+
+This removes the HUD statusline while keeping all plugins intact.
+
+### Check HUD Status
+
+When user runs `/opc-plugin hud status`:
+
+```bash
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-plugin/scripts/hud.py status
+```
+
+This shows whether HUD is configured and the current statusline command.

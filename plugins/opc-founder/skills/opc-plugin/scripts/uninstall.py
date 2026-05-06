@@ -8,6 +8,7 @@ Usage:
     python uninstall.py              # Interactive uninstall
     python uninstall.py --all        # Uninstall all plugins without prompt
     python uninstall.py <plugin>     # Uninstall specific plugin
+    python uninstall.py hud          # Uninstall HUD only
     python uninstall.py marketplace  # Full uninstall: plugins + HUD + marketplace
 """
 
@@ -78,6 +79,9 @@ def main():
         run_uninstall_marketplace()
     elif arg == "--all":
         run_uninstall_all()
+    elif arg == "hud":
+        # Uninstall HUD only
+        run_uninstall_hud()
     else:
         # Uninstall specific plugin
         print("OPC Plugin Uninstaller")
@@ -91,6 +95,19 @@ def main():
 
         print()
         print("✅ Uninstall complete")
+
+
+def run_uninstall_hud():
+    """Uninstall HUD only, keeping all plugins."""
+    print("Removing HUD statusline...")
+    success, message = uninstall_hud()
+
+    if success:
+        print(f"✅ {message}")
+        print()
+        print("Run /reload-plugins to refresh")
+    else:
+        print(f"ℹ️  {message}")
 
 
 def run_uninstall_all():
