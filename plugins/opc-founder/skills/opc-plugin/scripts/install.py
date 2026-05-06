@@ -24,6 +24,7 @@ from lib import (
     update_installed_plugins,
     update_settings_plugins,
     install_hud,
+    cleanup_marketplace_source,
 )
 
 
@@ -120,6 +121,10 @@ def main():
         print(f"✅ {message}")
     else:
         print(f"⚠️  {message}")
+
+    # Clean up source files from marketplace
+    print("\nCleaning up source files...")
+    cleanup_marketplace_source(marketplace_path)
 
     print()
     print(f"✅ Installed {len(installed)} plugin(s)")

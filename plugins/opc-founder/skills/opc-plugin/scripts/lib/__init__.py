@@ -28,6 +28,7 @@ from .plugins import (
     uninstall_plugin,
     uninstall_all_plugins,
     list_installed_plugins,
+    cleanup_marketplace_source,
 )
 
 from .hud import (
@@ -56,6 +57,7 @@ __all__ = [
     "uninstall_plugin",
     "uninstall_all_plugins",
     "list_installed_plugins",
+    "cleanup_marketplace_source",
     # hud
     "install_hud",
     "uninstall_hud",

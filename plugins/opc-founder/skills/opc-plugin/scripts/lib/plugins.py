@@ -159,3 +159,30 @@ def list_installed_plugins() -> List[str]:
             plugins.append(plugin_dir.name)
 
     return sorted(plugins)
+
+
+def cleanup_marketplace_source(marketplace_path: Path, verbose: bool = True) -> bool:
+    """
+    Remove source files from marketplace after installation.
+
+    This keeps source code tracked in git but removes it from
+    the installed marketplace to save space.
+
+    Args:
+        marketplace_path: Path to marketplace root
+        verbose: Print status messages
+
+    Returns:
+        True if cleaned up, False if nothing to clean
+    """
+    src_dir = marketplace_path / "src"
+
+    if src_dir.exists():
+        shutil.rmtree(src_dir)
+        if verbose:
+            print("  ✅ Cleaned up source files (src/)")
+        return True
+
+    if verbose:
+        print("  ℹ️  No source files to clean")
+    return False
