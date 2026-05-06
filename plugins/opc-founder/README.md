@@ -25,6 +25,8 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `opc_state_init` | Initialize a new project with pipeline tracking |
 | `opc_state_read` | Read current project state and progress |
 | `opc_state_write` | Update stage status, progress, artifacts |
+| `opc_state_clear` | Clear current task state |
+| `opc_sessions_list` | List all OPC task sessions |
 | `opc_checkpoint_create` | Create a checkpoint before risky operations |
 | `opc_checkpoint_list` | List available checkpoints |
 | `opc_checkpoint_rollback` | Restore state from a checkpoint |
@@ -33,6 +35,7 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 | `opc_task_group_create` | Create a parallel/serial task group |
 | `opc_task_update` | Update task status and progress |
 | `opc_task_group_status` | Get status of task groups |
+| `opc_workflows_path` | Get the workflows directory path |
 
 ### MCP Tools (Knowledge Library)
 

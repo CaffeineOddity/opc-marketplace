@@ -44,8 +44,6 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
     """
     opc_founder_path = get_opc_founder_path(marketplace_path)
     marker_file = project_root / ".opc" / ".first-install-done"
-    workflows_source = opc_founder_path / "workflows" / "built-in"
-    workflows_target = project_root / ".opc" / "workflows"
     gitignore_path = project_root / ".gitignore"
 
     # Check if already done
@@ -57,20 +55,39 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
 
     results = []
 
-    # 1. Copy built-in workflows
-    copied_files = []
-    if workflows_source.exists():
-        workflows_target.mkdir(parents=True, exist_ok=True)
+    # 1. Copy built-in workflows using opc-workflows init
+    workflows_init_script = opc_founder_path / "skills" / "opc-workflows" / "scripts" / "init.py"
 
-        for workflow_file in workflows_source.glob("*.json"):
-            target_file = workflows_target / workflow_file.name
-            shutil.copy2(workflow_file, target_file)
-            copied_files.append(workflow_file.name)
+    if workflows_init_script.exists():
+        # Import and call the init function directly
+        sys.path.insert(0, str(workflows_init_script.parent))
+        from init import run_workflows_init
 
-        if copied_files:
-            results.append(f"✅ Copied {len(copied_files)} workflows to .opc/workflows/")
+        init_result = run_workflows_init(project_root, marketplace_path, force=False, dry_run=False)
+
+        if init_result["errors"]:
+            results.append(f"⚠️  Workflows init failed: {', '.join(init_result['errors'])}")
+        else:
+            copied_count = len(init_result["copied"])
+            results.append(f"✅ Copied {copied_count} workflows to .opc/workflows/")
     else:
-        results.append("⚠️  Workflows source not found, skipping workflow copy.")
+        # Fallback: direct copy if init script not found
+        workflows_source = opc_founder_path / "workflows" / "built-in"
+        workflows_target = project_root / ".opc" / "workflows"
+
+        if workflows_source.exists():
+            workflows_target.mkdir(parents=True, exist_ok=True)
+            copied_files = []
+
+            for workflow_file in workflows_source.glob("*.json"):
+                target_file = workflows_target / workflow_file.name
+                shutil.copy2(workflow_file, target_file)
+                copied_files.append(workflow_file.name)
+
+            if copied_files:
+                results.append(f"✅ Copied {len(copied_files)} workflows to .opc/workflows/")
+        else:
+            results.append("⚠️  Workflows source not found, skipping workflow copy.")
 
     # 2. Update .gitignore
     gitignore_entry = """
@@ -94,7 +111,7 @@ def run_first_install_setup(project_root: Path, marketplace_path: Path) -> dict:
     marker_info = {
         "version": "1.0.0",
         "installed_at": __import__("datetime").datetime.now().isoformat(),
-        "workflows_copied": len(copied_files) if workflows_source.exists() else 0
+        "workflows_copied": len(init_result.get("copied", [])) if "init_result" in dir() else 0
     }
     marker_file.write_text(json.dumps(marker_info, indent=2))
     results.append("✅ Created first-install marker.")

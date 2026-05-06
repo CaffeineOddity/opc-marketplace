@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、51 个 Skill、2 个 Hook、13 个 MCP 工具**，覆盖完整产品生命周期。
+Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、52 个 Skill、2 个 Hook、20 个 MCP 工具**，覆盖完整产品生命周期。
 
 > **中文** | [English](./README.md)
 
@@ -47,13 +47,13 @@ Caffeine 的一人公司 Claude Code 插件市场 — **29 个 Agent、51 个 Sk
 | Skill | `/opc` | 一键入口，自动评估任务并编排 agents |
 | Skill | `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
 | Skill | `/opc-workflows` | 管理工作流规范 —— 列表、查看、创建、更新、删除 |
-| Skill | `/opc-hud` | 配置 HUD 状态栏显示 |
 | Agent | founder-agent | CEO agent，4种编排模式（单agent/串行/并行/Team） |
 | MCP | opc_state_* | 状态管理工具，支持跨会话持久化 |
 | MCP | opc_checkpoint_* | 检查点工具，支持回滚 |
 | MCP | opc_handoff | 代理交接，保留上下文 |
 | MCP | opc_memory | 项目记忆，存储决策和模式 |
 | MCP | opc_task_* | 并行任务组管理 |
+| MCP | opc_knowledge_* | 知识库管理工具 |
 
 ## 状态管理
 
@@ -235,9 +235,9 @@ OPC 通过任务队列系统管理任务：
 |------|------|
 | 插件 | 8 |
 | Agents | 29 |
-| Skills | 51 |
+| Skills | 52 |
 | Hooks | 2 |
-| MCP 工具 | 13 |
+| MCP 工具 | 20 |
 
 ## 安装
 

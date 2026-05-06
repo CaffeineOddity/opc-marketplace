@@ -10,7 +10,7 @@
 |------|------|
 | `/opc` | 一键入口 —— 自动评估任务并编排代理 |
 | `/opc-plugin` | 管理插件 —— 安装、更新、卸载、列表、状态 |
-| `/opc-hud` | 配置 HUD 状态栏 —— 安装、卸载、状态 |
+| `/opc-workflows` | 管理工作流规范 —— 列表、查看、创建、更新、删除 |
 
 ### 代理
 
@@ -25,6 +25,8 @@
 | `opc_state_init` | 初始化项目状态，创建 session |
 | `opc_state_read` | 读取项目进度和阶段状态 |
 | `opc_state_write` | 更新阶段状态、进度、产出物 |
+| `opc_state_clear` | 清除当前任务状态 |
+| `opc_sessions_list` | 列出所有 OPC 任务会话 |
 | `opc_checkpoint_create` | 创建检查点 |
 | `opc_checkpoint_list` | 列出所有检查点 |
 | `opc_checkpoint_rollback` | 回滚到检查点 |
@@ -33,6 +35,18 @@
 | `opc_task_group_create` | 创建并行/串行任务组 |
 | `opc_task_update` | 更新任务状态和进度 |
 | `opc_task_group_status` | 获取任务组状态 |
+| `opc_workflows_path` | 获取工作流目录路径 |
+
+### MCP 工具（知识库）
+
+| 工具 | 描述 |
+|------|------|
+| `opc_knowledge_init` | 为需求初始化知识库 |
+| `opc_knowledge_read` | 从域/平台/文档读取知识 |
+| `opc_knowledge_write` | 写入或更新知识文档 |
+| `opc_knowledge_exists` | 检查知识文档是否存在 |
+| `opc_knowledge_list` | 列出知识库中的需求 |
+| `opc_knowledge_docs` | 列出域中的可用文档 |
 
 ## 快速开始
 

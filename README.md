@@ -1,6 +1,6 @@
 # caffeine/opc-marketplace
 
-Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49 skills, 2 hooks, 10 MCP tools** covering the full product lifecycle.
+Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 52 skills, 2 hooks, 20 MCP tools** covering the full product lifecycle.
 
 > [中文文档](./README.zh-CN.md) | **English**
 
@@ -54,6 +54,7 @@ Caffeine's one-person company Claude Code plugin marketplace — **29 agents, 49
 | MCP | opc_handoff | Agent handoff with context preservation |
 | MCP | opc_memory | Project memory for decisions and patterns |
 | MCP | opc_task_* | Parallel task group management |
+| MCP | opc_knowledge_* | Knowledge library management tools |
 
 ## State Management
 
@@ -237,9 +238,9 @@ OPC manages tasks with a queue system:
 |--------|-------|
 | Plugins | 8 |
 | Agents | 29 |
-| Skills | 51 |
+| Skills | 52 |
 | Hooks | 2 |
-| MCP Tools | 13 |
+| MCP Tools | 20 |
 
 ## Install
 

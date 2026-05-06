@@ -19,6 +19,7 @@ def get_claude_dir() -> Path:
     return get_home() / ".claude"
 
 
+
 def get_marketplace_path() -> Path | None:
     """
     Find opc-marketplace path.

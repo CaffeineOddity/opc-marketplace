@@ -18,6 +18,7 @@ Manage workflow specifications that guide OPC pipeline assembly.
 
 | Command | Description |
 |---------|-------------|
+| `init` | Initialize workflows - copy built-in workflows to project |
 | `list` | List all workflow specs |
 | `show <name>` | Show a specific workflow spec |
 | `create <name>` | Create a new workflow spec (interactive) |
@@ -39,6 +40,91 @@ A **Workflow Spec** is a reusable template that defines:
 ## Built-in Workflows
 
 Run `/opc-workflows list` to see all available workflows.
+
+## Init Command
+
+The `init` command copies built-in workflows from the opc-founder plugin to your project's `.opc/workflows/` directory.
+
+```shell
+/opc-workflows init
+```
+
+### What it does:
+
+1. **Copies built-in workflows** from `{plugin}/workflows/built-in/` to `{project}/.opc/workflows/`
+2. **Preserves existing workflows** - won't overwrite custom workflows
+3. **Updates marker file** - records initialization status
+
+### When to use:
+
+- After cloning a project (workflows not in git)
+- When updating to a new version of opc-founder
+- To restore accidentally deleted workflows
+
+### Options:
+
+| Option | Description |
+|--------|-------------|
+| `--force` | Overwrite existing workflows |
+| `--dry-run` | Show what would be copied without copying |
+
+### Example:
+
+```shell
+/opc-workflows init
+
+Output:
+OPC Workflows Init
+Project: /path/to/project
+
+✅ Copied 8 workflows to .opc/workflows/
+  - feature-development.json
+  - bug-fix.json
+  - security-fix.json
+  - api-development.json
+  - refactor.json
+  - documentation.json
+  - product-design.json
+  - feature-page.json
+
+ℹ️  2 existing workflows preserved:
+  - my-custom-workflow.json
+  - team-workflow.json
+```
+
+### Force overwrite:
+
+```shell
+/opc-workflows init --force
+
+Output:
+OPC Workflows Init (force mode)
+Project: /path/to/project
+
+⚠️  Overwriting all workflows...
+
+✅ Copied 8 workflows to .opc/workflows/
+  - feature-development.json (overwritten)
+  - bug-fix.json (overwritten)
+  ...
+```
+
+### Implementation
+
+When this skill is invoked with `init`:
+
+```bash
+python3 {marketplace_root}/plugins/opc-founder/skills/opc-workflows/scripts/init.py [--force] [--dry-run]
+```
+
+The script:
+1. Finds marketplace path from `~/.claude/plugins/marketplaces/opc-marketplace/` or current project
+2. Gets git toplevel for project root
+3. Copies built-in workflows from `{marketplace}/plugins/opc-founder/workflows/built-in/`
+4. Preserves custom workflows (not in built-in list)
+5. Updates `.opc/.workflows-init` marker file
+
+## Built-in Workflow List
 
 | Workflow | Triggers | Description |
 |----------|----------|-------------|
