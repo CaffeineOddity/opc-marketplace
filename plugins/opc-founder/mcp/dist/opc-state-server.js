@@ -309,6 +309,257 @@ function readJsonFile(filePath) {
     }
 }
 /**
+ * Read all workflow specs from .opc/workflows/ directory.
+ */
+function readAllWorkflows(cwd) {
+    const workflowsDir = getWorkflowsPath(cwd);
+    if (!existsSync(workflowsDir))
+        return [];
+    const workflows = [];
+    const files = readdirSync(workflowsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+        const path = join(workflowsDir, file);
+        const spec = readJsonFile(path);
+        if (spec) {
+            workflows.push(spec);
+        }
+    }
+    return workflows;
+}
+/**
+ * Match a task description against workflow triggers.
+ * Returns the best matching workflow or null.
+ */
+function matchWorkflow(taskDescription, workflows) {
+    const lowerTask = taskDescription.toLowerCase();
+    let bestMatch = null;
+    for (const workflow of workflows) {
+        let score = 0;
+        // Check keyword matches
+        for (const keyword of workflow.triggers.keywords) {
+            if (lowerTask.includes(keyword.toLowerCase())) {
+                score += 1;
+            }
+        }
+        // Check regex patterns
+        for (const pattern of workflow.triggers.patterns) {
+            try {
+                const regex = new RegExp(pattern, 'i');
+                if (regex.test(taskDescription)) {
+                    score += 2; // Pattern matches are weighted higher
+                }
+            }
+            catch {
+                // Invalid regex, skip
+            }
+        }
+        // Normalize score by number of triggers
+        const totalTriggers = workflow.triggers.keywords.length + workflow.triggers.patterns.length;
+        const normalizedScore = totalTriggers > 0 ? score / totalTriggers : 0;
+        if (normalizedScore > 0 && (!bestMatch || normalizedScore > bestMatch.score)) {
+            bestMatch = { workflow, score: normalizedScore };
+        }
+    }
+    return bestMatch;
+}
+/**
+ * Build stages from a matched workflow.
+ */
+function buildStagesFromWorkflow(workflow) {
+    const stages = {};
+    for (const stageDef of workflow.pipeline) {
+        stages[stageDef.stage] = {
+            status: 'pending',
+            config: {
+                required: stageDef.required,
+                outputs: stageDef.outputs,
+                optional_outputs: stageDef.optional_outputs,
+                agents: stageDef.agents,
+                agent_mode: stageDef.agent_mode,
+                skills: stageDef.skills,
+                skip_conditions: stageDef.skip_conditions,
+                constraints: stageDef.constraints,
+                description: stageDef.description,
+                knowledge: stageDef.knowledge,
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    return stages;
+}
+/**
+ * Build stages automatically when no workflow matches.
+ * Analyzes task description to determine which stages are needed.
+ */
+function buildStagesAuto(taskDescription) {
+    const lowerTask = taskDescription.toLowerCase();
+    const stages = {};
+    // Always start with product stage
+    stages.product = {
+        status: 'pending',
+        config: {
+            required: true,
+            outputs: ['spec.md'],
+            agents: ['product-agent'],
+            skills: ['spec-driven-development'],
+            description: '需求分析和规格定义',
+            knowledge: {
+                domain: 'requirement',
+                doc: 'main',
+                read_before: false,
+                write_after: true,
+            },
+        },
+        gates_passed: [],
+        gates_blocked: [],
+    };
+    // Detect if design is needed
+    const designKeywords = ['ui', '界面', '设计', '页面', 'landing', 'dashboard', '前端', 'web', 'app', '移动'];
+    const needsDesign = designKeywords.some(kw => lowerTask.includes(kw));
+    if (needsDesign) {
+        stages.design = {
+            status: 'pending',
+            config: {
+                required: false,
+                outputs: ['design-spec.md'],
+                agents: ['web-agent', 'mobile-agent'],
+                skills: ['ui-design'],
+                description: 'UI/UX 设计',
+                knowledge: {
+                    domain: 'design',
+                    doc: 'ui',
+                    read_before: ['requirement'],
+                    write_after: true,
+                },
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    // Detect if dev is needed (almost always for feature tasks)
+    const devKeywords = ['实现', '开发', '添加', '新增', '功能', 'build', 'create', 'implement', 'feature'];
+    const backendKeywords = ['api', '后端', 'backend', '服务', 'server', '接口'];
+    const needsDev = devKeywords.some(kw => lowerTask.includes(kw)) || backendKeywords.some(kw => lowerTask.includes(kw));
+    if (needsDev) {
+        stages.dev = {
+            status: 'pending',
+            config: {
+                required: true,
+                outputs: ['tests/', 'implementation'],
+                agents: backendKeywords.some(kw => lowerTask.includes(kw))
+                    ? ['backend-agent']
+                    : ['frontend-agent', 'backend-agent'],
+                agent_mode: 'parallel',
+                skills: ['test-driven-development'],
+                constraints: ['tdd_red_first'],
+                description: 'TDD 开发',
+                knowledge: {
+                    frontend: {
+                        domain: 'platforms',
+                        platform: 'web',
+                        doc: 'tech',
+                        read_before: ['requirement', 'design'],
+                        write_after: true,
+                    },
+                    backend: {
+                        domain: 'backend',
+                        doc: 'api',
+                        read_before: ['requirement'],
+                        write_after: true,
+                    },
+                },
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    // Detect if qa is needed
+    const qaKeywords = ['测试', 'test', 'qa', '验证'];
+    const needsQa = qaKeywords.some(kw => lowerTask.includes(kw)) || needsDev;
+    if (needsQa) {
+        stages.qa = {
+            status: 'pending',
+            config: {
+                required: true,
+                outputs: ['test-report.md'],
+                agents: ['qa-agent'],
+                skills: ['test-plan'],
+                description: '测试验证',
+                knowledge: {
+                    domain: 'backend',
+                    doc: 'test',
+                    read_before: ['platforms/web/tech', 'backend/api'],
+                    write_after: true,
+                },
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    // Detect if ship is needed
+    const shipKeywords = ['部署', 'deploy', '发布', 'release', '上线'];
+    const needsShip = shipKeywords.some(kw => lowerTask.includes(kw));
+    if (needsShip) {
+        stages.ship = {
+            status: 'pending',
+            config: {
+                required: false,
+                outputs: ['deployment'],
+                agents: ['devops-agent'],
+                skills: ['deploy'],
+                description: '部署',
+                knowledge: {
+                    domain: 'shared',
+                    doc: 'infrastructure',
+                    read_before: ['backend/api'],
+                    write_after: true,
+                },
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    // Ensure at least product stage exists
+    if (Object.keys(stages).length === 0) {
+        stages.product = {
+            status: 'pending',
+            config: {
+                required: true,
+                description: '任务分析',
+            },
+            gates_passed: [],
+            gates_blocked: [],
+        };
+    }
+    return stages;
+}
+/**
+ * Build default gates for auto-assembled pipeline.
+ */
+function buildDefaultGates(stages) {
+    const gates = [];
+    // Add SDD gate if product stage exists
+    if (stages.product) {
+        gates.push({
+            name: 'sdd_spec_required',
+            description: 'Product 必须产出 Spec，否则 Dev 无法开始',
+            check: "stages.product.artifacts.includes('spec.md')",
+            blocker: 'Dev 阻止：缺少 Spec。请先在 Product 阶段完成规格定义。',
+        });
+    }
+    // Add TDD gate if dev stage exists with tdd constraint
+    if (stages.dev?.config?.constraints?.includes('tdd_red_first')) {
+        gates.push({
+            name: 'tdd_red_first',
+            description: '必须先写失败测试',
+            check: 'stages.dev.progress.red_complete === true',
+            blocker: '实现阻止：请先写失败测试（RED 阶段）。',
+        });
+    }
+    return gates.length > 0 ? gates : undefined;
+}
+/**
  * Get project state path for a requirement ID.
  * Each requirement has its own state file for history tracking.
  */
@@ -334,9 +585,42 @@ function writeProjectState(state, cwd) {
     state._meta.updated_by = 'opc_state_write';
     atomicWriteJson(path, state);
 }
-function initializeProjectState(name, description, lockId, requirementId, cwd) {
+function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence) {
     const now = new Date().toISOString();
-    const stages = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
+    // Build stages from workflow or auto-assemble
+    let stages;
+    let gates;
+    let rules;
+    let workflowMeta;
+    if (workflow) {
+        stages = buildStagesFromWorkflow(workflow);
+        gates = workflow.gates;
+        rules = workflow.rules;
+        workflowMeta = {
+            name: workflow.name,
+            source: workflowSource || 'matched',
+            matched_at: now,
+            confidence: workflowConfidence,
+        };
+    }
+    else {
+        stages = buildStagesAuto(description);
+        gates = buildDefaultGates(stages);
+        rules = {
+            tdd: !!stages.dev?.config?.constraints?.includes('tdd_red_first'),
+            sdd: !!stages.product,
+            parallel_allowed: stages.dev?.config?.agent_mode === 'parallel',
+            knowledge_enabled: true,
+        };
+        workflowMeta = {
+            name: 'auto-assembled',
+            source: 'auto_assembled',
+            matched_at: now,
+        };
+    }
+    // Determine first stage
+    const stageOrder = Object.keys(stages);
+    const firstStage = stageOrder[0] || 'product';
     return {
         project: {
             name,
@@ -346,18 +630,18 @@ function initializeProjectState(name, description, lockId, requirementId, cwd) {
             updated_at: now,
         },
         pipeline: {
-            current_stage: 'product',
-            stages: stages.reduce((acc, stage) => {
-                acc[stage] = { status: 'pending' };
-                return acc;
-            }, {}),
+            current_stage: firstStage,
+            stages,
         },
+        workflow: workflowMeta,
+        gates,
+        rules,
         context: {
             lock_id: lockId,
             worktree: getWorktreeRoot(cwd),
         },
         _meta: {
-            version: '3.0.0', // Single-task model
+            version: '3.1.0', // Dynamic workflow version
             updated_by: 'opc_state_init',
         },
     };
@@ -1063,11 +1347,32 @@ async function handleToolCall(name, args) {
                     const icon = data.status === 'completed' ? '✅' :
                         data.status === 'in_progress' ? '🔄' :
                             data.status === 'blocked' ? '🚫' : '⏳';
-                    return `${icon} **${stage}**: ${data.status}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(', ')})` : ''}`;
+                    const required = data.config?.required === false ? ' (optional)' : '';
+                    const desc = data.config?.description ? ` — ${data.config.description}` : '';
+                    return `${icon} **${stage}**${required}: ${data.status}${desc}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(', ')})` : ''}`;
                 })
                     .join('\n');
                 const requirementInfo = state.project.requirement_id
                     ? `\n**Requirement ID:** ${state.project.requirement_id}`
+                    : '';
+                // Workflow info
+                const workflowInfo = state.workflow
+                    ? `\n**Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ''})`
+                    : '';
+                // Rules info
+                const rulesInfo = state.rules
+                    ? `\n\n### Rules\n${state.rules.tdd ? '- ✅ TDD enabled\n' : ''}${state.rules.sdd ? '- ✅ SDD enabled\n' : ''}${state.rules.parallel_allowed ? '- ✅ Parallel execution allowed\n' : ''}${state.rules.knowledge_enabled ? '- ✅ Knowledge flow enabled\n' : ''}`
+                    : '';
+                // Current stage knowledge config
+                const currentStage = state.pipeline.stages[state.pipeline.current_stage];
+                const knowledgeInfo = currentStage?.config?.knowledge
+                    ? `\n\n### Current Stage Knowledge\n` +
+                        (currentStage.config.knowledge.read_before
+                            ? `- **Read before:** ${Array.isArray(currentStage.config.knowledge.read_before) ? currentStage.config.knowledge.read_before.join(', ') : 'none'}\n`
+                            : '') +
+                        (currentStage.config.knowledge.write_after
+                            ? `- **Write after:** ${currentStage.config.knowledge.domain}/${currentStage.config.knowledge.doc}\n`
+                            : '')
                     : '';
                 return {
                     content: [{
@@ -1076,13 +1381,13 @@ async function handleToolCall(name, args) {
 
 **Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
-**Current Stage:** ${state.pipeline.current_stage}
+**Current Stage:** ${state.pipeline.current_stage}${workflowInfo}
 **Created:** ${state.project.created_at}
 **Updated:** ${state.project.updated_at}
 
 ### Pipeline Progress
 
-${stageStatus}
+${stageStatus}${rulesInfo}${knowledgeInfo}
 
 ### Artifacts
 ${Object.entries(state.pipeline.stages)
@@ -1181,16 +1486,45 @@ Please choose how to proceed.
                     : `Resumed existing requirement: "${knowledgeResult.title}"`;
                 // Bind current session to this requirement
                 bindSessionToRequirement(lockId, requirementId, cwd);
-                // Initialize new task
-                const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
-                state.pipeline.stages.product.status = 'in_progress';
-                state.pipeline.stages.product.started_at = new Date().toISOString();
+                // Try to match workflow
+                const taskDescription = `${projectName} ${projectDescription}`.trim();
+                const workflows = readAllWorkflows(cwd);
+                const workflowMatch = matchWorkflow(taskDescription, workflows);
+                let workflowInfo = '';
+                let matchedWorkflow = null;
+                let workflowSource = 'auto_assembled';
+                let workflowConfidence;
+                if (workflowMatch && workflowMatch.score >= 0.3) {
+                    matchedWorkflow = workflowMatch.workflow;
+                    workflowSource = 'matched';
+                    workflowConfidence = workflowMatch.score;
+                    workflowInfo = `\n\n📋 **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowMatch.score * 100)}% confidence)`;
+                }
+                else {
+                    workflowInfo = '\n\n🔧 **Pipeline:** Auto-assembled based on task analysis';
+                }
+                // Initialize new task with workflow
+                const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
+                // Mark first stage as in_progress
+                const firstStage = state.pipeline.current_stage;
+                if (state.pipeline.stages[firstStage]) {
+                    state.pipeline.stages[firstStage].status = 'in_progress';
+                    state.pipeline.stages[firstStage].started_at = new Date().toISOString();
+                }
                 writeProjectState(state, cwd);
                 // Update .gitignore if needed
                 const gitignoreUpdated = updateGitignore(cwd);
                 const gitignoreMsg = gitignoreUpdated
                     ? '\n\n📝 **.gitignore updated**: Added `.opc/state/` to ignore personal session data.'
                     : '';
+                // Build stage info for output
+                const stageList = Object.entries(state.pipeline.stages)
+                    .map(([stageName, stageData]) => {
+                    const required = stageData.config?.required ? ' (required)' : '';
+                    const desc = stageData.config?.description ? ` - ${stageData.config.description}` : '';
+                    return `- **${stageName}**${required}${desc}`;
+                })
+                    .join('\n');
                 return {
                     content: [{
                             type: 'text',
@@ -1198,13 +1532,16 @@ Please choose how to proceed.
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}
-**Current Stage:** product${requirementMatchInfo}
+**Requirement ID:** ${requirementId}${requirementMatchInfo}${workflowInfo}
+
+### Pipeline Stages
+
+${stageList}
 
 ### Knowledge Library
 ${knowledgeInfo}
 
-The pipeline is ready. Stage "product" is now in progress.
+The pipeline is ready. Stage "${firstStage}" is now in progress.
 Use \`opc_state_write\` to update progress as you advance through stages.
 Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `,
