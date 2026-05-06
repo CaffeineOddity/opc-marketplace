@@ -13967,6 +13967,314 @@ var StdioServerTransport = class {
   }
 };
 
+// dist/tools.js
+var stateTools = [
+  {
+    name: "opc_state_read",
+    description: "Read the current OPC project state. Shows pipeline progress, stage status, and agent activity.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string", description: "Working directory (defaults to cwd)" }
+      }
+    }
+  },
+  {
+    name: "opc_state_write",
+    description: "Update OPC project state. Used by founder-agent to track pipeline progress.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_name: { type: "string", description: "Project name (for new projects)" },
+        project_description: { type: "string", description: "Project description" },
+        stage: { type: "string", enum: ["product", "design", "dev", "qa", "ship", "growth"] },
+        stage_status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
+        agent: { type: "string", description: "Agent name to record" },
+        artifact: { type: "string", description: "Artifact path to record" },
+        progress: { type: "object", description: "Progress percentages by subtask" },
+        blocker: { type: "string", description: "Blocker description" },
+        workingDirectory: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "opc_state_init",
+    description: "Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_name: { type: "string", description: "Project name" },
+        project_description: { type: "string", description: "Project description" },
+        requirement_id: { type: "string", description: "Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing." },
+        workingDirectory: { type: "string" }
+      },
+      required: ["project_name"]
+    }
+  },
+  {
+    name: "opc_state_clear",
+    description: "Clear current task. Use when abandoning or restarting. The task will be permanently removed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
+  }
+];
+var checkpointTools = [
+  {
+    name: "opc_checkpoint_create",
+    description: "Create a checkpoint before risky operations. Enables rollback if things go wrong.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        description: { type: "string", description: "Description of what this checkpoint captures" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["description"]
+    }
+  },
+  {
+    name: "opc_checkpoint_list",
+    description: "List all available checkpoints.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "opc_checkpoint_rollback",
+    description: "Rollback to a previous checkpoint. Restores state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        checkpoint_id: { type: "string", description: "Checkpoint ID to rollback to" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["checkpoint_id"]
+    }
+  }
+];
+var handoffTools = [
+  {
+    name: "opc_handoff",
+    description: "Hand off work from one agent to another. Preserves context and constraints.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from_agent: { type: "string", description: "Agent handing off work" },
+        to_agent: { type: "string", description: "Agent receiving work" },
+        artifacts: { type: "array", items: { type: "string" }, description: "Artifacts being handed off" },
+        constraints: { type: "array", items: { type: "string" }, description: "Constraints for receiving agent" },
+        context: { type: "string", description: "Additional context" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["from_agent", "to_agent", "artifacts"]
+    }
+  }
+];
+var memoryTools = [
+  {
+    name: "opc_memory",
+    description: "Read, write, or search project memory. Stores decisions, patterns, and lessons.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["read", "write", "search"] },
+        category: { type: "string", enum: ["decision", "pattern", "lesson", "constraint"] },
+        content: { type: "string", description: "Content to write" },
+        query: { type: "string", description: "Search query" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["action"]
+    }
+  }
+];
+var sessionTools = [
+  {
+    name: "opc_sessions_list",
+    description: "List all OPC tasks. Shows task name, current stage, and status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
+  }
+];
+var taskGroupTools = [
+  {
+    name: "opc_task_group_create",
+    description: "Create a parallel task group for a stage. Enables tracking multiple concurrent agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        stage: { type: "string", description: "Stage name (product/design/dev/qa/ship/growth)" },
+        group_name: { type: "string", description: "Name for this task group" },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              agent: { type: "string", description: "Agent assigned to this task" },
+              description: { type: "string", description: "Task description" },
+              dependencies: { type: "array", items: { type: "string" }, description: "Task IDs this depends on" }
+            },
+            required: ["agent", "description"]
+          },
+          description: "Tasks in this group"
+        },
+        parallel: { type: "boolean", description: "Run tasks in parallel (default: true)" },
+        completion_condition: { type: "string", enum: ["all", "any", "threshold"], description: "When group is complete" },
+        threshold: { type: "number", description: "For threshold condition, min completed tasks" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["stage", "group_name", "tasks"]
+    }
+  },
+  {
+    name: "opc_task_update",
+    description: "Update a parallel task status. Used by agents to report progress.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "Task ID to update" },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "failed"], description: "New status" },
+        progress: { type: "number", description: "Progress percentage (0-100)" },
+        artifact: { type: "string", description: "Artifact produced by this task" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["task_id", "status"]
+    }
+  },
+  {
+    name: "opc_task_group_status",
+    description: "Get status of a task group. Shows progress of all parallel tasks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        stage: { type: "string", description: "Stage name" },
+        group_id: { type: "string", description: "Group ID (optional, shows all if omitted)" },
+        workingDirectory: { type: "string" }
+      }
+    }
+  }
+];
+var workflowTools = [
+  {
+    name: "opc_workflows_path",
+    description: "Get the workflows directory path. Always uses git toplevel root for consistency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
+  }
+];
+var KNOWLEDGE_CATEGORIES = ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"];
+var knowledgeTools = [
+  {
+    name: "opc_knowledge_init",
+    description: "Initialize knowledge library for a requirement. Creates directory structure and index entry.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID (e.g., REQ-001)" },
+        title: { type: "string", description: "Requirement title" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "title"]
+    }
+  },
+  {
+    name: "opc_knowledge_read",
+    description: "Read knowledge from knowledge library. Can read specific doc or all docs in a category.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        doc: { type: "string", description: "Document name (without .md extension)" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "category"]
+    }
+  },
+  {
+    name: "opc_knowledge_write",
+    description: "Write or update knowledge document. Supports append, update section, or overwrite.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        doc: { type: "string", description: "Document name (without .md extension)" },
+        content: { type: "string", description: "Content to write" },
+        section: { type: "string", description: "Section header to update (optional)" },
+        mode: { type: "string", enum: ["append", "update", "overwrite"], description: "Write mode (default: append)" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "category", "doc", "content"]
+    }
+  },
+  {
+    name: "opc_knowledge_exists",
+    description: "Check if knowledge document exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        doc: { type: "string", description: "Document name" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId"]
+    }
+  },
+  {
+    name: "opc_knowledge_list",
+    description: "List requirements in knowledge library.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["in_progress", "completed", "paused"], description: "Filter by status" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Filter by category" },
+        workingDirectory: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "opc_knowledge_docs",
+    description: "List available documents in a category for a requirement.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requirementId: { type: "string", description: "Requirement ID" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        workingDirectory: { type: "string" }
+      },
+      required: ["requirementId", "category"]
+    }
+  }
+];
+var tools = [
+  ...stateTools,
+  ...checkpointTools,
+  ...handoffTools,
+  ...memoryTools,
+  ...sessionTools,
+  ...taskGroupTools,
+  ...workflowTools,
+  ...knowledgeTools
+];
+
+// dist/handlers.js
+var import_fs9 = require("fs");
+
 // dist/paths.js
 var import_path = require("path");
 var import_fs = require("fs");
@@ -14886,345 +15194,42 @@ function clearCurrentTask(cwd) {
   return false;
 }
 
-// dist/index.js
-var tools = [
-  // opc_state_read
-  {
-    name: "opc_state_read",
-    description: "Read the current OPC project state. Shows pipeline progress, stage status, and agent activity.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string", description: "Working directory (defaults to cwd)" }
-      }
-    }
-  },
-  // opc_state_write
-  {
-    name: "opc_state_write",
-    description: "Update OPC project state. Used by founder-agent to track pipeline progress.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project_name: { type: "string", description: "Project name (for new projects)" },
-        project_description: { type: "string", description: "Project description" },
-        stage: { type: "string", enum: ["product", "design", "dev", "qa", "ship", "growth"] },
-        stage_status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
-        agent: { type: "string", description: "Agent name to record" },
-        artifact: { type: "string", description: "Artifact path to record" },
-        progress: { type: "object", description: "Progress percentages by subtask" },
-        blocker: { type: "string", description: "Blocker description" },
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_state_init
-  {
-    name: "opc_state_init",
-    description: "Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project_name: { type: "string", description: "Project name" },
-        project_description: { type: "string", description: "Project description" },
-        requirement_id: { type: "string", description: "Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing." },
-        workingDirectory: { type: "string" }
-      },
-      required: ["project_name"]
-    }
-  },
-  // opc_state_clear
-  {
-    name: "opc_state_clear",
-    description: "Clear current task. Use when abandoning or restarting. The task will be permanently removed.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_checkpoint_create
-  {
-    name: "opc_checkpoint_create",
-    description: "Create a checkpoint before risky operations. Enables rollback if things go wrong.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        description: { type: "string", description: "Description of what this checkpoint captures" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["description"]
-    }
-  },
-  // opc_checkpoint_list
-  {
-    name: "opc_checkpoint_list",
-    description: "List all available checkpoints.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_checkpoint_rollback
-  {
-    name: "opc_checkpoint_rollback",
-    description: "Rollback to a previous checkpoint. Restores state.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        checkpoint_id: { type: "string", description: "Checkpoint ID to rollback to" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["checkpoint_id"]
-    }
-  },
-  // opc_handoff
-  {
-    name: "opc_handoff",
-    description: "Hand off work from one agent to another. Preserves context and constraints.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        from_agent: { type: "string", description: "Agent handing off work" },
-        to_agent: { type: "string", description: "Agent receiving work" },
-        artifacts: { type: "array", items: { type: "string" }, description: "Artifacts being handed off" },
-        constraints: { type: "array", items: { type: "string" }, description: "Constraints for receiving agent" },
-        context: { type: "string", description: "Additional context" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["from_agent", "to_agent", "artifacts"]
-    }
-  },
-  // opc_memory
-  {
-    name: "opc_memory",
-    description: "Read, write, or search project memory. Stores decisions, patterns, and lessons.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: { type: "string", enum: ["read", "write", "search"] },
-        category: { type: "string", enum: ["decision", "pattern", "lesson", "constraint"] },
-        content: { type: "string", description: "Content to write" },
-        query: { type: "string", description: "Search query" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["action"]
-    }
-  },
-  // opc_sessions_list
-  {
-    name: "opc_sessions_list",
-    description: "List all OPC tasks. Shows task name, current stage, and status.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_task_group_create
-  {
-    name: "opc_task_group_create",
-    description: "Create a parallel task group for a stage. Enables tracking multiple concurrent agents.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        stage: { type: "string", description: "Stage name (product/design/dev/qa/ship/growth)" },
-        group_name: { type: "string", description: "Name for this task group" },
-        tasks: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              agent: { type: "string", description: "Agent assigned to this task" },
-              description: { type: "string", description: "Task description" },
-              dependencies: { type: "array", items: { type: "string" }, description: "Task IDs this depends on" }
-            },
-            required: ["agent", "description"]
-          },
-          description: "Tasks in this group"
-        },
-        parallel: { type: "boolean", description: "Run tasks in parallel (default: true)" },
-        completion_condition: { type: "string", enum: ["all", "any", "threshold"], description: "When group is complete" },
-        threshold: { type: "number", description: "For threshold condition, min completed tasks" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["stage", "group_name", "tasks"]
-    }
-  },
-  // opc_task_update
-  {
-    name: "opc_task_update",
-    description: "Update a parallel task status. Used by agents to report progress.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        task_id: { type: "string", description: "Task ID to update" },
-        status: { type: "string", enum: ["pending", "in_progress", "completed", "failed"], description: "New status" },
-        progress: { type: "number", description: "Progress percentage (0-100)" },
-        artifact: { type: "string", description: "Artifact produced by this task" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["task_id", "status"]
-    }
-  },
-  // opc_task_group_status
-  {
-    name: "opc_task_group_status",
-    description: "Get status of a task group. Shows progress of all parallel tasks.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        stage: { type: "string", description: "Stage name" },
-        group_id: { type: "string", description: "Group ID (optional, shows all if omitted)" },
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_workflows_path
-  {
-    name: "opc_workflows_path",
-    description: "Get the workflows directory path. Always uses git toplevel root for consistency.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_knowledge_init
-  {
-    name: "opc_knowledge_init",
-    description: "Initialize knowledge library for a requirement. Creates directory structure and index entry.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        requirementId: { type: "string", description: "Requirement ID (e.g., REQ-001)" },
-        title: { type: "string", description: "Requirement title" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["requirementId", "title"]
-    }
-  },
-  // opc_knowledge_read
-  {
-    name: "opc_knowledge_read",
-    description: "Read knowledge from knowledge library. Can read specific doc or all docs in a category.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
-        category: { type: "string", enum: ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"], description: "Knowledge category (pipeline stage)" },
-        doc: { type: "string", description: "Document name (without .md extension)" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["requirementId", "category"]
-    }
-  },
-  // opc_knowledge_write
-  {
-    name: "opc_knowledge_write",
-    description: "Write or update knowledge document. Supports append, update section, or overwrite.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
-        category: { type: "string", enum: ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"], description: "Knowledge category (pipeline stage)" },
-        doc: { type: "string", description: "Document name (without .md extension)" },
-        content: { type: "string", description: "Content to write" },
-        section: { type: "string", description: "Section header to update (optional)" },
-        mode: { type: "string", enum: ["append", "update", "overwrite"], description: "Write mode (default: append)" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["requirementId", "category", "doc", "content"]
-    }
-  },
-  // opc_knowledge_exists
-  {
-    name: "opc_knowledge_exists",
-    description: "Check if knowledge document exists.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
-        category: { type: "string", enum: ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"], description: "Knowledge category (pipeline stage)" },
-        doc: { type: "string", description: "Document name" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["requirementId"]
-    }
-  },
-  // opc_knowledge_list
-  {
-    name: "opc_knowledge_list",
-    description: "List requirements in knowledge library.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        status: { type: "string", enum: ["in_progress", "completed", "paused"], description: "Filter by status" },
-        category: { type: "string", enum: ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"], description: "Filter by category" },
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  // opc_knowledge_docs
-  {
-    name: "opc_knowledge_docs",
-    description: "List available documents in a category for a requirement.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
-        category: { type: "string", enum: ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"], description: "Knowledge category (pipeline stage)" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["requirementId", "category"]
-    }
+// dist/handlers.js
+function handleStateRead(cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{
+        type: "text",
+        text: "No active task. Use opc_state_init to start a new project."
+      }]
+    };
   }
-];
-async function handleToolCall(name, args) {
-  const cwd = args.workingDirectory;
-  try {
-    switch (name) {
-      // ============================================================
-      case "opc_state_read": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{
-              type: "text",
-              text: "No active task. Use opc_state_init to start a new project."
-            }]
-          };
-        }
-        const stageStatus = Object.entries(state.pipeline.stages).map(([stage, data]) => {
-          const icon = data.status === "completed" ? "\u2705" : data.status === "in_progress" ? "\u{1F504}" : data.status === "blocked" ? "\u{1F6AB}" : "\u23F3";
-          const required2 = data.config?.required === false ? " (optional)" : "";
-          const desc = data.config?.description ? ` \u2014 ${data.config.description}` : "";
-          return `${icon} **${stage}**${required2}: ${data.status}${desc}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(", ")})` : ""}`;
-        }).join("\n");
-        const requirementInfo = state.project.requirement_id ? `
+  const stageStatus = Object.entries(state.pipeline.stages).map(([stage, data]) => {
+    const icon = data.status === "completed" ? "\u2705" : data.status === "in_progress" ? "\u{1F504}" : data.status === "blocked" ? "\u{1F6AB}" : "\u23F3";
+    const required2 = data.config?.required === false ? " (optional)" : "";
+    const desc = data.config?.description ? ` \u2014 ${data.config.description}` : "";
+    return `${icon} **${stage}**${required2}: ${data.status}${desc}${data.progress ? ` (${Object.entries(data.progress).map(([k, v]) => `${k}: ${v}%`).join(", ")})` : ""}`;
+  }).join("\n");
+  const requirementInfo = state.project.requirement_id ? `
 **Requirement ID:** ${state.project.requirement_id}` : "";
-        const workflowInfo = state.workflow ? `
+  const workflowInfo = state.workflow ? `
 **Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ""})` : "";
-        const rulesInfo = state.rules ? `
+  const rulesInfo = state.rules ? `
 
 ### Rules
 ${state.rules.tdd ? "- \u2705 TDD enabled\n" : ""}${state.rules.sdd ? "- \u2705 SDD enabled\n" : ""}${state.rules.parallel_allowed ? "- \u2705 Parallel execution allowed\n" : ""}${state.rules.knowledge_enabled ? "- \u2705 Knowledge flow enabled\n" : ""}` : "";
-        const currentStage = state.pipeline.stages[state.pipeline.current_stage];
-        const knowledgeInfo = currentStage?.config?.knowledge ? `
+  const currentStage = state.pipeline.stages[state.pipeline.current_stage];
+  const knowledgeInfo = currentStage?.config?.knowledge ? `
 
 ### Current Stage Knowledge
 ` + (currentStage.config.knowledge.read_before ? `- **Read before:** ${Array.isArray(currentStage.config.knowledge.read_before) ? currentStage.config.knowledge.read_before.join(", ") : "none"}
 ` : "") + (currentStage.config.knowledge.write_after ? `- **Write after:** ${currentStage.config.knowledge.domain}/${currentStage.config.knowledge.doc}
 ` : "") : "";
-        return {
-          content: [{
-            type: "text",
-            text: `## OPC Project State
+  return {
+    content: [{
+      type: "text",
+      text: `## OPC Project State
 
 **Project:** ${state.project.name}${requirementInfo}
 **Lock ID:** ${state.context.lock_id}
@@ -15239,25 +15244,24 @@ ${stageStatus}${rulesInfo}${knowledgeInfo}
 ### Artifacts
 ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.length).map(([stage, data]) => `- **${stage}**: ${data.artifacts?.join(", ")}`).join("\n") || "No artifacts recorded yet."}
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_state_init": {
-        const projectName = args.project_name;
-        const projectDescription = args.project_description || "";
-        const providedRequirementId = args.requirement_id;
-        const lockId = getCurrentLockId(cwd);
-        const currentSession = getCurrentSession(lockId, cwd);
-        if (currentSession) {
-          const existingTask = readProjectState(currentSession.requirement_id, currentSession.source, cwd);
-          if (existingTask) {
-            const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
-            if (currentStatus === "in_progress") {
-              return {
-                content: [{
-                  type: "text",
-                  text: `## Task Already Bound
+    }]
+  };
+}
+function handleStateInit(args, cwd) {
+  const projectName = args.project_name;
+  const projectDescription = args.project_description || "";
+  const providedRequirementId = args.requirement_id;
+  const lockId = getCurrentLockId(cwd);
+  const currentSession = getCurrentSession(lockId, cwd);
+  if (currentSession) {
+    const existingTask = readProjectState(currentSession.requirement_id, currentSession.source, cwd);
+    if (existingTask) {
+      const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
+      if (currentStatus === "in_progress") {
+        return {
+          content: [{
+            type: "text",
+            text: `## Task Already Bound
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || "Not set"}
@@ -15270,27 +15274,27 @@ Options:
 1. Continue the current task with \`opc_state_read\`
 2. Unbind from current task with \`opc_state_clear\` and start fresh
 `
-                }]
-              };
-            }
-          }
-        }
-        let requirementId = providedRequirementId;
-        let requirementMatchInfo = "";
-        if (!requirementId) {
-          const index = readKnowledgeIndex(cwd);
-          const candidates = findCandidateRequirements(index, projectName);
-          if (candidates.length > 0 && candidates[0].score >= 0.5) {
-            requirementId = candidates[0].id;
-            requirementMatchInfo = `
+          }]
+        };
+      }
+    }
+  }
+  let requirementId = providedRequirementId;
+  let requirementMatchInfo = "";
+  if (!requirementId) {
+    const index = readKnowledgeIndex(cwd);
+    const candidates = findCandidateRequirements(index, projectName);
+    if (candidates.length > 0 && candidates[0].score >= 0.5) {
+      requirementId = candidates[0].id;
+      requirementMatchInfo = `
 
 \u{1F517} **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
-          } else if (candidates.length > 0) {
-            const candidateList = candidates.slice(0, 3).map((c) => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`).join("\n");
-            return {
-              content: [{
-                type: "text",
-                text: `## Similar Requirements Found
+    } else if (candidates.length > 0) {
+      const candidateList = candidates.slice(0, 3).map((c) => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`).join("\n");
+      return {
+        content: [{
+          type: "text",
+          text: `## Similar Requirements Found
 
 The following requirements may be related to your task:
 
@@ -15303,58 +15307,58 @@ ${candidateList}
 
 Please choose how to proceed.
 `
-              }]
-            };
-          } else {
-            requirementId = generateNextRequirementId(cwd);
-            requirementMatchInfo = `
+        }]
+      };
+    } else {
+      requirementId = generateNextRequirementId(cwd);
+      requirementMatchInfo = `
 
 \u{1F195} **Generated new requirement ID:** ${requirementId}`;
-          }
-        } else if (requirementId === "new") {
-          requirementId = generateNextRequirementId(cwd);
-          requirementMatchInfo = `
+    }
+  } else if (requirementId === "new") {
+    requirementId = generateNextRequirementId(cwd);
+    requirementMatchInfo = `
 
 \u{1F195} **Generated new requirement ID:** ${requirementId}`;
-        }
-        const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
-        const knowledgeInfo = knowledgeResult.isNew ? "Knowledge library initialized." : `Resumed existing requirement: "${knowledgeResult.title}"`;
-        const taskDescription = `${projectName} ${projectDescription}`.trim();
-        const workflows = readAllWorkflows(cwd);
-        const workflowMatch = matchWorkflow(taskDescription, workflows);
-        let workflowInfo = "";
-        let matchedWorkflow = null;
-        let workflowSource = "auto_assembled";
-        let workflowConfidence;
-        if (workflowMatch && workflowMatch.score >= 0.3) {
-          matchedWorkflow = workflowMatch.workflow;
-          workflowSource = "matched";
-          workflowConfidence = workflowMatch.score;
-          workflowInfo = `
+  }
+  const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
+  const knowledgeInfo = knowledgeResult.isNew ? "Knowledge library initialized." : `Resumed existing requirement: "${knowledgeResult.title}"`;
+  const taskDescription = `${projectName} ${projectDescription}`.trim();
+  const workflows = readAllWorkflows(cwd);
+  const workflowMatch = matchWorkflow(taskDescription, workflows);
+  let workflowInfo = "";
+  let matchedWorkflow = null;
+  let workflowSource = "auto_assembled";
+  let workflowConfidence;
+  if (workflowMatch && workflowMatch.score >= 0.3) {
+    matchedWorkflow = workflowMatch.workflow;
+    workflowSource = "matched";
+    workflowConfidence = workflowMatch.score;
+    workflowInfo = `
 
 \u{1F4CB} **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowMatch.score * 100)}% confidence)`;
-        } else {
-          workflowInfo = "\n\n\u{1F527} **Pipeline:** Auto-assembled based on task analysis";
-        }
-        bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
-        const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
-        const firstStage = state.pipeline.current_stage;
-        if (state.pipeline.stages[firstStage]) {
-          state.pipeline.stages[firstStage].status = "in_progress";
-          state.pipeline.stages[firstStage].started_at = (/* @__PURE__ */ new Date()).toISOString();
-        }
-        writeProjectState(state, cwd);
-        const gitignoreUpdated = updateGitignore(cwd);
-        const gitignoreMsg = gitignoreUpdated ? "\n\n\u{1F4DD} **.gitignore updated**: Added `.opc/state/` to ignore personal session data." : "";
-        const stageList = Object.entries(state.pipeline.stages).map(([stageName, stageData]) => {
-          const required2 = stageData.config?.required ? " (required)" : "";
-          const desc = stageData.config?.description ? ` - ${stageData.config.description}` : "";
-          return `- **${stageName}**${required2}${desc}`;
-        }).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## OPC Task Initialized
+  } else {
+    workflowInfo = "\n\n\u{1F527} **Pipeline:** Auto-assembled based on task analysis";
+  }
+  bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
+  const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
+  const firstStage = state.pipeline.current_stage;
+  if (state.pipeline.stages[firstStage]) {
+    state.pipeline.stages[firstStage].status = "in_progress";
+    state.pipeline.stages[firstStage].started_at = (/* @__PURE__ */ new Date()).toISOString();
+  }
+  writeProjectState(state, cwd);
+  const gitignoreUpdated = updateGitignore(cwd);
+  const gitignoreMsg = gitignoreUpdated ? "\n\n\u{1F4DD} **.gitignore updated**: Added `.opc/state/` to ignore personal session data." : "";
+  const stageList = Object.entries(state.pipeline.stages).map(([stageName, stageData]) => {
+    const required2 = stageData.config?.required ? " (required)" : "";
+    const desc = stageData.config?.description ? ` - ${stageData.config.description}` : "";
+    return `- **${stageName}**${required2}${desc}`;
+  }).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## OPC Task Initialized
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
@@ -15371,19 +15375,18 @@ The pipeline is ready. Stage "${firstStage}" is now in progress.
 Use \`opc_state_write\` to update progress as you advance through stages.
 Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_state_clear": {
-        const lockId = getCurrentLockId(cwd);
-        const session = getCurrentSession(lockId, cwd);
-        const cleared = clearCurrentTask(cwd);
-        if (cleared) {
-          return {
-            content: [{
-              type: "text",
-              text: `## Task Unbound
+    }]
+  };
+}
+function handleStateClear(cwd) {
+  const lockId = getCurrentLockId(cwd);
+  const session = getCurrentSession(lockId, cwd);
+  const cleared = clearCurrentTask(cwd);
+  if (cleared) {
+    return {
+      content: [{
+        type: "text",
+        text: `## Task Unbound
 
 **Previous Requirement:** ${session?.requirement_id}
 
@@ -15392,122 +15395,120 @@ You can start a new task with \`opc_state_init\`.
 
 **Note:** The requirement's state file is preserved for history.
 Use \`opc_state_init(requirement_id="${session?.requirement_id}")\` to resume.`
-            }]
-          };
-        } else {
-          return {
-            content: [{
-              type: "text",
-              text: `No task to clear. Use \`opc_state_init\` to start a new task.`
-            }]
-          };
+      }]
+    };
+  } else {
+    return {
+      content: [{
+        type: "text",
+        text: `No task to clear. Use \`opc_state_init\` to start a new task.`
+      }]
+    };
+  }
+}
+function handleStateWrite(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{
+        type: "text",
+        text: "No active task. Use opc_state_init to start a new project."
+      }],
+      isError: true
+    };
+  }
+  if (args.stage && args.stage_status) {
+    const stage = args.stage;
+    const stageStatus = args.stage_status;
+    if (!state.pipeline.stages[stage]) {
+      state.pipeline.stages[stage] = { status: "pending" };
+    }
+    state.pipeline.stages[stage].status = stageStatus;
+    if (stageStatus === "in_progress" && !state.pipeline.stages[stage].started_at) {
+      state.pipeline.stages[stage].started_at = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    if (stageStatus === "completed") {
+      state.pipeline.stages[stage].completed_at = (/* @__PURE__ */ new Date()).toISOString();
+      state.pipeline.stages[stage].verification_passed = true;
+      const stageOrder = Object.keys(state.pipeline.stages);
+      const currentIndex = stageOrder.indexOf(stage);
+      if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
+        const nextStage = stageOrder[currentIndex + 1];
+        if (state.pipeline.stages[nextStage]?.status === "pending" || !state.pipeline.stages[nextStage]) {
+          state.pipeline.current_stage = nextStage;
+          state.pipeline.stages[nextStage] = { status: "pending" };
         }
       }
-      // ============================================================
-      case "opc_state_write": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{
-              type: "text",
-              text: "No active task. Use opc_state_init to start a new project."
-            }],
-            isError: true
-          };
-        }
-        if (args.stage && args.stage_status) {
-          const stage = args.stage;
-          const stageStatus = args.stage_status;
-          if (!state.pipeline.stages[stage]) {
-            state.pipeline.stages[stage] = { status: "pending" };
-          }
-          state.pipeline.stages[stage].status = stageStatus;
-          if (stageStatus === "in_progress" && !state.pipeline.stages[stage].started_at) {
-            state.pipeline.stages[stage].started_at = (/* @__PURE__ */ new Date()).toISOString();
-          }
-          if (stageStatus === "completed") {
-            state.pipeline.stages[stage].completed_at = (/* @__PURE__ */ new Date()).toISOString();
-            state.pipeline.stages[stage].verification_passed = true;
-            const stageOrder = Object.keys(state.pipeline.stages);
-            const currentIndex = stageOrder.indexOf(stage);
-            if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
-              const nextStage = stageOrder[currentIndex + 1];
-              if (state.pipeline.stages[nextStage]?.status === "pending" || !state.pipeline.stages[nextStage]) {
-                state.pipeline.current_stage = nextStage;
-                state.pipeline.stages[nextStage] = { status: "pending" };
-              }
-            }
-          }
-          if (stageStatus === "in_progress") {
-            state.pipeline.current_stage = stage;
-          }
-        }
-        if (args.agent) {
-          const stage = state.pipeline.current_stage;
-          if (!state.pipeline.stages[stage].agents_used) {
-            state.pipeline.stages[stage].agents_used = [];
-          }
-          if (!state.pipeline.stages[stage].agents_used.includes(args.agent)) {
-            state.pipeline.stages[stage].agents_used.push(args.agent);
-          }
-        }
-        if (args.artifact) {
-          const stage = args.stage || state.pipeline.current_stage;
-          if (!state.pipeline.stages[stage]) {
-            state.pipeline.stages[stage] = { status: "pending" };
-          }
-          if (!state.pipeline.stages[stage].artifacts) {
-            state.pipeline.stages[stage].artifacts = [];
-          }
-          state.pipeline.stages[stage].artifacts.push(args.artifact);
-        }
-        if (args.progress) {
-          const stage = args.stage || state.pipeline.current_stage;
-          if (!state.pipeline.stages[stage]) {
-            state.pipeline.stages[stage] = { status: "pending" };
-          }
-          state.pipeline.stages[stage].progress = args.progress;
-        }
-        if (args.blocker) {
-          const stage = args.stage || state.pipeline.current_stage;
-          if (!state.pipeline.stages[stage]) {
-            state.pipeline.stages[stage] = { status: "pending" };
-          }
-          if (!state.pipeline.stages[stage].blockers) {
-            state.pipeline.stages[stage].blockers = [];
-          }
-          state.pipeline.stages[stage].blockers.push(args.blocker);
-          state.pipeline.stages[stage].status = "blocked";
-        }
-        writeProjectState(state, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `State updated.
+    }
+    if (stageStatus === "in_progress") {
+      state.pipeline.current_stage = stage;
+    }
+  }
+  if (args.agent) {
+    const stage = state.pipeline.current_stage;
+    if (!state.pipeline.stages[stage].agents_used) {
+      state.pipeline.stages[stage].agents_used = [];
+    }
+    if (!state.pipeline.stages[stage].agents_used.includes(args.agent)) {
+      state.pipeline.stages[stage].agents_used.push(args.agent);
+    }
+  }
+  if (args.artifact) {
+    const stage = args.stage || state.pipeline.current_stage;
+    if (!state.pipeline.stages[stage]) {
+      state.pipeline.stages[stage] = { status: "pending" };
+    }
+    if (!state.pipeline.stages[stage].artifacts) {
+      state.pipeline.stages[stage].artifacts = [];
+    }
+    state.pipeline.stages[stage].artifacts.push(args.artifact);
+  }
+  if (args.progress) {
+    const stage = args.stage || state.pipeline.current_stage;
+    if (!state.pipeline.stages[stage]) {
+      state.pipeline.stages[stage] = { status: "pending" };
+    }
+    state.pipeline.stages[stage].progress = args.progress;
+  }
+  if (args.blocker) {
+    const stage = args.stage || state.pipeline.current_stage;
+    if (!state.pipeline.stages[stage]) {
+      state.pipeline.stages[stage] = { status: "pending" };
+    }
+    if (!state.pipeline.stages[stage].blockers) {
+      state.pipeline.stages[stage].blockers = [];
+    }
+    state.pipeline.stages[stage].blockers.push(args.blocker);
+    state.pipeline.stages[stage].status = "blocked";
+  }
+  writeProjectState(state, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `State updated.
 
 **Current Stage:** ${state.pipeline.current_stage}
 **Stage Status:** ${state.pipeline.stages[state.pipeline.current_stage].status}
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_checkpoint_create": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{
-              type: "text",
-              text: "No active task to checkpoint."
-            }],
-            isError: true
-          };
-        }
-        const checkpoint = createCheckpoint(state, args.description, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `## Checkpoint Created
+    }]
+  };
+}
+function handleCheckpointCreate(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{
+        type: "text",
+        text: "No active task to checkpoint."
+      }],
+      isError: true
+    };
+  }
+  const checkpoint = createCheckpoint(state, args.description, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Checkpoint Created
 
 **Checkpoint ID:** ${checkpoint.checkpoint_id}
 **Stage:** ${checkpoint.stage}
@@ -15516,48 +15517,46 @@ Use \`opc_state_init(requirement_id="${session?.requirement_id}")\` to resume.`
 
 Use \`opc_checkpoint_rollback\` with the checkpoint ID to restore this state.
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_checkpoint_list": {
-        const checkpoints = listCheckpoints(cwd);
-        if (checkpoints.length === 0) {
-          return {
-            content: [{
-              type: "text",
-              text: "No checkpoints found."
-            }]
-          };
-        }
-        const list = checkpoints.map((cp) => `- **${cp.checkpoint_id}**: ${cp.description} (${cp.stage}) - ${cp.created_at}`).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## Checkpoints (${checkpoints.length})
+    }]
+  };
+}
+function handleCheckpointList(cwd) {
+  const checkpoints = listCheckpoints(cwd);
+  if (checkpoints.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: "No checkpoints found."
+      }]
+    };
+  }
+  const list = checkpoints.map((cp) => `- **${cp.checkpoint_id}**: ${cp.description} (${cp.stage}) - ${cp.created_at}`).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Checkpoints (${checkpoints.length})
 
 ${list}
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_checkpoint_rollback": {
-        const checkpoint = readCheckpoint(args.checkpoint_id, cwd);
-        if (!checkpoint) {
-          return {
-            content: [{
-              type: "text",
-              text: `Checkpoint not found: ${args.checkpoint_id}`
-            }],
-            isError: true
-          };
-        }
-        writeProjectState(checkpoint.state_snapshot, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `## Rolled Back to Checkpoint
+    }]
+  };
+}
+function handleCheckpointRollback(args, cwd) {
+  const checkpoint = readCheckpoint(args.checkpoint_id, cwd);
+  if (!checkpoint) {
+    return {
+      content: [{
+        type: "text",
+        text: `Checkpoint not found: ${args.checkpoint_id}`
+      }],
+      isError: true
+    };
+  }
+  writeProjectState(checkpoint.state_snapshot, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Rolled Back to Checkpoint
 
 **Checkpoint ID:** ${checkpoint.checkpoint_id}
 **Stage:** ${checkpoint.stage}
@@ -15565,26 +15564,25 @@ ${list}
 
 The project state has been restored to the checkpoint.
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_handoff": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{
-              type: "text",
-              text: "No active task for handoff."
-            }],
-            isError: true
-          };
-        }
-        const handoff = recordHandoff(args.from_agent, args.to_agent, args.artifacts, args.constraints || [], args.context || "", state.context.lock_id, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `## Handoff Recorded
+    }]
+  };
+}
+function handleHandoff(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{
+        type: "text",
+        text: "No active task for handoff."
+      }],
+      isError: true
+    };
+  }
+  const handoff = recordHandoff(args.from_agent, args.to_agent, args.artifacts, args.constraints || [], args.context || "", state.context.lock_id, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Handoff Recorded
 
 **From:** ${handoff.from_agent}
 **To:** ${handoff.to_agent}
@@ -15593,137 +15591,133 @@ The project state has been restored to the checkpoint.
 
 The receiving agent should check constraints and artifacts before starting work.
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_memory": {
-        const action = args.action;
-        if (action === "read") {
-          const memory = readProjectMemory(cwd);
-          const grouped = memory.entries.reduce((acc, entry) => {
-            if (!acc[entry.category])
-              acc[entry.category] = [];
-            acc[entry.category].push(entry);
-            return acc;
-          }, {});
-          const output = Object.entries(grouped).map(([category, entries]) => {
-            const items = entries.map((e) => `- ${e.content}`).join("\n");
-            return `### ${category}
+    }]
+  };
+}
+function handleMemory(args, cwd) {
+  const action = args.action;
+  if (action === "read") {
+    const memory = readProjectMemory(cwd);
+    const grouped = memory.entries.reduce((acc, entry) => {
+      if (!acc[entry.category])
+        acc[entry.category] = [];
+      acc[entry.category].push(entry);
+      return acc;
+    }, {});
+    const output = Object.entries(grouped).map(([category, entries]) => {
+      const items = entries.map((e) => `- ${e.content}`).join("\n");
+      return `### ${category}
 ${items}`;
-          }).join("\n\n");
-          return {
-            content: [{
-              type: "text",
-              text: `## Project Memory (${memory.entries.length} entries)
+    }).join("\n\n");
+    return {
+      content: [{
+        type: "text",
+        text: `## Project Memory (${memory.entries.length} entries)
 
 ${output || "No entries yet."}
 `
-            }]
-          };
-        }
-        if (action === "write") {
-          if (!args.category || !args.content) {
-            return {
-              content: [{
-                type: "text",
-                text: "category and content are required for write action."
-              }],
-              isError: true
-            };
-          }
-          const entry = addMemoryEntry(args.category, args.content, void 0, cwd);
-          return {
-            content: [{
-              type: "text",
-              text: `Memory entry added: [${entry.category}] ${entry.content}`
-            }]
-          };
-        }
-        if (action === "search") {
-          const results = searchMemory(args.query, cwd);
-          const output = results.map((e) => `- [${e.category}] ${e.content}`).join("\n");
-          return {
-            content: [{
-              type: "text",
-              text: `## Search Results (${results.length})
+      }]
+    };
+  }
+  if (action === "write") {
+    if (!args.category || !args.content) {
+      return {
+        content: [{
+          type: "text",
+          text: "category and content are required for write action."
+        }],
+        isError: true
+      };
+    }
+    const entry = addMemoryEntry(args.category, args.content, void 0, cwd);
+    return {
+      content: [{
+        type: "text",
+        text: `Memory entry added: [${entry.category}] ${entry.content}`
+      }]
+    };
+  }
+  if (action === "search") {
+    const results = searchMemory(args.query, cwd);
+    const output = results.map((e) => `- [${e.category}] ${e.content}`).join("\n");
+    return {
+      content: [{
+        type: "text",
+        text: `## Search Results (${results.length})
 
 ${output || "No matches found."}
 `
-            }]
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: "Invalid action. Use read, write, or search."
-          }],
-          isError: true
-        };
-      }
-      // ============================================================
-      case "opc_sessions_list": {
-        const lockId = getCurrentLockId(cwd);
-        const currentSession = getCurrentSession(lockId, cwd);
-        const stateDir = ensureOpcDir("state", cwd);
-        const { existsSync: existsSync8, readdirSync: readdirSync5 } = require("fs");
-        const allTaskDirs = existsSync8(stateDir) ? readdirSync5(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/)) : [];
-        if (allTaskDirs.length === 0) {
-          return {
-            content: [{
-              type: "text",
-              text: "No tasks found. Use opc_state_init to start a new project."
-            }]
-          };
-        }
-        const taskList = allTaskDirs.map((dirName) => {
-          const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
-          if (!match)
-            return null;
-          const reqId = match[1];
-          const source = match[2];
-          const state = readProjectState(reqId, source, cwd);
-          if (!state)
-            return null;
-          const isCurrent = currentSession && currentSession.requirement_id === reqId && currentSession.source === source;
-          const status = state.pipeline.stages[state.pipeline.current_stage]?.status || "pending";
-          const icon = status === "in_progress" ? "\u{1F504}" : status === "completed" ? "\u2705" : status === "blocked" ? "\u{1F6AB}" : "\u23F3";
-          const currentMarker = isCurrent ? " \u2190 **current**" : "";
-          const workflowTag = state.workflow?.name || source;
-          return `${icon} **${reqId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
-        }).filter(Boolean).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## All Tasks (${allTaskDirs.length})
+      }]
+    };
+  }
+  return {
+    content: [{
+      type: "text",
+      text: "Invalid action. Use read, write, or search."
+    }],
+    isError: true
+  };
+}
+function handleSessionsList(cwd) {
+  const lockId = getCurrentLockId(cwd);
+  const currentSession = getCurrentSession(lockId, cwd);
+  const stateDir = ensureOpcDir("state", cwd);
+  const allTaskDirs = (0, import_fs9.existsSync)(stateDir) ? (0, import_fs9.readdirSync)(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/)) : [];
+  if (allTaskDirs.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: "No tasks found. Use opc_state_init to start a new project."
+      }]
+    };
+  }
+  const taskList = allTaskDirs.map((dirName) => {
+    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
+    if (!match)
+      return null;
+    const reqId = match[1];
+    const source = match[2];
+    const state = readProjectState(reqId, source, cwd);
+    if (!state)
+      return null;
+    const isCurrent = currentSession && currentSession.requirement_id === reqId && currentSession.source === source;
+    const status = state.pipeline.stages[state.pipeline.current_stage]?.status || "pending";
+    const icon = status === "in_progress" ? "\u{1F504}" : status === "completed" ? "\u2705" : status === "blocked" ? "\u{1F6AB}" : "\u23F3";
+    const currentMarker = isCurrent ? " \u2190 **current**" : "";
+    const workflowTag = state.workflow?.name || source;
+    return `${icon} **${reqId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
+  }).filter(Boolean).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## All Tasks (${allTaskDirs.length})
 
 ${taskList}
 
 Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_task_group_create": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{ type: "text", text: "No active task. Use opc_state_init first." }],
-            isError: true
-          };
-        }
-        const stage = args.stage;
-        const groupName = args.group_name;
-        const tasks = args.tasks;
-        const parallel = args.parallel !== false;
-        const completionCondition = args.completion_condition || "all";
-        const threshold = args.threshold;
-        const result = createTaskGroup(state, stage, groupName, tasks, parallel, completionCondition, threshold, cwd);
-        const taskList = result.state.pipeline.stages[stage].task_groups.find((g) => g.group_id === result.groupId).tasks.map((t) => `- **${t.task_id}**: ${t.agent} - ${t.description}`).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## Task Group Created
+    }]
+  };
+}
+function handleTaskGroupCreate(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{ type: "text", text: "No active task. Use opc_state_init first." }],
+      isError: true
+    };
+  }
+  const stage = args.stage;
+  const groupName = args.group_name;
+  const tasks = args.tasks;
+  const parallel = args.parallel !== false;
+  const completionCondition = args.completion_condition || "all";
+  const threshold = args.threshold;
+  const result = createTaskGroup(state, stage, groupName, tasks, parallel, completionCondition, threshold, cwd);
+  const taskList = result.state.pipeline.stages[stage].task_groups.find((g) => g.group_id === result.groupId).tasks.map((t) => `- **${t.task_id}**: ${t.agent} - ${t.description}`).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Task Group Created
 
 **Group ID:** ${result.groupId}
 **Stage:** ${stage}
@@ -15736,99 +15730,95 @@ ${taskList}
 
 Use \`opc_task_update\` to update task progress.
 `
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_task_update": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{ type: "text", text: "No active task." }],
-            isError: true
-          };
-        }
-        const taskId = args.task_id;
-        const status = args.status;
-        const progress = args.progress;
-        const artifact = args.artifact;
-        const updatedState = updateTask(state, taskId, status, progress, artifact, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `Task ${taskId} updated: ${status}${progress !== void 0 ? ` (${progress}%)` : ""}`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_task_group_status": {
-        const state = getCurrentTask(cwd);
-        if (!state) {
-          return {
-            content: [{ type: "text", text: "No active task." }],
-            isError: true
-          };
-        }
-        const stage = args.stage;
-        const groupId = args.group_id;
-        const groups = getTaskGroups(state, stage, groupId);
-        if (groups.length === 0) {
-          return {
-            content: [{ type: "text", text: "No task groups found." }]
-          };
-        }
-        const output = groups.map((group) => {
-          const completed = group.tasks.filter((t) => t.status === "completed").length;
-          const inProgress = group.tasks.filter((t) => t.status === "in_progress").length;
-          const failed = group.tasks.filter((t) => t.status === "failed").length;
-          const pending = group.tasks.filter((t) => t.status === "pending").length;
-          const taskList = group.tasks.map((t) => {
-            const icon = t.status === "completed" ? "\u2705" : t.status === "in_progress" ? "\u{1F504}" : t.status === "failed" ? "\u274C" : "\u23F3";
-            return `  ${icon} ${t.task_id}: ${t.agent} (${t.progress}%) - ${t.description}`;
-          }).join("\n");
-          return `### ${group.name} (${group.group_id})
+    }]
+  };
+}
+function handleTaskUpdate(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{ type: "text", text: "No active task." }],
+      isError: true
+    };
+  }
+  const taskId = args.task_id;
+  const status = args.status;
+  const progress = args.progress;
+  const artifact = args.artifact;
+  updateTask(state, taskId, status, progress, artifact, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `Task ${taskId} updated: ${status}${progress !== void 0 ? ` (${progress}%)` : ""}`
+    }]
+  };
+}
+function handleTaskGroupStatus(args, cwd) {
+  const state = getCurrentTask(cwd);
+  if (!state) {
+    return {
+      content: [{ type: "text", text: "No active task." }],
+      isError: true
+    };
+  }
+  const stage = args.stage;
+  const groupId = args.group_id;
+  const groups = getTaskGroups(state, stage, groupId);
+  if (groups.length === 0) {
+    return {
+      content: [{ type: "text", text: "No task groups found." }]
+    };
+  }
+  const output = groups.map((group) => {
+    const completed = group.tasks.filter((t) => t.status === "completed").length;
+    const inProgress = group.tasks.filter((t) => t.status === "in_progress").length;
+    const failed = group.tasks.filter((t) => t.status === "failed").length;
+    const pending = group.tasks.filter((t) => t.status === "pending").length;
+    const taskList = group.tasks.map((t) => {
+      const icon = t.status === "completed" ? "\u2705" : t.status === "in_progress" ? "\u{1F504}" : t.status === "failed" ? "\u274C" : "\u23F3";
+      return `  ${icon} ${t.task_id}: ${t.agent} (${t.progress}%) - ${t.description}`;
+    }).join("\n");
+    return `### ${group.name} (${group.group_id})
 **Parallel:** ${group.parallel} | **Completion:** ${group.completion_condition}
 **Status:** \u2705${completed} \u{1F504}${inProgress} \u274C${failed} \u23F3${pending}
 ${group.completed_at ? `**Completed:** ${group.completed_at}` : ""}
 
 ${taskList}`;
-        }).join("\n\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## Task Group Status
+  }).join("\n\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Task Group Status
 
 ${output}`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_workflows_path": {
-        const workflowsDir = ensureWorkflowsDir(cwd);
-        const gitRoot = getWorktreeRoot(cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `## Workflows Directory
+    }]
+  };
+}
+function handleWorkflowsPath(cwd) {
+  const workflowsDir = ensureWorkflowsDir(cwd);
+  const gitRoot = getWorktreeRoot(cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Workflows Directory
 
 **Path:** ${workflowsDir}
 **Git Root:** ${gitRoot}
 
 All workflow files should be read from/written to this directory.
 This ensures consistency regardless of current working directory.`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_knowledge_init": {
-        const requirementId = args.requirementId;
-        const title = args.title;
-        try {
-          initKnowledgeLibrary(requirementId, title, cwd);
-          return {
-            content: [{
-              type: "text",
-              text: `## Knowledge Library Initialized
+    }]
+  };
+}
+function handleKnowledgeInit(args, cwd) {
+  const requirementId = args.requirementId;
+  const title = args.title;
+  try {
+    initKnowledgeLibrary(requirementId, title, cwd);
+    return {
+      content: [{
+        type: "text",
+        text: `## Knowledge Library Initialized
 
 **Requirement ID:** ${requirementId}
 **Title:** ${title}
@@ -15846,79 +15836,77 @@ Knowledge documents will be created on-demand when writing to each category.
 | QA | qa | Test plans, test cases |
 | Ship | ship | Deployment, CI/CD, infrastructure |
 | Growth | growth | Metrics, analytics, marketing |`
-            }]
-          };
-        } catch (error2) {
-          return {
-            content: [{
-              type: "text",
-              text: `Error: ${error2 instanceof Error ? error2.message : String(error2)}`
-            }],
-            isError: true
-          };
-        }
-      }
-      // ============================================================
-      case "opc_knowledge_read": {
-        const requirementId = args.requirementId;
-        const category = args.category;
-        const doc = args.doc;
-        if (doc) {
-          const content2 = readKnowledgeDoc(requirementId, category, doc, cwd);
-          if (!content2) {
-            return {
-              content: [{
-                type: "text",
-                text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md`
-              }]
-            };
-          }
-          return {
-            content: [{
-              type: "text",
-              text: content2
-            }]
-          };
-        }
-        const content = readAllKnowledgeDocs(requirementId, category, cwd);
-        if (!content) {
-          return {
-            content: [{
-              type: "text",
-              text: `No knowledge documents found for ${requirementId}/${category}`
-            }]
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: content
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_knowledge_write": {
-        const requirementId = args.requirementId;
-        const category = args.category;
-        const doc = args.doc;
-        const content = args.content;
-        const mode = args.mode || "append";
-        const section = args.section;
-        const index = readKnowledgeIndex(cwd);
-        if (!index.requirements[requirementId]) {
-          return {
-            content: [{
-              type: "text",
-              text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`
-            }],
-            isError: true
-          };
-        }
-        writeKnowledgeDoc(requirementId, category, doc, content, mode, section, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: `## Knowledge Written
+      }]
+    };
+  } catch (error2) {
+    return {
+      content: [{
+        type: "text",
+        text: `Error: ${error2 instanceof Error ? error2.message : String(error2)}`
+      }],
+      isError: true
+    };
+  }
+}
+function handleKnowledgeRead(args, cwd) {
+  const requirementId = args.requirementId;
+  const category = args.category;
+  const doc = args.doc;
+  if (doc) {
+    const content2 = readKnowledgeDoc(requirementId, category, doc, cwd);
+    if (!content2) {
+      return {
+        content: [{
+          type: "text",
+          text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md`
+        }]
+      };
+    }
+    return {
+      content: [{
+        type: "text",
+        text: content2
+      }]
+    };
+  }
+  const content = readAllKnowledgeDocs(requirementId, category, cwd);
+  if (!content) {
+    return {
+      content: [{
+        type: "text",
+        text: `No knowledge documents found for ${requirementId}/${category}`
+      }]
+    };
+  }
+  return {
+    content: [{
+      type: "text",
+      text: content
+    }]
+  };
+}
+function handleKnowledgeWrite(args, cwd) {
+  const requirementId = args.requirementId;
+  const category = args.category;
+  const doc = args.doc;
+  const content = args.content;
+  const mode = args.mode || "append";
+  const section = args.section;
+  const index = readKnowledgeIndex(cwd);
+  if (!index.requirements[requirementId]) {
+    return {
+      content: [{
+        type: "text",
+        text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`
+      }],
+      isError: true
+    };
+  }
+  writeKnowledgeDoc(requirementId, category, doc, content, mode, section, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Knowledge Written
 
 **Requirement:** ${requirementId}
 **Document:** ${category}/${doc}.md
@@ -15926,81 +15914,121 @@ Knowledge documents will be created on-demand when writing to each category.
 **Section:** ${section}` : ""}
 
 Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_knowledge_exists": {
-        const requirementId = args.requirementId;
-        const category = args.category;
-        const doc = args.doc;
-        const exists = knowledgeExists(requirementId, category, doc, cwd);
-        return {
-          content: [{
-            type: "text",
-            text: exists ? "true" : "false"
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_knowledge_list": {
-        const status = args.status;
-        const categoryFilter = args.category;
-        const index = readKnowledgeIndex(cwd);
-        let requirements = Object.entries(index.requirements);
-        if (status) {
-          requirements = requirements.filter(([, r]) => r.status === status);
-        }
-        if (categoryFilter) {
-          requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
-        }
-        if (requirements.length === 0) {
-          return {
-            content: [{
-              type: "text",
-              text: "No requirements found in knowledge library."
-            }]
-          };
-        }
-        const table = requirements.map(([id, r]) => {
-          const categories = Object.keys(r.domains).join(", ") || "-";
-          return `| ${id} | ${r.title} | ${r.status} | ${categories} | ${r.updated_at.split("T")[0]} |`;
-        }).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## Knowledge Library
+    }]
+  };
+}
+function handleKnowledgeExists(args, cwd) {
+  const requirementId = args.requirementId;
+  const category = args.category;
+  const doc = args.doc;
+  const exists = knowledgeExists(requirementId, category, doc, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: exists ? "true" : "false"
+    }]
+  };
+}
+function handleKnowledgeList(args, cwd) {
+  const status = args.status;
+  const categoryFilter = args.category;
+  const index = readKnowledgeIndex(cwd);
+  let requirements = Object.entries(index.requirements);
+  if (status) {
+    requirements = requirements.filter(([, r]) => r.status === status);
+  }
+  if (categoryFilter) {
+    requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
+  }
+  if (requirements.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: "No requirements found in knowledge library."
+      }]
+    };
+  }
+  const table = requirements.map(([id, r]) => {
+    const categories = Object.keys(r.domains).join(", ") || "-";
+    return `| ${id} | ${r.title} | ${r.status} | ${categories} | ${r.updated_at.split("T")[0]} |`;
+  }).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Knowledge Library
 
 | ID | Title | Status | Categories | Updated |
 |-----|-------|--------|---------|--------|
 ${table}`
-          }]
-        };
-      }
-      // ============================================================
-      case "opc_knowledge_docs": {
-        const requirementId = args.requirementId;
-        const category = args.category;
-        const docs = listKnowledgeDocs(requirementId, category, cwd);
-        if (docs.length === 0) {
-          return {
-            content: [{
-              type: "text",
-              text: `No documents found for ${requirementId}/${category}`
-            }]
-          };
-        }
-        const docList = docs.map((d) => `- ${d}.md`).join("\n");
-        return {
-          content: [{
-            type: "text",
-            text: `## ${requirementId}/${category} Documents
+    }]
+  };
+}
+function handleKnowledgeDocs(args, cwd) {
+  const requirementId = args.requirementId;
+  const category = args.category;
+  const docs = listKnowledgeDocs(requirementId, category, cwd);
+  if (docs.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: `No documents found for ${requirementId}/${category}`
+      }]
+    };
+  }
+  const docList = docs.map((d) => `- ${d}.md`).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## ${requirementId}/${category} Documents
 
 ${docList}`
-          }]
-        };
-      }
-      // ============================================================
+    }]
+  };
+}
+async function handleToolCall(name, args) {
+  const cwd = args.workingDirectory;
+  try {
+    switch (name) {
+      case "opc_state_read":
+        return handleStateRead(cwd);
+      case "opc_state_init":
+        return handleStateInit(args, cwd);
+      case "opc_state_clear":
+        return handleStateClear(cwd);
+      case "opc_state_write":
+        return handleStateWrite(args, cwd);
+      case "opc_checkpoint_create":
+        return handleCheckpointCreate(args, cwd);
+      case "opc_checkpoint_list":
+        return handleCheckpointList(cwd);
+      case "opc_checkpoint_rollback":
+        return handleCheckpointRollback(args, cwd);
+      case "opc_handoff":
+        return handleHandoff(args, cwd);
+      case "opc_memory":
+        return handleMemory(args, cwd);
+      case "opc_sessions_list":
+        return handleSessionsList(cwd);
+      case "opc_task_group_create":
+        return handleTaskGroupCreate(args, cwd);
+      case "opc_task_update":
+        return handleTaskUpdate(args, cwd);
+      case "opc_task_group_status":
+        return handleTaskGroupStatus(args, cwd);
+      case "opc_workflows_path":
+        return handleWorkflowsPath(cwd);
+      case "opc_knowledge_init":
+        return handleKnowledgeInit(args, cwd);
+      case "opc_knowledge_read":
+        return handleKnowledgeRead(args, cwd);
+      case "opc_knowledge_write":
+        return handleKnowledgeWrite(args, cwd);
+      case "opc_knowledge_exists":
+        return handleKnowledgeExists(args, cwd);
+      case "opc_knowledge_list":
+        return handleKnowledgeList(args, cwd);
+      case "opc_knowledge_docs":
+        return handleKnowledgeDocs(args, cwd);
       default:
         return {
           content: [{
@@ -16020,6 +16048,8 @@ ${docList}`
     };
   }
 }
+
+// dist/index.js
 var server = new Server({ name: "opc-state", version: "3.1.0" }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
