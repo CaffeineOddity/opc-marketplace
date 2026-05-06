@@ -1,14 +1,14 @@
 /**
- * OPC State MCP Server (Single-Task Model)
+ * OPC State MCP Server (Multi-Task with History)
  *
  * Provides state management tools for OPC Founder agent.
  * Enables cross-session persistence, stage tracking, and agent handoffs.
  *
- * Single-Task Model:
- * - One window = one task
- * - Task must complete before starting next
- * - ESC interruption = task abandoned (start fresh)
- * - No task queue, no multi-session management
+ * Multi-Task Model:
+ * - Each requirement has its own state file (preserves history)
+ * - One window = one active task (via session binding)
+ * - Session index maps lock_id → requirement_id
+ * - All task history is preserved in .opc/state/{requirement_id}/
  *
  * Window detection uses PID + O_CREAT|O_EXCL atomic file creation
  * (adopted from OMC's approach - no external dependencies).
@@ -309,19 +309,23 @@ function readJsonFile(filePath) {
     }
 }
 /**
- * Get project state path for a lock ID.
- * Single-task model: one state file per window.
+ * Get project state path for a requirement ID.
+ * Each requirement has its own state file for history tracking.
  */
-function getProjectStatePath(lockId, cwd) {
+function getProjectStatePath(requirementId, cwd) {
     const stateDir = ensureOpcDir('state', cwd);
-    return join(stateDir, lockId, 'project-state.json');
+    return join(stateDir, requirementId, 'project-state.json');
 }
-function readProjectState(lockId, cwd) {
-    const path = getProjectStatePath(lockId, cwd);
+function readProjectState(requirementId, cwd) {
+    const path = getProjectStatePath(requirementId, cwd);
     return readJsonFile(path);
 }
 function writeProjectState(state, cwd) {
-    const path = getProjectStatePath(state.context.lock_id, cwd);
+    const requirementId = state.project.requirement_id;
+    if (!requirementId) {
+        throw new Error('Cannot write project state without requirement_id');
+    }
+    const path = getProjectStatePath(requirementId, cwd);
     const dir = join(path, '..');
     if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -655,52 +659,85 @@ function findCandidateRequirements(index, query, threshold = 0.3) {
     // Sort by score descending
     return candidates.sort((a, b) => b.score - a.score);
 }
-// ============================================================
-// Session Management (Single-Task Model)
-// ============================================================
+function getSessionIndexPath(cwd) {
+    const stateDir = ensureOpcDir('state', cwd);
+    return join(stateDir, 'sessions.json');
+}
+function readSessionIndex(cwd) {
+    const path = getSessionIndexPath(cwd);
+    const index = readJsonFile(path);
+    return index || { sessions: {} };
+}
+function writeSessionIndex(index, cwd) {
+    const path = getSessionIndexPath(cwd);
+    atomicWriteJson(path, index);
+}
 /**
- * List all task directories (lock IDs) in state.
+ * Bind current window to a requirement.
+ */
+function bindSessionToRequirement(lockId, requirementId, cwd) {
+    const index = readSessionIndex(cwd);
+    const now = new Date().toISOString();
+    if (index.sessions[lockId]) {
+        index.sessions[lockId].requirement_id = requirementId;
+        index.sessions[lockId].updated_at = now;
+    }
+    else {
+        index.sessions[lockId] = {
+            requirement_id: requirementId,
+            created_at: now,
+            updated_at: now,
+        };
+    }
+    writeSessionIndex(index, cwd);
+}
+/**
+ * Get requirement_id for current window.
+ */
+function getCurrentRequirementId(lockId, cwd) {
+    const index = readSessionIndex(cwd);
+    return index.sessions[lockId]?.requirement_id || null;
+}
+/**
+ * List all task directories (requirement IDs) in state.
  */
 function listAllTasks(cwd) {
     const stateDir = ensureOpcDir('state', cwd);
     if (!existsSync(stateDir))
         return [];
-    return readdirSync(stateDir).filter(f => f.startsWith('pid-'));
+    return readdirSync(stateDir).filter(f => f.startsWith('REQ-'));
 }
 /**
  * Get current window's task state.
  */
 function getCurrentTask(cwd) {
     const lockId = getCurrentLockId(cwd);
-    return readProjectState(lockId, cwd);
+    const requirementId = getCurrentRequirementId(lockId, cwd);
+    if (!requirementId) {
+        return null;
+    }
+    return readProjectState(requirementId, cwd);
 }
 /**
- * Clear current window's task (abandon).
+ * Clear current window's task binding (abandon).
+ * Note: This only unbinds the window from the requirement.
+ * The requirement's state file is preserved for history.
  */
 function clearCurrentTask(cwd) {
     const lockId = getCurrentLockId(cwd);
-    const statePath = getProjectStatePath(lockId, cwd);
-    const handoffPath = getHandoffPath(lockId, cwd);
-    let cleared = false;
-    if (existsSync(statePath)) {
-        unlinkSync(statePath);
-        cleared = true;
-    }
-    if (existsSync(handoffPath)) {
-        unlinkSync(handoffPath);
-    }
-    // Remove the state directory if empty
-    const stateDir = join(statePath, '..');
-    try {
-        const remaining = readdirSync(stateDir);
-        if (remaining.length === 0) {
-            unlinkSync(stateDir);
+    const index = readSessionIndex(cwd);
+    if (index.sessions[lockId]) {
+        const requirementId = index.sessions[lockId].requirement_id;
+        delete index.sessions[lockId];
+        writeSessionIndex(index, cwd);
+        // Also clear handoffs for this session
+        const handoffPath = getHandoffPath(lockId, cwd);
+        if (existsSync(handoffPath)) {
+            unlinkSync(handoffPath);
         }
+        return true;
     }
-    catch {
-        // Directory doesn't exist or not empty
-    }
-    return cleared;
+    return false;
 }
 // ============================================================
 // MCP Tool Definitions
@@ -1062,29 +1099,32 @@ ${Object.entries(state.pipeline.stages)
                 const projectDescription = args.project_description || '';
                 const providedRequirementId = args.requirement_id;
                 const lockId = getCurrentLockId(cwd);
-                // Check if current window already has a task
-                const existingTask = readProjectState(lockId, cwd);
-                if (existingTask) {
-                    const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
-                    if (currentStatus === 'in_progress') {
-                        return {
-                            content: [{
-                                    type: 'text',
-                                    text: `## Task Already Exists
+                // Check if current window already has a task bound
+                const currentRequirementId = getCurrentRequirementId(lockId, cwd);
+                if (currentRequirementId) {
+                    const existingTask = readProjectState(currentRequirementId, cwd);
+                    if (existingTask) {
+                        const currentStatus = existingTask.pipeline.stages[existingTask.pipeline.current_stage]?.status;
+                        if (currentStatus === 'in_progress') {
+                            return {
+                                content: [{
+                                        type: 'text',
+                                        text: `## Task Already Bound
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || 'Not set'}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** 🔄 in_progress
 
-One window can only have one task at a time.
+One window can only have one active task at a time.
 
 Options:
 1. Continue the current task with \`opc_state_read\`
-2. Abandon current task with \`opc_state_clear\` and start fresh
+2. Unbind from current task with \`opc_state_clear\` and start fresh
 `,
-                                }],
-                        };
+                                    }],
+                            };
+                        }
                     }
                 }
                 // Determine requirement ID
@@ -1139,6 +1179,8 @@ Please choose how to proceed.
                 const knowledgeInfo = knowledgeResult.isNew
                     ? 'Knowledge library initialized.'
                     : `Resumed existing requirement: "${knowledgeResult.title}"`;
+                // Bind current session to this requirement
+                bindSessionToRequirement(lockId, requirementId, cwd);
                 // Initialize new task
                 const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd);
                 state.pipeline.stages.product.status = 'in_progress';
@@ -1171,14 +1213,22 @@ Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${git
             }
             // ============================================================
             case 'opc_state_clear': {
+                const lockId = getCurrentLockId(cwd);
+                const requirementId = getCurrentRequirementId(lockId, cwd);
                 const cleared = clearCurrentTask(cwd);
                 if (cleared) {
                     return {
                         content: [{
                                 type: 'text',
-                                text: `## Task Cleared
+                                text: `## Task Unbound
 
-The current task has been abandoned. You can start a new task with \`opc_state_init\`.`,
+**Previous Requirement:** ${requirementId}
+
+The current window has been unbound from this requirement.
+You can start a new task with \`opc_state_init\`.
+
+**Note:** The requirement's state file is preserved for history.
+Use \`opc_state_init(requirement_id="${requirementId}")\` to resume.`,
                             }],
                     };
                 }
@@ -1466,36 +1516,45 @@ ${output || 'No matches found.'}
             }
             // ============================================================
             case 'opc_sessions_list': {
-                const state = getCurrentTask(cwd);
-                if (!state) {
+                const lockId = getCurrentLockId(cwd);
+                const currentRequirementId = getCurrentRequirementId(lockId, cwd);
+                const stateDir = ensureOpcDir('state', cwd);
+                // List all requirement state directories
+                const allRequirements = existsSync(stateDir)
+                    ? readdirSync(stateDir).filter(f => f.startsWith('REQ-'))
+                    : [];
+                if (allRequirements.length === 0) {
                     return {
                         content: [{
                                 type: 'text',
-                                text: 'No active task. Use opc_state_init to start a new project.',
+                                text: 'No tasks found. Use opc_state_init to start a new project.',
                             }],
                     };
                 }
-                const status = state.pipeline.stages[state.pipeline.current_stage]?.status;
-                const icon = status === 'in_progress' ? '🔄' : status === 'completed' ? '✅' : '⏳';
-                const stageStatus = Object.entries(state.pipeline.stages)
-                    .map(([stage, data]) => {
-                    const stageIcon = data.status === 'completed' ? '✅' :
-                        data.status === 'in_progress' ? '🔄' :
-                            data.status === 'blocked' ? '🚫' : '⏳';
-                    return `${stageIcon} ${stage}: ${data.status}`;
+                // Build task list with status
+                const taskList = allRequirements
+                    .map(reqId => {
+                    const state = readProjectState(reqId, cwd);
+                    if (!state)
+                        return null;
+                    const isCurrent = reqId === currentRequirementId;
+                    const status = state.pipeline.stages[state.pipeline.current_stage]?.status || 'pending';
+                    const icon = status === 'in_progress' ? '🔄' :
+                        status === 'completed' ? '✅' :
+                            status === 'blocked' ? '🚫' : '⏳';
+                    const currentMarker = isCurrent ? ' ← **current**' : '';
+                    return `${icon} **${reqId}**: ${state.project.name} (${status})${currentMarker}`;
                 })
+                    .filter(Boolean)
                     .join('\n');
                 return {
                     content: [{
                             type: 'text',
-                            text: `## Current Task
+                            text: `## All Tasks (${allRequirements.length})
 
-${icon} **${state.project.name}** - ${status}
+${taskList}
 
-### Pipeline Status
-
-${stageStatus}
-`,
+Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`,
                         }],
                 };
             }
