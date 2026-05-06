@@ -1084,6 +1084,35 @@ ${docList}`,
 }
 
 // ============================================================
+// Handler Registry
+// ============================================================
+
+type HandlerFn = (args: Record<string, unknown>, cwd: string | undefined) => ToolResult;
+
+const handlers: Record<string, HandlerFn> = {
+  opc_state_read: (_, cwd) => handleStateRead(cwd),
+  opc_state_init: (args, cwd) => handleStateInit(args, cwd),
+  opc_state_clear: (_, cwd) => handleStateClear(cwd),
+  opc_state_write: (args, cwd) => handleStateWrite(args, cwd),
+  opc_checkpoint_create: (args, cwd) => handleCheckpointCreate(args, cwd),
+  opc_checkpoint_list: (_, cwd) => handleCheckpointList(cwd),
+  opc_checkpoint_rollback: (args, cwd) => handleCheckpointRollback(args, cwd),
+  opc_handoff: (args, cwd) => handleHandoff(args, cwd),
+  opc_memory: (args, cwd) => handleMemory(args, cwd),
+  opc_sessions_list: (_, cwd) => handleSessionsList(cwd),
+  opc_task_group_create: (args, cwd) => handleTaskGroupCreate(args, cwd),
+  opc_task_update: (args, cwd) => handleTaskUpdate(args, cwd),
+  opc_task_group_status: (args, cwd) => handleTaskGroupStatus(args, cwd),
+  opc_workflows_path: (_, cwd) => handleWorkflowsPath(cwd),
+  opc_knowledge_init: (args, cwd) => handleKnowledgeInit(args, cwd),
+  opc_knowledge_read: (args, cwd) => handleKnowledgeRead(args, cwd),
+  opc_knowledge_write: (args, cwd) => handleKnowledgeWrite(args, cwd),
+  opc_knowledge_exists: (args, cwd) => handleKnowledgeExists(args, cwd),
+  opc_knowledge_list: (args, cwd) => handleKnowledgeList(args, cwd),
+  opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd),
+};
+
+// ============================================================
 // Main Handler Router
 // ============================================================
 
@@ -1094,56 +1123,14 @@ export async function handleToolCall(
   const cwd = args.workingDirectory as string | undefined;
 
   try {
-    switch (name) {
-      case 'opc_state_read':
-        return handleStateRead(cwd);
-      case 'opc_state_init':
-        return handleStateInit(args, cwd);
-      case 'opc_state_clear':
-        return handleStateClear(cwd);
-      case 'opc_state_write':
-        return handleStateWrite(args, cwd);
-      case 'opc_checkpoint_create':
-        return handleCheckpointCreate(args, cwd);
-      case 'opc_checkpoint_list':
-        return handleCheckpointList(cwd);
-      case 'opc_checkpoint_rollback':
-        return handleCheckpointRollback(args, cwd);
-      case 'opc_handoff':
-        return handleHandoff(args, cwd);
-      case 'opc_memory':
-        return handleMemory(args, cwd);
-      case 'opc_sessions_list':
-        return handleSessionsList(cwd);
-      case 'opc_task_group_create':
-        return handleTaskGroupCreate(args, cwd);
-      case 'opc_task_update':
-        return handleTaskUpdate(args, cwd);
-      case 'opc_task_group_status':
-        return handleTaskGroupStatus(args, cwd);
-      case 'opc_workflows_path':
-        return handleWorkflowsPath(cwd);
-      case 'opc_knowledge_init':
-        return handleKnowledgeInit(args, cwd);
-      case 'opc_knowledge_read':
-        return handleKnowledgeRead(args, cwd);
-      case 'opc_knowledge_write':
-        return handleKnowledgeWrite(args, cwd);
-      case 'opc_knowledge_exists':
-        return handleKnowledgeExists(args, cwd);
-      case 'opc_knowledge_list':
-        return handleKnowledgeList(args, cwd);
-      case 'opc_knowledge_docs':
-        return handleKnowledgeDocs(args, cwd);
-      default:
-        return {
-          content: [{
-            type: 'text',
-            text: `Unknown tool: ${name}`,
-          }],
-          isError: true,
-        };
+    const handler = handlers[name];
+    if (handler) {
+      return handler(args, cwd);
     }
+    return {
+      content: [{ type: 'text', text: `Unknown tool: ${name}` }],
+      isError: true,
+    };
   } catch (error) {
     return {
       content: [{
