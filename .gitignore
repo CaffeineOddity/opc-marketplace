@@ -9,7 +9,7 @@ src/mcp/node_modules/
 src/mcp/package-lock.json
 
 # OPC state - personal session data, don't commit
-.opc/state/sessions/
+.opc/state/**/*
 
 # Keep these (optional but recommended):
 # .opc/memory/          - project decisions, useful for team

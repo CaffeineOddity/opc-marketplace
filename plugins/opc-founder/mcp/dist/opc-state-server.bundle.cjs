@@ -14696,17 +14696,26 @@ function getKnowledgePath(cwd) {
 function getKnowledgeIndexPath(cwd) {
   return (0, import_path5.join)(getKnowledgePath(cwd), "index.json");
 }
-function getRequirementPath(requirementId, cwd) {
-  return (0, import_path5.join)(getKnowledgePath(cwd), requirementId);
+function getTopicPath(topic, cwd) {
+  return (0, import_path5.join)(getKnowledgePath(cwd), topic);
 }
-function getKnowledgeDocPath(requirementId, category, doc, cwd) {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  return (0, import_path5.join)(reqPath, category, `${doc}.md`);
+function getKnowledgeDocPath(topic, category, doc, cwd) {
+  const topicPath = getTopicPath(topic, cwd);
+  return (0, import_path5.join)(topicPath, category, `${doc}.md`);
 }
 function readKnowledgeIndex(cwd) {
   const path = getKnowledgeIndexPath(cwd);
   const index = readJsonFile(path);
-  return index || { requirements: {} };
+  if (!index) {
+    return { topics: {} };
+  }
+  if ("requirements" in index && !("topics" in index)) {
+    const legacyIndex = index;
+    const migratedIndex = { topics: legacyIndex.requirements };
+    writeKnowledgeIndex(migratedIndex, cwd);
+    return migratedIndex;
+  }
+  return index;
 }
 function writeKnowledgeIndex(index, cwd) {
   const path = getKnowledgeIndexPath(cwd);
@@ -14716,38 +14725,69 @@ function writeKnowledgeIndex(index, cwd) {
   }
   atomicWriteJson(path, index);
 }
-function initKnowledgeLibrary(requirementId, title, cwd) {
+function generateTopicSlug(title) {
+  const englishWords = title.match(/[a-zA-Z]+/g);
+  if (englishWords && englishWords.length > 0) {
+    const significant = englishWords.find((w) => w.length > 2) || englishWords[0];
+    return significant.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  }
+  return `topic-${Date.now().toString(36)}`;
+}
+function findOrCreateTopic(taskTitle, taskDescription, cwd) {
   const index = readKnowledgeIndex(cwd);
-  if (index.requirements[requirementId]) {
-    index.requirements[requirementId].status = "in_progress";
-    index.requirements[requirementId].updated_at = (/* @__PURE__ */ new Date()).toISOString();
-    writeKnowledgeIndex(index, cwd);
-    return { isNew: false, title: index.requirements[requirementId].title };
+  const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
+  const candidates = Object.entries(index.topics).map(([slug2, data]) => {
+    const titleWords = data.title.toLowerCase().split(/\s+/);
+    const queryWords = searchQuery.split(/\s+/).filter((w) => w.length > 1);
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const titleWord of titleWords) {
+        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+    return { slug: slug2, data, score };
+  }).filter((c) => c.score >= 0.3).sort((a, b) => b.score - a.score);
+  if (candidates.length > 0 && candidates[0].score >= 0.5) {
+    return {
+      topic: candidates[0].slug,
+      isNew: false,
+      title: candidates[0].data.title
+    };
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  index.requirements[requirementId] = {
-    title,
+  const slug = generateTopicSlug(taskTitle);
+  index.topics[slug] = {
+    title: taskTitle,
+    description: taskDescription,
     status: "in_progress",
     created_at: now,
     updated_at: now,
     domains: {}
   };
   writeKnowledgeIndex(index, cwd);
-  const reqPath = getRequirementPath(requirementId, cwd);
-  if (!(0, import_fs6.existsSync)(reqPath)) {
-    (0, import_fs6.mkdirSync)(reqPath, { recursive: true });
+  const topicPath = getTopicPath(slug, cwd);
+  if (!(0, import_fs6.existsSync)(topicPath)) {
+    (0, import_fs6.mkdirSync)(topicPath, { recursive: true });
   }
-  return { isNew: true, title };
+  return { topic: slug, isNew: true, title: taskTitle };
 }
-function readKnowledgeDoc(requirementId, category, doc, cwd) {
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+function getTopic(topic, cwd) {
+  const index = readKnowledgeIndex(cwd);
+  return index.topics[topic] || null;
+}
+function readKnowledgeDoc(topic, category, doc, cwd) {
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   if (!(0, import_fs6.existsSync)(path))
     return null;
   return (0, import_fs6.readFileSync)(path, "utf-8");
 }
-function readAllKnowledgeDocs(requirementId, category, cwd) {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = (0, import_path5.join)(reqPath, category);
+function readAllKnowledgeDocs(topic, category, cwd) {
+  const topicPath = getTopicPath(topic, cwd);
+  const categoryPath = (0, import_path5.join)(topicPath, category);
   if (!(0, import_fs6.existsSync)(categoryPath))
     return null;
   const results = [];
@@ -14761,8 +14801,8 @@ ${content}`);
   }
   return results.length > 0 ? results.join("\n\n---\n\n") : null;
 }
-function writeKnowledgeDoc(requirementId, category, doc, content, mode = "append", section, cwd) {
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+function writeKnowledgeDoc(topic, category, doc, content, mode = "append", section, cwd) {
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   const dir = (0, import_path5.join)(path, "..");
   if (!(0, import_fs6.existsSync)(dir)) {
     (0, import_fs6.mkdirSync)(dir, { recursive: true });
@@ -14793,34 +14833,34 @@ ${content}`;
   }
   (0, import_fs6.writeFileSync)(path, finalContent, "utf-8");
   const index = readKnowledgeIndex(cwd);
-  const req = index.requirements[requirementId];
-  if (req) {
-    req.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-    if (!req.domains[category]) {
-      req.domains[category] = [];
+  const topicData = index.topics[topic];
+  if (topicData) {
+    topicData.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    if (!topicData.domains[category]) {
+      topicData.domains[category] = [];
     }
-    if (!req.domains[category].includes(doc)) {
-      req.domains[category].push(doc);
+    if (!topicData.domains[category].includes(doc)) {
+      topicData.domains[category].push(doc);
     }
     writeKnowledgeIndex(index, cwd);
   }
 }
-function knowledgeExists(requirementId, category, doc, cwd) {
+function knowledgeExists(topic, category, doc, cwd) {
   if (!category) {
     const index = readKnowledgeIndex(cwd);
-    return !!index.requirements[requirementId];
+    return !!index.topics[topic];
   }
   if (!doc) {
-    const reqPath = getRequirementPath(requirementId, cwd);
-    const categoryPath = (0, import_path5.join)(reqPath, category);
+    const topicPath = getTopicPath(topic, cwd);
+    const categoryPath = (0, import_path5.join)(topicPath, category);
     return (0, import_fs6.existsSync)(categoryPath);
   }
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   return (0, import_fs6.existsSync)(path);
 }
-function listKnowledgeDocs(requirementId, category, cwd) {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = (0, import_path5.join)(reqPath, category);
+function listKnowledgeDocs(topic, category, cwd) {
+  const topicPath = getTopicPath(topic, cwd);
+  const categoryPath = (0, import_path5.join)(topicPath, category);
   if (!(0, import_fs6.existsSync)(categoryPath))
     return [];
   const docs = [];
@@ -14833,38 +14873,12 @@ function listKnowledgeDocs(requirementId, category, cwd) {
 }
 function generateNextRequirementId(cwd) {
   const index = readKnowledgeIndex(cwd);
-  const existingIds = Object.keys(index.requirements).filter((id) => id.startsWith("REQ-")).map((id) => {
+  const existingIds = Object.keys(index.topics).filter((id) => id.startsWith("REQ-")).map((id) => {
     const num = parseInt(id.replace("REQ-", ""), 10);
     return isNaN(num) ? 0 : num;
   });
   const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
   return `REQ-${String(nextNum).padStart(3, "0")}`;
-}
-function findCandidateRequirements(index, query, threshold = 0.3) {
-  const queryWords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-  const candidates = [];
-  for (const [id, req] of Object.entries(index.requirements)) {
-    const titleWords = req.title.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-    let matchCount = 0;
-    for (const queryWord of queryWords) {
-      for (const titleWord of titleWords) {
-        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
-          matchCount++;
-          break;
-        }
-      }
-    }
-    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
-    if (score >= threshold) {
-      candidates.push({
-        id,
-        title: req.title,
-        status: req.status,
-        score
-      });
-    }
-  }
-  return candidates.sort((a, b) => b.score - a.score);
 }
 
 // dist/session.js
@@ -15216,6 +15230,8 @@ function handleStateRead(cwd) {
   }).join("\n");
   const requirementInfo = state.project.requirement_id ? `
 **Requirement ID:** ${state.project.requirement_id}` : "";
+  const topicInfo = state.project.knowledge_topic ? `
+**Knowledge Topic:** ${state.project.knowledge_topic}` : "";
   const workflowInfo = state.workflow ? `
 **Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ""})` : "";
   const rulesInfo = state.rules ? `
@@ -15234,7 +15250,7 @@ ${state.rules.tdd ? "- \u2705 TDD enabled\n" : ""}${state.rules.sdd ? "- \u2705 
       type: "text",
       text: `## OPC Project State
 
-**Project:** ${state.project.name}${requirementInfo}
+**Project:** ${state.project.name}${requirementInfo}${topicInfo}
 **Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}${workflowInfo}
 **Created:** ${state.project.created_at}
@@ -15268,6 +15284,7 @@ function handleStateInit(args, cwd) {
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || "Not set"}
+**Knowledge Topic:** ${existingTask.project.knowledge_topic || "Not set"}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** \u{1F504} in_progress
 
@@ -15282,50 +15299,22 @@ Options:
       }
     }
   }
+  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd);
+  const topic = topicResult.topic;
+  const topicInfo = topicResult.isNew ? `\u{1F195} **Created new knowledge topic:** ${topic}` : `\u{1F517} **Matched existing topic:** ${topic} (${topicResult.title})`;
   let requirementId = providedRequirementId;
   let requirementMatchInfo = "";
   if (!requirementId) {
-    const index = readKnowledgeIndex(cwd);
-    const candidates = findCandidateRequirements(index, projectName);
-    if (candidates.length > 0 && candidates[0].score >= 0.5) {
-      requirementId = candidates[0].id;
-      requirementMatchInfo = `
+    requirementId = generateNextRequirementId(cwd);
+    requirementMatchInfo = `
 
-\u{1F517} **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
-    } else if (candidates.length > 0) {
-      const candidateList = candidates.slice(0, 3).map((c) => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`).join("\n");
-      return {
-        content: [{
-          type: "text",
-          text: `## Similar Requirements Found
-
-The following requirements may be related to your task:
-
-${candidateList}
-
-**Options:**
-1. Specify a requirement ID: \`opc_state_init(project_name, requirement_id="REQ-XXX")\`
-2. Create new: \`opc_state_init(project_name, requirement_id="new")\`
-3. Let system auto-generate: call again without requirement_id (will create REQ-XXX)
-
-Please choose how to proceed.
-`
-        }]
-      };
-    } else {
-      requirementId = generateNextRequirementId(cwd);
-      requirementMatchInfo = `
-
-\u{1F195} **Generated new requirement ID:** ${requirementId}`;
-    }
+\u{1F195} **Generated requirement ID:** ${requirementId}`;
   } else if (requirementId === "new") {
     requirementId = generateNextRequirementId(cwd);
     requirementMatchInfo = `
 
-\u{1F195} **Generated new requirement ID:** ${requirementId}`;
+\u{1F195} **Generated requirement ID:** ${requirementId}`;
   }
-  const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
-  const knowledgeInfo = knowledgeResult.isNew ? "Knowledge library initialized." : `Resumed existing requirement: "${knowledgeResult.title}"`;
   const taskDescription = `${projectName} ${projectDescription}`.trim();
   const workflows = readAllWorkflows(cwd);
   const workflowMatch = matchWorkflow(taskDescription, workflows);
@@ -15345,6 +15334,7 @@ Please choose how to proceed.
   }
   bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
   const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
+  state.project.knowledge_topic = topic;
   const firstStage = state.pipeline.current_stage;
   if (state.pipeline.stages[firstStage]) {
     state.pipeline.stages[firstStage].status = "in_progress";
@@ -15365,14 +15355,15 @@ Please choose how to proceed.
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}${requirementMatchInfo}${workflowInfo}
+**Requirement ID:** ${requirementId}${requirementMatchInfo}
+**Knowledge Topic:** ${topic}${workflowInfo}
 
 ### Pipeline Stages
 
 ${stageList}
 
 ### Knowledge Library
-${knowledgeInfo}
+${topicInfo}
 
 The pipeline is ready. Stage "${firstStage}" is now in progress.
 Use \`opc_state_write\` to update progress as you advance through stages.
@@ -15796,19 +15787,33 @@ This ensures consistency regardless of current working directory.`
 }
 
 // dist/handlers/knowledge.js
+function resolveTopic(args, cwd) {
+  if (args.requirementId) {
+    return args.requirementId;
+  }
+  if (args.topic) {
+    return args.topic;
+  }
+  const state = getCurrentTask(cwd);
+  if (state?.project.knowledge_topic) {
+    return state.project.knowledge_topic;
+  }
+  return null;
+}
 function handleKnowledgeInit(args, cwd) {
   const requirementId = args.requirementId;
   const title = args.title;
-  try {
-    initKnowledgeLibrary(requirementId, title, cwd);
-    return {
-      content: [{
-        type: "text",
-        text: `## Knowledge Library Initialized
+  const result = findOrCreateTopic(title, "", cwd);
+  const topic = requirementId || result.topic;
+  const topicData = getTopic(topic, cwd);
+  return {
+    content: [{
+      type: "text",
+      text: `## Knowledge Library Initialized
 
-**Requirement ID:** ${requirementId}
+**Topic:** ${topic}
 **Title:** ${title}
-**Path:** .opc/knowledge/${requirementId}/
+**Path:** .opc/knowledge/${topic}/
 
 Knowledge documents will be created on-demand when writing to each category.
 
@@ -15822,63 +15827,63 @@ Knowledge documents will be created on-demand when writing to each category.
 | QA | qa | Test plans, test cases |
 | Ship | ship | Deployment, CI/CD, infrastructure |
 | Growth | growth | Metrics, analytics, marketing |`
-      }]
-    };
-  } catch (error2) {
+    }]
+  };
+}
+function handleKnowledgeRead(args, cwd) {
+  const topic = resolveTopic(args, cwd);
+  const category = args.category;
+  const doc = args.doc;
+  if (!topic) {
     return {
-      content: [{
-        type: "text",
-        text: `Error: ${error2 instanceof Error ? error2.message : String(error2)}`
-      }],
+      content: [{ type: "text", text: "No topic specified. Provide requirementId/topic or start a task first." }],
       isError: true
     };
   }
-}
-function handleKnowledgeRead(args, cwd) {
-  const requirementId = args.requirementId;
-  const category = args.category;
-  const doc = args.doc;
   if (doc) {
-    const content2 = readKnowledgeDoc(requirementId, category, doc, cwd);
+    const content2 = readKnowledgeDoc(topic, category, doc, cwd);
     if (!content2) {
       return {
-        content: [{ type: "text", text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md` }]
+        content: [{ type: "text", text: `Knowledge document not found: ${topic}/${category}/${doc}.md` }]
       };
     }
     return { content: [{ type: "text", text: content2 }] };
   }
-  const content = readAllKnowledgeDocs(requirementId, category, cwd);
+  const content = readAllKnowledgeDocs(topic, category, cwd);
   if (!content) {
     return {
-      content: [{ type: "text", text: `No knowledge documents found for ${requirementId}/${category}` }]
+      content: [{ type: "text", text: `No knowledge documents found for ${topic}/${category}` }]
     };
   }
   return { content: [{ type: "text", text: content }] };
 }
 function handleKnowledgeWrite(args, cwd) {
-  const requirementId = args.requirementId;
+  const topic = resolveTopic(args, cwd);
   const category = args.category;
   const doc = args.doc;
   const content = args.content;
   const mode = args.mode || "append";
   const section = args.section;
-  const index = readKnowledgeIndex(cwd);
-  if (!index.requirements[requirementId]) {
+  if (!topic) {
     return {
       content: [{
         type: "text",
-        text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`
+        text: "No topic specified. Provide requirementId/topic or start a task first."
       }],
       isError: true
     };
   }
-  writeKnowledgeDoc(requirementId, category, doc, content, mode, section, cwd);
+  const index = readKnowledgeIndex(cwd);
+  if (!index.topics[topic]) {
+    findOrCreateTopic(topic, "", cwd);
+  }
+  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd);
   return {
     content: [{
       type: "text",
       text: `## Knowledge Written
 
-**Requirement:** ${requirementId}
+**Topic:** ${topic}
 **Document:** ${category}/${doc}.md
 **Mode:** ${mode}${section ? `
 **Section:** ${section}` : ""}
@@ -15888,10 +15893,15 @@ Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updat
   };
 }
 function handleKnowledgeExists(args, cwd) {
-  const requirementId = args.requirementId;
+  const topic = resolveTopic(args, cwd);
   const category = args.category;
   const doc = args.doc;
-  const exists = knowledgeExists(requirementId, category, doc, cwd);
+  if (!topic) {
+    return {
+      content: [{ type: "text", text: "false" }]
+    };
+  }
+  const exists = knowledgeExists(topic, category, doc, cwd);
   return {
     content: [{ type: "text", text: exists ? "true" : "false" }]
   };
@@ -15900,45 +15910,51 @@ function handleKnowledgeList(args, cwd) {
   const status = args.status;
   const categoryFilter = args.category;
   const index = readKnowledgeIndex(cwd);
-  let requirements = Object.entries(index.requirements);
+  let topics = Object.entries(index.topics);
   if (status) {
-    requirements = requirements.filter(([, r]) => r.status === status);
+    topics = topics.filter(([, t]) => t.status === status);
   }
   if (categoryFilter) {
-    requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
+    topics = topics.filter(([, t]) => t.domains[categoryFilter]?.length > 0);
   }
-  if (requirements.length === 0) {
-    return { content: [{ type: "text", text: "No requirements found in knowledge library." }] };
+  if (topics.length === 0) {
+    return { content: [{ type: "text", text: "No topics found in knowledge library." }] };
   }
-  const table = requirements.map(([id, r]) => {
-    const categories = Object.keys(r.domains).join(", ") || "-";
-    return `| ${id} | ${r.title} | ${r.status} | ${categories} | ${r.updated_at.split("T")[0]} |`;
+  const table = topics.map(([slug, t]) => {
+    const categories = Object.keys(t.domains).join(", ") || "-";
+    return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${t.updated_at.split("T")[0]} |`;
   }).join("\n");
   return {
     content: [{
       type: "text",
       text: `## Knowledge Library
 
-| ID | Title | Status | Categories | Updated |
-|-----|-------|--------|---------|--------|
+| Topic | Title | Status | Categories | Updated |
+|-------|-------|--------|------------|---------|
 ${table}`
     }]
   };
 }
 function handleKnowledgeDocs(args, cwd) {
-  const requirementId = args.requirementId;
+  const topic = resolveTopic(args, cwd);
   const category = args.category;
-  const docs = listKnowledgeDocs(requirementId, category, cwd);
+  if (!topic) {
+    return {
+      content: [{ type: "text", text: "No topic specified. Provide requirementId/topic or start a task first." }],
+      isError: true
+    };
+  }
+  const docs = listKnowledgeDocs(topic, category, cwd);
   if (docs.length === 0) {
     return {
-      content: [{ type: "text", text: `No documents found for ${requirementId}/${category}` }]
+      content: [{ type: "text", text: `No documents found for ${topic}/${category}` }]
     };
   }
   const docList = docs.map((d) => `- ${d}.md`).join("\n");
   return {
     content: [{
       type: "text",
-      text: `## ${requirementId}/${category} Documents
+      text: `## ${topic}/${category} Documents
 
 ${docList}`
     }]

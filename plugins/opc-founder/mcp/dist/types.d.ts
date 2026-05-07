@@ -75,11 +75,13 @@ export interface ProjectState {
         name: string;
         description: string;
         requirement_id?: string;
+        knowledge_topic?: string;
         created_at: string;
         updated_at: string;
     };
     pipeline: {
         current_stage: string;
+        stage_order?: string[];
         stages: Record<string, StageState>;
     };
     workflow?: {
@@ -199,8 +201,9 @@ export interface ProjectMemory {
 export declare const KNOWLEDGE_CATEGORIES: readonly ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"];
 export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number];
 export interface KnowledgeIndex {
-    requirements: Record<string, {
+    topics: Record<string, {
         title: string;
+        description?: string;
         status: 'in_progress' | 'completed' | 'paused';
         created_at: string;
         updated_at: string;

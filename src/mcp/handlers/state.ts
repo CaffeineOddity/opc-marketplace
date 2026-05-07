@@ -9,7 +9,8 @@ import { getCurrentLockId } from '../lock.js';
 import { readAllWorkflows, matchWorkflow } from '../workflow.js';
 import {
   readKnowledgeIndex,
-  initKnowledgeLibrary,
+  findOrCreateTopic,
+  getTopic,
   generateNextRequirementId,
   findCandidateRequirements,
 } from '../knowledge.js';
@@ -54,6 +55,10 @@ export function handleStateRead(cwd: string | undefined): ToolResult {
     ? `\n**Requirement ID:** ${state.project.requirement_id}`
     : '';
 
+  const topicInfo = state.project.knowledge_topic
+    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}`
+    : '';
+
   const workflowInfo = state.workflow
     ? `\n**Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ''})`
     : '';
@@ -78,7 +83,7 @@ export function handleStateRead(cwd: string | undefined): ToolResult {
       type: 'text',
       text: `## OPC Project State
 
-**Project:** ${state.project.name}${requirementInfo}
+**Project:** ${state.project.name}${requirementInfo}${topicInfo}
 **Lock ID:** ${state.context.lock_id}
 **Current Stage:** ${state.pipeline.current_stage}${workflowInfo}
 **Created:** ${state.project.created_at}
@@ -118,6 +123,7 @@ export function handleStateInit(args: Record<string, unknown>, cwd: string | und
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || 'Not set'}
+**Knowledge Topic:** ${existingTask.project.knowledge_topic || 'Not set'}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** 🔄 in_progress
 
@@ -133,52 +139,24 @@ Options:
     }
   }
 
+  // Step 1: Find or create knowledge topic
+  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd);
+  const topic = topicResult.topic;
+  const topicInfo = topicResult.isNew
+    ? `🆕 **Created new knowledge topic:** ${topic}`
+    : `🔗 **Matched existing topic:** ${topic} (${topicResult.title})`;
+
+  // Step 2: Generate requirement ID (for task tracking)
   let requirementId = providedRequirementId;
   let requirementMatchInfo = '';
 
   if (!requirementId) {
-    const index = readKnowledgeIndex(cwd);
-    const candidates = findCandidateRequirements(index, projectName);
-
-    if (candidates.length > 0 && candidates[0].score >= 0.5) {
-      requirementId = candidates[0].id;
-      requirementMatchInfo = `\n\n🔗 **Matched existing requirement:** ${requirementId} (similarity: ${Math.round(candidates[0].score * 100)}%)`;
-    } else if (candidates.length > 0) {
-      const candidateList = candidates.slice(0, 3)
-        .map(c => `  - **${c.id}**: ${c.title} (${Math.round(c.score * 100)}% match)`)
-        .join('\n');
-
-      return {
-        content: [{
-          type: 'text',
-          text: `## Similar Requirements Found
-
-The following requirements may be related to your task:
-
-${candidateList}
-
-**Options:**
-1. Specify a requirement ID: \`opc_state_init(project_name, requirement_id="REQ-XXX")\`
-2. Create new: \`opc_state_init(project_name, requirement_id="new")\`
-3. Let system auto-generate: call again without requirement_id (will create REQ-XXX)
-
-Please choose how to proceed.
-`,
-        }],
-      };
-    } else {
-      requirementId = generateNextRequirementId(cwd);
-      requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
-    }
+    requirementId = generateNextRequirementId(cwd);
+    requirementMatchInfo = `\n\n🆕 **Generated requirement ID:** ${requirementId}`;
   } else if (requirementId === 'new') {
     requirementId = generateNextRequirementId(cwd);
-    requirementMatchInfo = `\n\n🆕 **Generated new requirement ID:** ${requirementId}`;
+    requirementMatchInfo = `\n\n🆕 **Generated requirement ID:** ${requirementId}`;
   }
-
-  const knowledgeResult = initKnowledgeLibrary(requirementId, projectName, cwd);
-  const knowledgeInfo = knowledgeResult.isNew
-    ? 'Knowledge library initialized.'
-    : `Resumed existing requirement: "${knowledgeResult.title}"`;
 
   const taskDescription = `${projectName} ${projectDescription}`.trim();
   const workflows = readAllWorkflows(cwd);
@@ -204,6 +182,9 @@ Please choose how to proceed.
     projectName, projectDescription, lockId, requirementId, cwd,
     matchedWorkflow, workflowSource, workflowConfidence
   );
+
+  // Set knowledge_topic in state
+  state.project.knowledge_topic = topic;
 
   const firstStage = state.pipeline.current_stage;
   if (state.pipeline.stages[firstStage]) {
@@ -232,14 +213,15 @@ Please choose how to proceed.
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}${requirementMatchInfo}${workflowInfo}
+**Requirement ID:** ${requirementId}${requirementMatchInfo}
+**Knowledge Topic:** ${topic}${workflowInfo}
 
 ### Pipeline Stages
 
 ${stageList}
 
 ### Knowledge Library
-${knowledgeInfo}
+${topicInfo}
 
 The pipeline is ready. Stage "${firstStage}" is now in progress.
 Use \`opc_state_write\` to update progress as you advance through stages.

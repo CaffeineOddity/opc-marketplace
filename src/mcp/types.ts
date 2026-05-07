@@ -109,6 +109,7 @@ export interface ProjectState {
     name: string;
     description: string;
     requirement_id?: string;
+    knowledge_topic?: string;  // Links to knowledge topic (e.g., "hud", "state-management")
     created_at: string;
     updated_at: string;
   };
@@ -281,12 +282,15 @@ export const KNOWLEDGE_CATEGORIES = [
 
 export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number];
 
+// Knowledge is organized by topic (e.g., "hud", "state-management")
+// Each topic can have multiple domain documents (e.g., backend.md, design.md)
 export interface KnowledgeIndex {
-  requirements: Record<string, {
+  topics: Record<string, {
     title: string;
+    description?: string;
     status: 'in_progress' | 'completed' | 'paused';
     created_at: string;
     updated_at: string;
-    domains: Record<string, string[]>;
+    domains: Record<string, string[]>;  // domain -> [doc names]
   }>;
 }

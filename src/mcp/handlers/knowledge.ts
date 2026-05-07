@@ -2,35 +2,65 @@
  * Knowledge Handlers
  *
  * Handles opc_knowledge_* tool calls.
+ * Knowledge is organized by topic (e.g., "hud", "state-management").
  */
 
 import type { KnowledgeCategory } from '../types.js';
 import {
   readKnowledgeIndex,
-  initKnowledgeLibrary,
+  findOrCreateTopic,
+  getTopic,
   readKnowledgeDoc,
   readAllKnowledgeDocs,
   writeKnowledgeDoc,
   knowledgeExists,
   listKnowledgeDocs,
 } from '../knowledge.js';
+import { getCurrentTask } from '../session.js';
 import type { ToolResult } from './index.js';
+
+/**
+ * Get the topic from args or current task
+ */
+function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): string | null {
+  // If requirementId is provided, use it as topic (backward compatibility)
+  if (args.requirementId) {
+    return args.requirementId as string;
+  }
+
+  // If topic is provided directly
+  if (args.topic) {
+    return args.topic as string;
+  }
+
+  // Try to get from current task
+  const state = getCurrentTask(cwd);
+  if (state?.project.knowledge_topic) {
+    return state.project.knowledge_topic;
+  }
+
+  return null;
+}
 
 export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const requirementId = args.requirementId as string;
   const title = args.title as string;
 
-  try {
-    initKnowledgeLibrary(requirementId, title, cwd);
+  // For backward compatibility, treat requirementId as topic
+  // But also support the new topic-based approach
+  const result = findOrCreateTopic(title, '', cwd);
+  const topic = requirementId || result.topic;
 
-    return {
-      content: [{
-        type: 'text',
-        text: `## Knowledge Library Initialized
+  const topicData = getTopic(topic, cwd);
 
-**Requirement ID:** ${requirementId}
+  return {
+    content: [{
+      type: 'text',
+      text: `## Knowledge Library Initialized
+
+**Topic:** ${topic}
 **Title:** ${title}
-**Path:** .opc/knowledge/${requirementId}/
+**Path:** .opc/knowledge/${topic}/
 
 Knowledge documents will be created on-demand when writing to each category.
 
@@ -44,41 +74,39 @@ Knowledge documents will be created on-demand when writing to each category.
 | QA | qa | Test plans, test cases |
 | Ship | ship | Deployment, CI/CD, infrastructure |
 | Growth | growth | Metrics, analytics, marketing |`,
-      }],
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-      }],
-      isError: true,
-    };
-  }
+    }],
+  };
 }
 
 export function handleKnowledgeRead(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const requirementId = args.requirementId as string;
+  const topic = resolveTopic(args, cwd);
   const category = args.category as KnowledgeCategory;
   const doc = args.doc as string | undefined;
 
+  if (!topic) {
+    return {
+      content: [{ type: 'text', text: 'No topic specified. Provide requirementId/topic or start a task first.' }],
+      isError: true,
+    };
+  }
+
   if (doc) {
-    const content = readKnowledgeDoc(requirementId, category, doc, cwd);
+    const content = readKnowledgeDoc(topic, category, doc, cwd);
 
     if (!content) {
       return {
-        content: [{ type: 'text', text: `Knowledge document not found: ${requirementId}/${category}/${doc}.md` }],
+        content: [{ type: 'text', text: `Knowledge document not found: ${topic}/${category}/${doc}.md` }],
       };
     }
 
     return { content: [{ type: 'text', text: content }] };
   }
 
-  const content = readAllKnowledgeDocs(requirementId, category, cwd);
+  const content = readAllKnowledgeDocs(topic, category, cwd);
 
   if (!content) {
     return {
-      content: [{ type: 'text', text: `No knowledge documents found for ${requirementId}/${category}` }],
+      content: [{ type: 'text', text: `No knowledge documents found for ${topic}/${category}` }],
     };
   }
 
@@ -86,32 +114,38 @@ export function handleKnowledgeRead(args: Record<string, unknown>, cwd: string |
 }
 
 export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const requirementId = args.requirementId as string;
+  const topic = resolveTopic(args, cwd);
   const category = args.category as KnowledgeCategory;
   const doc = args.doc as string;
   const content = args.content as string;
   const mode = (args.mode as 'append' | 'update' | 'overwrite') || 'append';
   const section = args.section as string | undefined;
 
-  const index = readKnowledgeIndex(cwd);
-  if (!index.requirements[requirementId]) {
+  if (!topic) {
     return {
       content: [{
         type: 'text',
-        text: `Error: Requirement ${requirementId} not found. Initialize with opc_knowledge_init first.`,
+        text: 'No topic specified. Provide requirementId/topic or start a task first.',
       }],
       isError: true,
     };
   }
 
-  writeKnowledgeDoc(requirementId, category, doc, content, mode, section, cwd);
+  // Ensure topic exists
+  const index = readKnowledgeIndex(cwd);
+  if (!index.topics[topic]) {
+    // Create topic if it doesn't exist
+    findOrCreateTopic(topic, '', cwd);
+  }
+
+  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd);
 
   return {
     content: [{
       type: 'text',
       text: `## Knowledge Written
 
-**Requirement:** ${requirementId}
+**Topic:** ${topic}
 **Document:** ${category}/${doc}.md
 **Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
 
@@ -121,11 +155,17 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
 }
 
 export function handleKnowledgeExists(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const requirementId = args.requirementId as string;
+  const topic = resolveTopic(args, cwd);
   const category = args.category as KnowledgeCategory | undefined;
   const doc = args.doc as string | undefined;
 
-  const exists = knowledgeExists(requirementId, category, doc, cwd);
+  if (!topic) {
+    return {
+      content: [{ type: 'text', text: 'false' }],
+    };
+  }
+
+  const exists = knowledgeExists(topic, category, doc, cwd);
 
   return {
     content: [{ type: 'text', text: exists ? 'true' : 'false' }],
@@ -137,24 +177,24 @@ export function handleKnowledgeList(args: Record<string, unknown>, cwd: string |
   const categoryFilter = args.category as KnowledgeCategory | undefined;
 
   const index = readKnowledgeIndex(cwd);
-  let requirements = Object.entries(index.requirements);
+  let topics = Object.entries(index.topics);
 
   if (status) {
-    requirements = requirements.filter(([, r]) => r.status === status);
+    topics = topics.filter(([, t]) => t.status === status);
   }
 
   if (categoryFilter) {
-    requirements = requirements.filter(([, r]) => r.domains[categoryFilter]?.length > 0);
+    topics = topics.filter(([, t]) => t.domains[categoryFilter]?.length > 0);
   }
 
-  if (requirements.length === 0) {
-    return { content: [{ type: 'text', text: 'No requirements found in knowledge library.' }] };
+  if (topics.length === 0) {
+    return { content: [{ type: 'text', text: 'No topics found in knowledge library.' }] };
   }
 
-  const table = requirements
-    .map(([id, r]) => {
-      const categories = Object.keys(r.domains).join(', ') || '-';
-      return `| ${id} | ${r.title} | ${r.status} | ${categories} | ${r.updated_at.split('T')[0]} |`;
+  const table = topics
+    .map(([slug, t]) => {
+      const categories = Object.keys(t.domains).join(', ') || '-';
+      return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${t.updated_at.split('T')[0]} |`;
     })
     .join('\n');
 
@@ -163,22 +203,29 @@ export function handleKnowledgeList(args: Record<string, unknown>, cwd: string |
       type: 'text',
       text: `## Knowledge Library
 
-| ID | Title | Status | Categories | Updated |
-|-----|-------|--------|---------|--------|
+| Topic | Title | Status | Categories | Updated |
+|-------|-------|--------|------------|---------|
 ${table}`,
     }],
   };
 }
 
 export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const requirementId = args.requirementId as string;
+  const topic = resolveTopic(args, cwd);
   const category = args.category as KnowledgeCategory;
 
-  const docs = listKnowledgeDocs(requirementId, category, cwd);
+  if (!topic) {
+    return {
+      content: [{ type: 'text', text: 'No topic specified. Provide requirementId/topic or start a task first.' }],
+      isError: true,
+    };
+  }
+
+  const docs = listKnowledgeDocs(topic, category, cwd);
 
   if (docs.length === 0) {
     return {
-      content: [{ type: 'text', text: `No documents found for ${requirementId}/${category}` }],
+      content: [{ type: 'text', text: `No documents found for ${topic}/${category}` }],
     };
   }
 
@@ -187,7 +234,7 @@ export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string |
   return {
     content: [{
       type: 'text',
-      text: `## ${requirementId}/${category} Documents
+      text: `## ${topic}/${category} Documents
 
 ${docList}`,
     }],

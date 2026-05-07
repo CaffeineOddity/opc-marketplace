@@ -1,51 +1,11 @@
 {
-  "requirements": {
-    "REQ-001": {
-      "title": "opc-marketplace 知识库",
+  "topics": {
+    "hud": {
+      "title": "HUD 知识库文档生成",
+      "description": "生成 HUD 知识库文档",
       "status": "in_progress",
-      "created_at": "2026-05-06T06:16:05.116Z",
-      "updated_at": "2026-05-07T02:28:48.007Z",
-      "domains": {
-        "requirement": [
-          "overview"
-        ],
-        "backend": [
-          "architecture",
-          "state-management",
-          "knowledge-protocol",
-          "orchestration",
-          "agents",
-          "workflows",
-          "mcp-server",
-          "installation",
-          "conventions",
-          "dynamic-stage-order"
-        ]
-      }
-    },
-    "REQ-002": {
-      "title": "HUD 状态栏实时更新修复",
-      "status": "in_progress",
-      "created_at": "2026-05-07T01:54:25.407Z",
-      "updated_at": "2026-05-07T02:17:20.464Z",
-      "domains": {
-        "backend": [
-          "hud-fix"
-        ]
-      }
-    },
-    "REQ-003": {
-      "title": "HUD 测试",
-      "status": "in_progress",
-      "created_at": "2026-05-07T02:08:17.007Z",
-      "updated_at": "2026-05-07T02:08:17.007Z",
-      "domains": {}
-    },
-    "REQ-004": {
-      "title": "阶段顺序测试",
-      "status": "in_progress",
-      "created_at": "2026-05-07T02:15:44.345Z",
-      "updated_at": "2026-05-07T02:15:44.345Z",
+      "created_at": "2026-05-07T03:44:12.853Z",
+      "updated_at": "2026-05-07T03:44:12.853Z",
       "domains": {}
     }
   }

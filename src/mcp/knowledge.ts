@@ -1,7 +1,8 @@
 /**
  * OPC Knowledge Library
  *
- * Knowledge management for requirements across pipeline stages.
+ * Knowledge management organized by topic (e.g., "hud", "state-management").
+ * Each topic can have multiple domain documents (backend.md, design.md, etc.)
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'fs';
@@ -22,18 +23,18 @@ function getKnowledgeIndexPath(cwd?: string): string {
   return join(getKnowledgePath(cwd), 'index.json');
 }
 
-function getRequirementPath(requirementId: string, cwd?: string): string {
-  return join(getKnowledgePath(cwd), requirementId);
+function getTopicPath(topic: string, cwd?: string): string {
+  return join(getKnowledgePath(cwd), topic);
 }
 
 function getKnowledgeDocPath(
-  requirementId: string,
+  topic: string,
   category: KnowledgeCategory,
   doc: string,
   cwd?: string
 ): string {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  return join(reqPath, category, `${doc}.md`);
+  const topicPath = getTopicPath(topic, cwd);
+  return join(topicPath, category, `${doc}.md`);
 }
 
 // ============================================================
@@ -43,7 +44,21 @@ function getKnowledgeDocPath(
 export function readKnowledgeIndex(cwd?: string): KnowledgeIndex {
   const path = getKnowledgeIndexPath(cwd);
   const index = readJsonFile<KnowledgeIndex>(path);
-  return index || { requirements: {} };
+
+  if (!index) {
+    return { topics: {} };
+  }
+
+  // Migration: Convert old 'requirements' key to 'topics'
+  if ('requirements' in index && !('topics' in index)) {
+    const legacyIndex = index as unknown as { requirements: KnowledgeIndex['topics'] };
+    const migratedIndex: KnowledgeIndex = { topics: legacyIndex.requirements };
+    // Write migrated index
+    writeKnowledgeIndex(migratedIndex, cwd);
+    return migratedIndex;
+  }
+
+  return index;
 }
 
 export function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void {
@@ -56,25 +71,128 @@ export function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void {
 }
 
 // ============================================================
-// Knowledge Library Initialization
+// Topic Management
 // ============================================================
 
+/**
+ * Generate a topic slug from a title
+ * e.g., "HUD 状态栏实时更新修复" -> "hud"
+ * e.g., "State Management" -> "state-management"
+ */
+export function generateTopicSlug(title: string): string {
+  // Try to extract meaningful English words first
+  const englishWords = title.match(/[a-zA-Z]+/g);
+  if (englishWords && englishWords.length > 0) {
+    // Use the longest English word or first significant word
+    const significant = englishWords.find(w => w.length > 2) || englishWords[0];
+    return significant.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  }
+
+  // For Chinese or other languages, generate a slug based on timestamp
+  return `topic-${Date.now().toString(36)}`;
+}
+
+/**
+ * Find or create a topic for a given task
+ * Returns the topic slug
+ */
+export function findOrCreateTopic(
+  taskTitle: string,
+  taskDescription: string,
+  cwd?: string
+): { topic: string; isNew: boolean; title: string } {
+  const index = readKnowledgeIndex(cwd);
+  const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
+
+  // Try to find existing topic by title similarity
+  const candidates = Object.entries(index.topics)
+    .map(([slug, data]) => {
+      const titleWords = data.title.toLowerCase().split(/\s+/);
+      const queryWords = searchQuery.split(/\s+/).filter(w => w.length > 1);
+
+      let matchCount = 0;
+      for (const queryWord of queryWords) {
+        for (const titleWord of titleWords) {
+          if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+            matchCount++;
+            break;
+          }
+        }
+      }
+
+      const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+      return { slug, data, score };
+    })
+    .filter(c => c.score >= 0.3)
+    .sort((a, b) => b.score - a.score);
+
+  // If high similarity found, use existing topic
+  if (candidates.length > 0 && candidates[0].score >= 0.5) {
+    return {
+      topic: candidates[0].slug,
+      isNew: false,
+      title: candidates[0].data.title,
+    };
+  }
+
+  // Create new topic
+  const now = new Date().toISOString();
+  const slug = generateTopicSlug(taskTitle);
+
+  index.topics[slug] = {
+    title: taskTitle,
+    description: taskDescription,
+    status: 'in_progress',
+    created_at: now,
+    updated_at: now,
+    domains: {},
+  };
+
+  writeKnowledgeIndex(index, cwd);
+
+  // Create topic directory
+  const topicPath = getTopicPath(slug, cwd);
+  if (!existsSync(topicPath)) {
+    mkdirSync(topicPath, { recursive: true });
+  }
+
+  return { topic: slug, isNew: true, title: taskTitle };
+}
+
+/**
+ * Get topic info by slug
+ */
+export function getTopic(topic: string, cwd?: string): KnowledgeIndex['topics'][string] | null {
+  const index = readKnowledgeIndex(cwd);
+  return index.topics[topic] || null;
+}
+
+// ============================================================
+// Knowledge Library Initialization (Legacy Compatibility)
+// ============================================================
+
+/**
+ * @deprecated Use findOrCreateTopic instead
+ * Initialize knowledge library for a requirement.
+ * This is kept for backward compatibility but now creates/finds a topic.
+ */
 export function initKnowledgeLibrary(
   requirementId: string,
   title: string,
   cwd?: string
-): { isNew: boolean; title: string } {
+): { isNew: boolean; title: string; topic?: string } {
+  // For backward compatibility, treat requirementId as topic
   const index = readKnowledgeIndex(cwd);
 
-  if (index.requirements[requirementId]) {
-    index.requirements[requirementId].status = 'in_progress';
-    index.requirements[requirementId].updated_at = new Date().toISOString();
+  if (index.topics[requirementId]) {
+    index.topics[requirementId].status = 'in_progress';
+    index.topics[requirementId].updated_at = new Date().toISOString();
     writeKnowledgeIndex(index, cwd);
-    return { isNew: false, title: index.requirements[requirementId].title };
+    return { isNew: false, title: index.topics[requirementId].title, topic: requirementId };
   }
 
   const now = new Date().toISOString();
-  index.requirements[requirementId] = {
+  index.topics[requirementId] = {
     title,
     status: 'in_progress',
     created_at: now,
@@ -84,12 +202,12 @@ export function initKnowledgeLibrary(
 
   writeKnowledgeIndex(index, cwd);
 
-  const reqPath = getRequirementPath(requirementId, cwd);
-  if (!existsSync(reqPath)) {
-    mkdirSync(reqPath, { recursive: true });
+  const topicPath = getTopicPath(requirementId, cwd);
+  if (!existsSync(topicPath)) {
+    mkdirSync(topicPath, { recursive: true });
   }
 
-  return { isNew: true, title };
+  return { isNew: true, title, topic: requirementId };
 }
 
 // ============================================================
@@ -97,23 +215,23 @@ export function initKnowledgeLibrary(
 // ============================================================
 
 export function readKnowledgeDoc(
-  requirementId: string,
+  topic: string,
   category: KnowledgeCategory,
   doc: string,
   cwd?: string
 ): string | null {
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   if (!existsSync(path)) return null;
   return readFileSync(path, 'utf-8');
 }
 
 export function readAllKnowledgeDocs(
-  requirementId: string,
+  topic: string,
   category: KnowledgeCategory,
   cwd?: string
 ): string | null {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = join(reqPath, category);
+  const topicPath = getTopicPath(topic, cwd);
+  const categoryPath = join(topicPath, category);
 
   if (!existsSync(categoryPath)) return null;
 
@@ -136,7 +254,7 @@ function isDirectory(path: string): boolean {
 }
 
 export function writeKnowledgeDoc(
-  requirementId: string,
+  topic: string,
   category: KnowledgeCategory,
   doc: string,
   content: string,
@@ -144,7 +262,7 @@ export function writeKnowledgeDoc(
   section?: string,
   cwd?: string
 ): void {
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   const dir = join(path, '..');
 
   if (!existsSync(dir)) {
@@ -171,14 +289,14 @@ export function writeKnowledgeDoc(
 
   // Update index
   const index = readKnowledgeIndex(cwd);
-  const req = index.requirements[requirementId];
-  if (req) {
-    req.updated_at = new Date().toISOString();
-    if (!req.domains[category]) {
-      req.domains[category] = [];
+  const topicData = index.topics[topic];
+  if (topicData) {
+    topicData.updated_at = new Date().toISOString();
+    if (!topicData.domains[category]) {
+      topicData.domains[category] = [];
     }
-    if (!req.domains[category].includes(doc)) {
-      req.domains[category].push(doc);
+    if (!topicData.domains[category].includes(doc)) {
+      topicData.domains[category].push(doc);
     }
     writeKnowledgeIndex(index, cwd);
   }
@@ -189,23 +307,23 @@ export function writeKnowledgeDoc(
 // ============================================================
 
 export function knowledgeExists(
-  requirementId: string,
+  topic: string,
   category?: KnowledgeCategory,
   doc?: string,
   cwd?: string
 ): boolean {
   if (!category) {
     const index = readKnowledgeIndex(cwd);
-    return !!index.requirements[requirementId];
+    return !!index.topics[topic];
   }
 
   if (!doc) {
-    const reqPath = getRequirementPath(requirementId, cwd);
-    const categoryPath = join(reqPath, category);
+    const topicPath = getTopicPath(topic, cwd);
+    const categoryPath = join(topicPath, category);
     return existsSync(categoryPath);
   }
 
-  const path = getKnowledgeDocPath(requirementId, category, doc, cwd);
+  const path = getKnowledgeDocPath(topic, category, doc, cwd);
   return existsSync(path);
 }
 
@@ -214,12 +332,12 @@ export function knowledgeExists(
 // ============================================================
 
 export function listKnowledgeDocs(
-  requirementId: string,
+  topic: string,
   category: KnowledgeCategory,
   cwd?: string
 ): string[] {
-  const reqPath = getRequirementPath(requirementId, cwd);
-  const categoryPath = join(reqPath, category);
+  const topicPath = getTopicPath(topic, cwd);
+  const categoryPath = join(topicPath, category);
 
   if (!existsSync(categoryPath)) return [];
 
@@ -234,12 +352,15 @@ export function listKnowledgeDocs(
 }
 
 // ============================================================
-// Requirement ID Helpers
+// Requirement ID Helpers (Legacy Compatibility)
 // ============================================================
 
+/**
+ * @deprecated Topics are now auto-generated from task titles
+ */
 export function generateNextRequirementId(cwd?: string): string {
   const index = readKnowledgeIndex(cwd);
-  const existingIds = Object.keys(index.requirements)
+  const existingIds = Object.keys(index.topics)
     .filter(id => id.startsWith('REQ-'))
     .map(id => {
       const num = parseInt(id.replace('REQ-', ''), 10);
@@ -250,6 +371,9 @@ export function generateNextRequirementId(cwd?: string): string {
   return `REQ-${String(nextNum).padStart(3, '0')}`;
 }
 
+/**
+ * @deprecated Use topic-based search instead
+ */
 export function findCandidateRequirements(
   index: KnowledgeIndex,
   query: string,
@@ -258,8 +382,8 @@ export function findCandidateRequirements(
   const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
   const candidates: Array<{ id: string; title: string; status: string; score: number }> = [];
 
-  for (const [id, req] of Object.entries(index.requirements)) {
-    const titleWords = req.title.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  for (const [id, topic] of Object.entries(index.topics)) {
+    const titleWords = topic.title.toLowerCase().split(/\s+/).filter(w => w.length > 1);
 
     let matchCount = 0;
     for (const queryWord of queryWords) {
@@ -276,8 +400,8 @@ export function findCandidateRequirements(
     if (score >= threshold) {
       candidates.push({
         id,
-        title: req.title,
-        status: req.status,
+        title: topic.title,
+        status: topic.status,
         score,
       });
     }
