@@ -8,17 +8,15 @@ import type { StageState } from '../types.js';
 import { getCurrentLockId } from '../lock.js';
 import { readAllWorkflows, matchWorkflow } from '../workflow.js';
 import {
-  readKnowledgeIndex,
   findOrCreateTopic,
   getTopic,
-  generateNextRequirementId,
-  findCandidateRequirements,
 } from '../knowledge.js';
 import {
   bindSessionToRequirement,
   getCurrentSession,
   clearCurrentTask,
   getCurrentTask,
+  generateNextRequirementId,
 } from '../session.js';
 import {
   readProjectState,

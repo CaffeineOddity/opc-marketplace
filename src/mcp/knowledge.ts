@@ -168,49 +168,6 @@ export function getTopic(topic: string, cwd?: string): KnowledgeIndex['topics'][
 }
 
 // ============================================================
-// Knowledge Library Initialization (Legacy Compatibility)
-// ============================================================
-
-/**
- * @deprecated Use findOrCreateTopic instead
- * Initialize knowledge library for a requirement.
- * This is kept for backward compatibility but now creates/finds a topic.
- */
-export function initKnowledgeLibrary(
-  requirementId: string,
-  title: string,
-  cwd?: string
-): { isNew: boolean; title: string; topic?: string } {
-  // For backward compatibility, treat requirementId as topic
-  const index = readKnowledgeIndex(cwd);
-
-  if (index.topics[requirementId]) {
-    index.topics[requirementId].status = 'in_progress';
-    index.topics[requirementId].updated_at = new Date().toISOString();
-    writeKnowledgeIndex(index, cwd);
-    return { isNew: false, title: index.topics[requirementId].title, topic: requirementId };
-  }
-
-  const now = new Date().toISOString();
-  index.topics[requirementId] = {
-    title,
-    status: 'in_progress',
-    created_at: now,
-    updated_at: now,
-    domains: {},
-  };
-
-  writeKnowledgeIndex(index, cwd);
-
-  const topicPath = getTopicPath(requirementId, cwd);
-  if (!existsSync(topicPath)) {
-    mkdirSync(topicPath, { recursive: true });
-  }
-
-  return { isNew: true, title, topic: requirementId };
-}
-
-// ============================================================
 // Knowledge Read/Write
 // ============================================================
 
@@ -349,63 +306,4 @@ export function listKnowledgeDocs(
   }
 
   return docs;
-}
-
-// ============================================================
-// Requirement ID Helpers (Legacy Compatibility)
-// ============================================================
-
-/**
- * @deprecated Topics are now auto-generated from task titles
- */
-export function generateNextRequirementId(cwd?: string): string {
-  const index = readKnowledgeIndex(cwd);
-  const existingIds = Object.keys(index.topics)
-    .filter(id => id.startsWith('REQ-'))
-    .map(id => {
-      const num = parseInt(id.replace('REQ-', ''), 10);
-      return isNaN(num) ? 0 : num;
-    });
-
-  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-  return `REQ-${String(nextNum).padStart(3, '0')}`;
-}
-
-/**
- * @deprecated Use topic-based search instead
- */
-export function findCandidateRequirements(
-  index: KnowledgeIndex,
-  query: string,
-  threshold: number = 0.3
-): Array<{ id: string; title: string; status: string; score: number }> {
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-  const candidates: Array<{ id: string; title: string; status: string; score: number }> = [];
-
-  for (const [id, topic] of Object.entries(index.topics)) {
-    const titleWords = topic.title.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-
-    let matchCount = 0;
-    for (const queryWord of queryWords) {
-      for (const titleWord of titleWords) {
-        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
-          matchCount++;
-          break;
-        }
-      }
-    }
-
-    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
-
-    if (score >= threshold) {
-      candidates.push({
-        id,
-        title: topic.title,
-        status: topic.status,
-        score,
-      });
-    }
-  }
-
-  return candidates.sort((a, b) => b.score - a.score);
 }

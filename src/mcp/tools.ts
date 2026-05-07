@@ -257,38 +257,37 @@ const KNOWLEDGE_CATEGORIES = ['requirement', 'design', 'backend', 'ios', 'androi
 const knowledgeTools: Tool[] = [
   {
     name: 'opc_knowledge_init',
-    description: 'Initialize knowledge library for a requirement. Creates directory structure and index entry.',
+    description: 'Initialize knowledge library for a topic. Creates directory structure and index entry.',
     inputSchema: {
       type: 'object',
       properties: {
-        requirementId: { type: 'string', description: 'Requirement ID (e.g., REQ-001)' },
-        title: { type: 'string', description: 'Requirement title' },
+        title: { type: 'string', description: 'Topic title' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'title'],
+      required: ['title'],
     },
   },
   {
     name: 'opc_knowledge_read',
-    description: 'Read knowledge from knowledge library. Can read specific doc or all docs in a category.',
+    description: 'Read knowledge from knowledge library. Can read specific doc or all docs in a category. Uses topic from current task if not specified.',
     inputSchema: {
       type: 'object',
       properties: {
-        requirementId: { type: 'string', description: 'Requirement ID' },
+        topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
         category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
         doc: { type: 'string', description: 'Document name (without .md extension)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'category'],
+      required: ['category'],
     },
   },
   {
     name: 'opc_knowledge_write',
-    description: 'Write or update knowledge document. Supports append, update section, or overwrite.',
+    description: 'Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite.',
     inputSchema: {
       type: 'object',
       properties: {
-        requirementId: { type: 'string', description: 'Requirement ID' },
+        topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
         category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
         doc: { type: 'string', description: 'Document name (without .md extension)' },
         content: { type: 'string', description: 'Content to write' },
@@ -296,26 +295,26 @@ const knowledgeTools: Tool[] = [
         mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'category', 'doc', 'content'],
+      required: ['category', 'doc', 'content'],
     },
   },
   {
     name: 'opc_knowledge_exists',
-    description: 'Check if knowledge document exists.',
+    description: 'Check if knowledge document exists. Uses topic from current task if not specified.',
     inputSchema: {
       type: 'object',
       properties: {
-        requirementId: { type: 'string', description: 'Requirement ID' },
+        topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
         category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
         doc: { type: 'string', description: 'Document name' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId'],
+      required: [],
     },
   },
   {
     name: 'opc_knowledge_list',
-    description: 'List requirements in knowledge library.',
+    description: 'List topics in knowledge library.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -327,15 +326,15 @@ const knowledgeTools: Tool[] = [
   },
   {
     name: 'opc_knowledge_docs',
-    description: 'List available documents in a category for a requirement.',
+    description: 'List available documents in a category. Uses topic from current task if not specified.',
     inputSchema: {
       type: 'object',
       properties: {
-        requirementId: { type: 'string', description: 'Requirement ID' },
+        topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
         category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['requirementId', 'category'],
+      required: ['category'],
     },
   },
 ];

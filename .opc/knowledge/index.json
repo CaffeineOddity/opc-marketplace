@@ -2,10 +2,10 @@
   "topics": {
     "hud": {
       "title": "HUD 知识库文档生成",
-      "description": "生成 HUD 知识库文档",
+      "description": "为 OPC HUD (Heads-Up Display) 状态栏生成完整的知识库文档，包括架构设计、实现细节、配置说明等",
       "status": "in_progress",
-      "created_at": "2026-05-07T03:44:12.853Z",
-      "updated_at": "2026-05-07T03:44:12.853Z",
+      "created_at": "2026-05-07T03:52:36.172Z",
+      "updated_at": "2026-05-07T03:52:36.172Z",
       "domains": {}
     }
   }

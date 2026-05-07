@@ -23,17 +23,12 @@ import type { ToolResult } from './index.js';
  * Get the topic from args or current task
  */
 function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): string | null {
-  // If requirementId is provided, use it as topic (backward compatibility)
-  if (args.requirementId) {
-    return args.requirementId as string;
-  }
-
-  // If topic is provided directly
+  // If topic is provided directly, use it
   if (args.topic) {
     return args.topic as string;
   }
 
-  // Try to get from current task
+  // Get from current task
   const state = getCurrentTask(cwd);
   if (state?.project.knowledge_topic) {
     return state.project.knowledge_topic;
@@ -43,13 +38,11 @@ function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): s
 }
 
 export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const requirementId = args.requirementId as string;
   const title = args.title as string;
 
-  // For backward compatibility, treat requirementId as topic
-  // But also support the new topic-based approach
+  // Create/find topic from title
   const result = findOrCreateTopic(title, '', cwd);
-  const topic = requirementId || result.topic;
+  const topic = result.topic;
 
   const topicData = getTopic(topic, cwd);
 
@@ -85,7 +78,7 @@ export function handleKnowledgeRead(args: Record<string, unknown>, cwd: string |
 
   if (!topic) {
     return {
-      content: [{ type: 'text', text: 'No topic specified. Provide requirementId/topic or start a task first.' }],
+      content: [{ type: 'text', text: 'No topic specified. Provide topic or start a task first.' }],
       isError: true,
     };
   }
@@ -125,7 +118,7 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
     return {
       content: [{
         type: 'text',
-        text: 'No topic specified. Provide requirementId/topic or start a task first.',
+        text: 'No topic specified. Provide topic or start a task first.',
       }],
       isError: true,
     };
@@ -216,7 +209,7 @@ export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string |
 
   if (!topic) {
     return {
-      content: [{ type: 'text', text: 'No topic specified. Provide requirementId/topic or start a task first.' }],
+      content: [{ type: 'text', text: 'No topic specified. Provide topic or start a task first.' }],
       isError: true,
     };
   }

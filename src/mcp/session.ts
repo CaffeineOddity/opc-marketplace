@@ -13,6 +13,32 @@ import { readProjectState, getHandoffPath } from './state.js';
 import { getCurrentLockId } from './lock.js';
 
 // ============================================================
+// Requirement ID Generation
+// ============================================================
+
+/**
+ * Generate the next available requirement ID
+ * Scans existing task directories to find the next number
+ */
+export function generateNextRequirementId(cwd?: string): string {
+  const stateDir = ensureOpcDir('state', cwd);
+  if (!existsSync(stateDir)) {
+    return 'REQ-001';
+  }
+
+  const existingIds = readdirSync(stateDir)
+    .filter(f => f.startsWith('REQ-') && f.includes('_'))
+    .map(f => {
+      const match = f.match(/^REQ-(\d+)_/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter(n => !isNaN(n));
+
+  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+  return `REQ-${String(nextNum).padStart(3, '0')}`;
+}
+
+// ============================================================
 // Session Index
 // ============================================================
 
