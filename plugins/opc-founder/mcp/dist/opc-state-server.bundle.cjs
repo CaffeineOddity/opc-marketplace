@@ -14940,6 +14940,8 @@ function initializeProjectState(name, description, lockId, requirementId, cwd, w
     },
     pipeline: {
       current_stage: firstStage,
+      stage_order: stageOrder,
+      // Preserve stage order
       stages
     },
     workflow: workflowMeta,
@@ -15428,7 +15430,7 @@ function handleStateWrite(args, cwd) {
     if (stageStatus === "completed") {
       state.pipeline.stages[stage].completed_at = (/* @__PURE__ */ new Date()).toISOString();
       state.pipeline.stages[stage].verification_passed = true;
-      const stageOrder = ["product", "design", "dev", "qa", "ship", "growth"];
+      const stageOrder = state.pipeline.stage_order || Object.keys(state.pipeline.stages);
       const currentIndex = stageOrder.indexOf(stage);
       if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
         const nextStage = stageOrder[currentIndex + 1];

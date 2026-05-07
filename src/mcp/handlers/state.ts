@@ -306,8 +306,8 @@ export function handleStateWrite(args: Record<string, unknown>, cwd: string | un
       state.pipeline.stages[stage].completed_at = new Date().toISOString();
       state.pipeline.stages[stage].verification_passed = true;
 
-      // Use predefined stage order instead of Object.keys
-      const stageOrder = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
+      // Use preserved stage_order from pipeline, fallback to Object.keys for legacy states
+      const stageOrder = state.pipeline.stage_order || Object.keys(state.pipeline.stages);
       const currentIndex = stageOrder.indexOf(stage);
       if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
         const nextStage = stageOrder[currentIndex + 1];

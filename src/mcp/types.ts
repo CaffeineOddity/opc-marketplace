@@ -114,6 +114,7 @@ export interface ProjectState {
   };
   pipeline: {
     current_stage: string;
+    stage_order?: string[];  // Preserved stage order from workflow/auto-assembly
     stages: Record<string, StageState>;
   };
   // Workflow metadata

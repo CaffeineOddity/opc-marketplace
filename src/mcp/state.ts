@@ -101,6 +101,7 @@ export function initializeProjectState(
     },
     pipeline: {
       current_stage: firstStage,
+      stage_order: stageOrder,  // Preserve stage order
       stages,
     },
     workflow: workflowMeta,
