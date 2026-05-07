@@ -4,7 +4,7 @@
       "title": "opc-marketplace 知识库",
       "status": "in_progress",
       "created_at": "2026-05-06T06:16:05.116Z",
-      "updated_at": "2026-05-07T01:44:02.893Z",
+      "updated_at": "2026-05-07T02:28:48.007Z",
       "domains": {
         "requirement": [
           "overview"
@@ -18,7 +18,8 @@
           "workflows",
           "mcp-server",
           "installation",
-          "conventions"
+          "conventions",
+          "dynamic-stage-order"
         ]
       }
     },
