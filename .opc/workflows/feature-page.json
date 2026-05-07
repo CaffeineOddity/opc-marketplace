@@ -12,7 +12,7 @@
       "outputs": ["spec.md", "page-spec.md", "api-spec.yaml"],
       "agents": ["product-agent", "backend-architect"],
       "agent_mode": "parallel",
-      "skills": ["spec-driven-development", "openapi-spec"],
+      "skills": ["spec-driven-development", "openapi-spec","brainstorm"],
       "description": "定义页面需求 + API 规格（并行）"
     },
     {
@@ -21,7 +21,7 @@
       "outputs": ["wireframes/", "ui-spec.md"],
       "agents": ["web-agent", "design-reviewer"],
       "agent_mode": "sequential",
-      "skills": ["ui-design"],
+      "skills": ["ui-design","ui-ux-pro-max"],
       "description": "页面设计 + 评审（串行）"
     },
     {
