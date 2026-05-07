@@ -222,48 +222,36 @@ function getStageIcon(status) {
 
 /**
  * Format pipeline status - show pipeline flow with stage status icons
- * Returns: "product → dev ✅ → qa 🔄 → ship" (arrow flow with status icons)
+ * Uses stage_order from project state to respect dynamic pipeline configuration
+ * Returns: "product ✅" or "product ✅ → dev 🔄" (arrow flow with status icons)
  */
 function formatPipelineStatus(state) {
   if (!state?.pipeline?.stages) return null;
 
-  const stages = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
+  // Use stage_order from state if available, otherwise fall back to stages keys
+  const stageOrder = state.pipeline.stage_order || Object.keys(state.pipeline.stages);
   const currentStage = state.pipeline.current_stage;
 
-  // Build pipeline flow showing all active stages
+  // Build pipeline flow showing only stages defined in the project
   const parts = [];
-  let foundCurrent = false;
 
-  for (const stage of stages) {
+  for (const stage of stageOrder) {
     const stageData = state.pipeline.stages[stage];
-    const status = stageData?.status || 'pending';
+    if (!stageData) continue;
+
+    const status = stageData.status || 'pending';
     const isCurrent = stage === currentStage;
-
-    // Skip pending stages that are not current and not after current
-    if (status === 'pending' && !isCurrent && !foundCurrent) {
-      continue;
-    }
-
-    // Stop after showing one pending stage after current
-    if (foundCurrent && status === 'pending') {
-      parts.push(stage);
-      break;
-    }
 
     // Show stage with appropriate icon based on actual status
     if (status === 'completed') {
       parts.push(`${stage} ✅`);
-      if (isCurrent) foundCurrent = true;
     } else if (status === 'in_progress') {
       parts.push(`${stage} 🔄`);
-      foundCurrent = true;
     } else if (status === 'blocked') {
       parts.push(`${stage} 🚫`);
-      foundCurrent = true;
     } else if (isCurrent) {
       // Current stage but pending
       parts.push(`${stage} ⏳`);
-      foundCurrent = true;
     }
   }
 
