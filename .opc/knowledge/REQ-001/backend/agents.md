@@ -8,7 +8,7 @@
 | Skill | /opc-plugin | 插件管理 |
 | Skill | /opc-workflows | 工作流规范管理 |
 
-## product-kit (产品层)
+## product-kit (产品层) v1.4.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | product-agent | 产品经理代理 |
@@ -19,7 +19,7 @@
 | Skill | /brainstorm | 结构化头脑风暴 |
 | Skill | /spec-driven-development | 规格驱动开发 |
 
-## design-kit (设计层)
+## design-kit (设计层) v2.0.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | brand-agent | 品牌策略、视觉识别 |
@@ -30,7 +30,7 @@
 | Skill | /ui-ux-pro-max | 设计系统生成器 |
 | Skill | /baoyu-imagine | AI 图像生成 |
 
-## dev-kit (开发层)
+## dev-kit (开发层) v1.5.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | frontend-agent | 前端开发 |
@@ -55,7 +55,7 @@
 | Skill | /baoyu-diagram | SVG 图表生成 |
 | Hook | auto-lint | 自动代码检查 |
 
-## qa-kit (测试层)
+## qa-kit (测试层) v1.2.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | qa-agent | QA 测试代理 |
@@ -66,7 +66,7 @@
 | Skill | /wcag-audit | WCAG 审计 |
 | Skill | /webapp-testing | Web 应用测试 |
 
-## ship-kit (部署层)
+## ship-kit (部署层) v1.1.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | devops-agent | 部署、运维 |
@@ -80,7 +80,7 @@
 | Skill | /terraform | Terraform 模块 |
 | Hook | pre-deploy-check | 部署前检查 |
 
-## growth-kit (增长层)
+## growth-kit (增长层) v2.1.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | marketing-agent | 营销策略 |
@@ -101,7 +101,7 @@
 | Skill | /baoyu-post-to-weibo | 发布到微博 |
 | Skill | /baoyu-post-to-x | 发布到 X/Twitter |
 
-## docs-kit (文档层)
+## docs-kit (文档层) v2.1.0
 | 类型 | 名称 | 描述 |
 |------|------|------|
 | Agent | docs-agent | 文档生成代理 |

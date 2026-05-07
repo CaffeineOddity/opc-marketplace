@@ -11,7 +11,7 @@ OPC Marketplace 是一个为独立开发者（One-Person Company）设计的 Cla
 - **状态持久化**: 跨会话状态管理，支持任务恢复和回滚
 - **知识库**: 自动积累项目知识，确保跨阶段上下文一致性
 
-## 统计数据
+## 统计数据 (2026-05-07 更新)
 
 | 指标 | 数量 |
 |------|------|
@@ -20,6 +20,19 @@ OPC Marketplace 是一个为独立开发者（One-Person Company）设计的 Cla
 | 技能 | 52 |
 | 钩子 | 2 |
 | MCP 工具 | 20 |
+
+## 插件版本
+
+| 插件 | 版本 |
+|------|------|
+| opc-founder | 1.4.1 |
+| product-kit | 1.4.0 |
+| design-kit | 2.0.0 |
+| dev-kit | 1.5.0 |
+| qa-kit | 1.2.0 |
+| ship-kit | 1.1.0 |
+| growth-kit | 2.1.0 |
+| docs-kit | 2.1.0 |
 
 ## 架构设计
 

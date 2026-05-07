@@ -306,13 +306,17 @@ export function handleStateWrite(args: Record<string, unknown>, cwd: string | un
       state.pipeline.stages[stage].completed_at = new Date().toISOString();
       state.pipeline.stages[stage].verification_passed = true;
 
-      const stageOrder = Object.keys(state.pipeline.stages);
+      // Use predefined stage order instead of Object.keys
+      const stageOrder = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
       const currentIndex = stageOrder.indexOf(stage);
       if (currentIndex >= 0 && currentIndex < stageOrder.length - 1) {
         const nextStage = stageOrder[currentIndex + 1];
-        if (state.pipeline.stages[nextStage]?.status === 'pending' || !state.pipeline.stages[nextStage]) {
+        // Only advance if next stage doesn't exist or is pending
+        if (!state.pipeline.stages[nextStage] || state.pipeline.stages[nextStage]?.status === 'pending') {
           state.pipeline.current_stage = nextStage;
-          state.pipeline.stages[nextStage] = { status: 'pending' };
+          if (!state.pipeline.stages[nextStage]) {
+            state.pipeline.stages[nextStage] = { status: 'pending' };
+          }
         }
       }
     }

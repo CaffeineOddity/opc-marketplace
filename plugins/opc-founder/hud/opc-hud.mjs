@@ -166,6 +166,7 @@ function getGitToplevel(cwd) {
 
 /**
  * Find the most recent project state file
+ * Supports both old format (pid-XXX) and new format (REQ-XXX_source)
  */
 function findProjectState(cwd) {
   const gitRoot = getGitToplevel(cwd);
@@ -174,9 +175,41 @@ function findProjectState(cwd) {
   if (!existsSync(stateDir)) return null;
 
   try {
+    // First, try to read sessions.json to get current session
+    const sessionsPath = join(stateDir, 'sessions.json');
+    if (existsSync(sessionsPath)) {
+      const sessionsContent = readFileSync(sessionsPath, 'utf-8');
+      const sessionsData = JSON.parse(sessionsContent);
+      const sessions = sessionsData.sessions || {};
+
+      // Find the most recent session by updated_at
+      const sessionEntries = Object.entries(sessions);
+      if (sessionEntries.length > 0) {
+        const sortedSessions = sessionEntries.sort((a, b) => {
+          const aTime = new Date(a[1].updated_at || a[1].created_at || 0).getTime();
+          const bTime = new Date(b[1].updated_at || b[1].created_at || 0).getTime();
+          return bTime - aTime;
+        });
+
+        const [lockId, session] = sortedSessions[0];
+        const requirementId = session.requirement_id;
+        const source = session.source || 'auto_assembled';
+
+        // Try new format first: REQ-XXX_source/project-state.json
+        const newStateFile = join(stateDir, `${requirementId}_${source}`, 'project-state.json');
+        if (existsSync(newStateFile)) {
+          const content = readFileSync(newStateFile, 'utf-8');
+          return JSON.parse(content);
+        }
+      }
+    }
+
+    // Fallback: scan directories for state files
     const entries = readdirSync(stateDir, { withFileTypes: true });
-    const lockDirs = entries
-      .filter(d => d.isDirectory() && d.name.startsWith('pid-'))
+
+    // Collect all potential state directories (both old and new format)
+    const stateDirs = entries
+      .filter(d => d.isDirectory() && (d.name.startsWith('pid-') || d.name.startsWith('REQ-')))
       .map(d => {
         const stateFile = join(stateDir, d.name, 'project-state.json');
         if (!existsSync(stateFile)) return null;
@@ -190,9 +223,9 @@ function findProjectState(cwd) {
       .filter(Boolean)
       .sort((a, b) => b.mtime - a.mtime);
 
-    if (lockDirs.length === 0) return null;
+    if (stateDirs.length === 0) return null;
 
-    const content = readFileSync(lockDirs[0].path, 'utf-8');
+    const content = readFileSync(stateDirs[0].path, 'utf-8');
     return JSON.parse(content);
   } catch {
     return null;
@@ -212,8 +245,8 @@ function getStageIcon(status) {
 }
 
 /**
- * Format pipeline status - show pipeline flow with current stage highlighted
- * Returns: "product → dev 🔄 → qa → ship" (arrow flow, current highlighted)
+ * Format pipeline status - show pipeline flow with stage status icons
+ * Returns: "product → dev ✅ → qa 🔄 → ship" (arrow flow with status icons)
  */
 function formatPipelineStatus(state) {
   if (!state?.pipeline?.stages) return null;
@@ -221,7 +254,7 @@ function formatPipelineStatus(state) {
   const stages = ['product', 'design', 'dev', 'qa', 'ship', 'growth'];
   const currentStage = state.pipeline.current_stage;
 
-  // Build pipeline flow, only show up to current+1 pending stages
+  // Build pipeline flow showing all active stages
   const parts = [];
   let foundCurrent = false;
 
@@ -230,21 +263,31 @@ function formatPipelineStatus(state) {
     const status = stageData?.status || 'pending';
     const isCurrent = stage === currentStage;
 
-    if (isCurrent) {
-      // Current stage with icon
+    // Skip pending stages that are not current and not after current
+    if (status === 'pending' && !isCurrent && !foundCurrent) {
+      continue;
+    }
+
+    // Stop after showing one pending stage after current
+    if (foundCurrent && status === 'pending') {
+      parts.push(stage);
+      break;
+    }
+
+    // Show stage with appropriate icon based on actual status
+    if (status === 'completed') {
+      parts.push(`${stage} ✅`);
+      if (isCurrent) foundCurrent = true;
+    } else if (status === 'in_progress') {
       parts.push(`${stage} 🔄`);
       foundCurrent = true;
-    } else if (!foundCurrent) {
-      // Completed stages before current
-      if (status === 'completed') {
-        parts.push(stage);
-      }
-    } else {
-      // Show one pending stage after current, then stop
-      if (status === 'pending') {
-        parts.push(stage);
-        break;
-      }
+    } else if (status === 'blocked') {
+      parts.push(`${stage} 🚫`);
+      foundCurrent = true;
+    } else if (isCurrent) {
+      // Current stage but pending
+      parts.push(`${stage} ⏳`);
+      foundCurrent = true;
     }
   }
 
