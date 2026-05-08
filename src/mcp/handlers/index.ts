@@ -31,6 +31,7 @@ import {
   handleKnowledgeExists,
   handleKnowledgeList,
   handleKnowledgeDocs,
+  handleKnowledgeListBrief,
 } from './knowledge.js';
 
 // ============================================================
@@ -60,6 +61,7 @@ const handlers: Record<string, HandlerFn> = {
   opc_knowledge_exists: (args, cwd) => handleKnowledgeExists(args, cwd),
   opc_knowledge_list: (args, cwd) => handleKnowledgeList(args, cwd),
   opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd),
+  opc_knowledge_list_brief: (args, cwd) => handleKnowledgeListBrief(args, cwd),
 };
 
 // ============================================================

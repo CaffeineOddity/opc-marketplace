@@ -14258,6 +14258,18 @@ var knowledgeTools = [
       },
       required: ["category"]
     }
+  },
+  {
+    name: "opc_knowledge_list_brief",
+    description: "List all knowledge documents with brief metadata (name, description, topic, category). Enables progressive loading without reading full document content.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: { type: "string", description: "Filter by topic" },
+        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Filter by category" },
+        workingDirectory: { type: "string" }
+      }
+    }
   }
 ];
 var tools = [
@@ -14800,41 +14812,58 @@ ${content}`);
   }
   return results.length > 0 ? results.join("\n\n---\n\n") : null;
 }
-function writeKnowledgeDoc(topic, category, doc, content, mode = "append", section, cwd) {
+function writeKnowledgeDoc(topic, category, doc, content, mode = "append", section, cwd, meta) {
   const path = getKnowledgeDocPath(topic, category, doc, cwd);
   const dir = (0, import_path5.join)(path, "..");
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   if (!(0, import_fs6.existsSync)(dir)) {
     (0, import_fs6.mkdirSync)(dir, { recursive: true });
   }
   let finalContent = content;
-  if (mode === "append" && (0, import_fs6.existsSync)(path)) {
+  let existingMeta = {};
+  if ((0, import_fs6.existsSync)(path)) {
     const existing = (0, import_fs6.readFileSync)(path, "utf-8");
-    const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    finalContent = `${existing}
+    const parsed = parseFrontmatter(existing);
+    existingMeta = parsed.meta;
+    if (mode === "append") {
+      const timestamp = now.split("T")[0];
+      finalContent = `${parsed.content}
 
 ## ${timestamp}
 
 ${content}`;
-  } else if (mode === "update" && section && (0, import_fs6.existsSync)(path)) {
-    const existing = (0, import_fs6.readFileSync)(path, "utf-8");
-    const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, "g");
-    if (sectionRegex.test(existing)) {
-      finalContent = existing.replace(sectionRegex, `$1${content}
+    } else if (mode === "update" && section) {
+      const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, "g");
+      if (sectionRegex.test(parsed.content)) {
+        finalContent = parsed.content.replace(sectionRegex, `$1${content}
 
 `);
-    } else {
-      finalContent = `${existing}
+      } else {
+        finalContent = `${parsed.content}
 
 ## ${section}
 
 ${content}`;
+      }
     }
   }
-  (0, import_fs6.writeFileSync)(path, finalContent, "utf-8");
   const index = readKnowledgeIndex(cwd);
   const topicData = index.topics[topic];
+  const frontmatterMeta = {
+    name: meta?.name || existingMeta.name || doc,
+    description: meta?.description || existingMeta.description || topicData?.description || "",
+    category: meta?.category || category,
+    topic: meta?.topic || topic,
+    created_at: existingMeta.created_at || now,
+    updated_at: now,
+    tags: meta?.tags || existingMeta.tags
+  };
+  const frontmatter = generateFrontmatter(frontmatterMeta);
+  finalContent = `${frontmatter}
+${finalContent}`;
+  (0, import_fs6.writeFileSync)(path, finalContent, "utf-8");
   if (topicData) {
-    topicData.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    topicData.updated_at = now;
     if (!topicData.domains[category]) {
       topicData.domains[category] = [];
     }
@@ -14856,6 +14885,93 @@ function knowledgeExists(topic, category, doc, cwd) {
   }
   const path = getKnowledgeDocPath(topic, category, doc, cwd);
   return (0, import_fs6.existsSync)(path);
+}
+function parseFrontmatter(content) {
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+  const match = content.match(frontmatterRegex);
+  if (!match) {
+    return { meta: {}, content };
+  }
+  const [, frontmatterStr, bodyContent] = match;
+  const meta = {};
+  const lines = frontmatterStr.split("\n");
+  for (const line of lines) {
+    const colonIndex = line.indexOf(":");
+    if (colonIndex === -1)
+      continue;
+    const key = line.slice(0, colonIndex).trim();
+    let value = line.slice(colonIndex + 1).trim();
+    if (value.startsWith("[") && value.endsWith("]")) {
+      value = value.slice(1, -1).split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    const normalizedKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    meta[normalizedKey] = value;
+  }
+  return { meta, content: bodyContent };
+}
+function generateFrontmatter(meta) {
+  const lines = ["---"];
+  lines.push(`name: ${meta.name}`);
+  lines.push(`description: ${meta.description}`);
+  lines.push(`category: ${meta.category}`);
+  lines.push(`topic: ${meta.topic}`);
+  if (meta.created_at) {
+    lines.push(`created_at: ${meta.created_at}`);
+  }
+  if (meta.updated_at) {
+    lines.push(`updated_at: ${meta.updated_at}`);
+  }
+  if (meta.tags && meta.tags.length > 0) {
+    lines.push(`tags: [${meta.tags.join(", ")}]`);
+  }
+  lines.push("---");
+  return lines.join("\n");
+}
+function readKnowledgeDocWithMeta(topic, category, doc, cwd) {
+  const rawContent = readKnowledgeDoc(topic, category, doc, cwd);
+  if (!rawContent)
+    return null;
+  const { meta, content } = parseFrontmatter(rawContent);
+  return {
+    meta: {
+      name: meta.name || doc,
+      description: meta.description || "",
+      category: meta.category || category,
+      topic: meta.topic || topic,
+      created_at: meta.created_at,
+      updated_at: meta.updated_at,
+      tags: meta.tags
+    },
+    content
+  };
+}
+function listKnowledgeDocsBrief(topic, category, cwd) {
+  const index = readKnowledgeIndex(cwd);
+  const results = [];
+  const topicsToScan = topic ? [topic] : Object.keys(index.topics);
+  for (const t of topicsToScan) {
+    const topicData = index.topics[t];
+    if (!topicData)
+      continue;
+    const categoriesToScan = category ? [category] : Object.keys(topicData.domains);
+    for (const c of categoriesToScan) {
+      const docs = topicData.domains[c] || [];
+      for (const doc of docs) {
+        const docWithMeta = readKnowledgeDocWithMeta(t, c, doc, cwd);
+        if (docWithMeta) {
+          results.push(docWithMeta.meta);
+        } else {
+          results.push({
+            name: doc,
+            description: topicData.description || "",
+            category: c,
+            topic: t
+          });
+        }
+      }
+    }
+  }
+  return results;
 }
 function listKnowledgeDocs(topic, category, cwd) {
   const topicPath = getTopicPath(topic, cwd);
@@ -15958,6 +16074,29 @@ ${docList}`
     }]
   };
 }
+function handleKnowledgeListBrief(args, cwd) {
+  const topic = args.topic;
+  const category = args.category;
+  const docs = listKnowledgeDocsBrief(topic, category, cwd);
+  if (docs.length === 0) {
+    return {
+      content: [{ type: "text", text: "No knowledge documents found." }]
+    };
+  }
+  const table = docs.map((d) => `| ${d.topic} | ${d.category} | ${d.name} | ${d.description || "-"} |`).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Knowledge Documents (Brief)
+
+| Topic | Category | Name | Description |
+|-------|----------|------|-------------|
+${table}
+
+\u{1F4A1} Use \`opc_knowledge_read\` to read full content of specific documents.`
+    }]
+  };
+}
 
 // dist/handlers/index.js
 var handlers = {
@@ -15980,7 +16119,8 @@ var handlers = {
   opc_knowledge_write: (args, cwd) => handleKnowledgeWrite(args, cwd),
   opc_knowledge_exists: (args, cwd) => handleKnowledgeExists(args, cwd),
   opc_knowledge_list: (args, cwd) => handleKnowledgeList(args, cwd),
-  opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd)
+  opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd),
+  opc_knowledge_list_brief: (args, cwd) => handleKnowledgeListBrief(args, cwd)
 };
 async function handleToolCall(name, args) {
   const cwd = args.workingDirectory;

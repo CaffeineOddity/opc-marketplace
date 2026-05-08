@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSy
 import { join } from 'path';
 import { ensureOpcDir } from './paths.js';
 import { readJsonFile, atomicWriteJson } from './io.js';
-import type { KnowledgeCategory, KnowledgeIndex } from './types.js';
+import type { KnowledgeCategory, KnowledgeIndex, KnowledgeDocMeta, KnowledgeDocWithMeta } from './types.js';
 
 // ============================================================
 // Knowledge Paths
@@ -217,38 +217,65 @@ export function writeKnowledgeDoc(
   content: string,
   mode: 'append' | 'update' | 'overwrite' = 'append',
   section?: string,
-  cwd?: string
+  cwd?: string,
+  /** Optional metadata for frontmatter generation */
+  meta?: Partial<KnowledgeDocMeta>
 ): void {
   const path = getKnowledgeDocPath(topic, category, doc, cwd);
   const dir = join(path, '..');
+  const now = new Date().toISOString();
 
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
 
   let finalContent = content;
+  let existingMeta: Partial<KnowledgeDocMeta> = {};
 
-  if (mode === 'append' && existsSync(path)) {
+  // Handle existing document
+  if (existsSync(path)) {
     const existing = readFileSync(path, 'utf-8');
-    const timestamp = new Date().toISOString().split('T')[0];
-    finalContent = `${existing}\n\n## ${timestamp}\n\n${content}`;
-  } else if (mode === 'update' && section && existsSync(path)) {
-    const existing = readFileSync(path, 'utf-8');
-    const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, 'g');
-    if (sectionRegex.test(existing)) {
-      finalContent = existing.replace(sectionRegex, `$1${content}\n\n`);
-    } else {
-      finalContent = `${existing}\n\n## ${section}\n\n${content}`;
+    const parsed = parseFrontmatter(existing);
+    existingMeta = parsed.meta;
+
+    if (mode === 'append') {
+      const timestamp = now.split('T')[0];
+      finalContent = `${parsed.content}\n\n## ${timestamp}\n\n${content}`;
+    } else if (mode === 'update' && section) {
+      const sectionRegex = new RegExp(`(## ${section}[\\s]*\\n)([^#]*)(?=##|$)`, 'g');
+      if (sectionRegex.test(parsed.content)) {
+        finalContent = parsed.content.replace(sectionRegex, `$1${content}\n\n`);
+      } else {
+        finalContent = `${parsed.content}\n\n## ${section}\n\n${content}`;
+      }
     }
+    // overwrite mode: use new content directly
   }
+
+  // Get topic info for default metadata
+  const index = readKnowledgeIndex(cwd);
+  const topicData = index.topics[topic];
+
+  // Build frontmatter metadata
+  const frontmatterMeta: KnowledgeDocMeta = {
+    name: meta?.name || existingMeta.name || doc,
+    description: meta?.description || existingMeta.description || topicData?.description || '',
+    category: meta?.category || category,
+    topic: meta?.topic || topic,
+    created_at: existingMeta.created_at || now,
+    updated_at: now,
+    tags: meta?.tags || existingMeta.tags,
+  };
+
+  // Prepend frontmatter to content
+  const frontmatter = generateFrontmatter(frontmatterMeta);
+  finalContent = `${frontmatter}\n${finalContent}`;
 
   writeFileSync(path, finalContent, 'utf-8');
 
   // Update index
-  const index = readKnowledgeIndex(cwd);
-  const topicData = index.topics[topic];
   if (topicData) {
-    topicData.updated_at = new Date().toISOString();
+    topicData.updated_at = now;
     if (!topicData.domains[category]) {
       topicData.domains[category] = [];
     }
@@ -282,6 +309,146 @@ export function knowledgeExists(
 
   const path = getKnowledgeDocPath(topic, category, doc, cwd);
   return existsSync(path);
+}
+
+// ============================================================
+// Frontmatter Processing
+// ============================================================
+
+/**
+ * Parse YAML frontmatter from document content.
+ * Returns metadata and content without frontmatter.
+ */
+export function parseFrontmatter(content: string): { meta: Partial<KnowledgeDocMeta>; content: string } {
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+  const match = content.match(frontmatterRegex);
+
+  if (!match) {
+    return { meta: {}, content };
+  }
+
+  const [, frontmatterStr, bodyContent] = match;
+  const meta: Partial<KnowledgeDocMeta> = {};
+
+  // Parse simple YAML key-value pairs
+  const lines = frontmatterStr.split('\n');
+  for (const line of lines) {
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) continue;
+
+    const key = line.slice(0, colonIndex).trim();
+    let value: string | string[] = line.slice(colonIndex + 1).trim();
+
+    // Handle arrays (e.g., tags: [a, b, c])
+    if (value.startsWith('[') && value.endsWith(']')) {
+      value = value.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    // Map to camelCase for consistency
+    const normalizedKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    (meta as Record<string, unknown>)[normalizedKey] = value;
+  }
+
+  return { meta, content: bodyContent };
+}
+
+/**
+ * Generate YAML frontmatter string from metadata.
+ */
+export function generateFrontmatter(meta: KnowledgeDocMeta): string {
+  const lines: string[] = ['---'];
+
+  lines.push(`name: ${meta.name}`);
+  lines.push(`description: ${meta.description}`);
+  lines.push(`category: ${meta.category}`);
+  lines.push(`topic: ${meta.topic}`);
+
+  if (meta.created_at) {
+    lines.push(`created_at: ${meta.created_at}`);
+  }
+  if (meta.updated_at) {
+    lines.push(`updated_at: ${meta.updated_at}`);
+  }
+  if (meta.tags && meta.tags.length > 0) {
+    lines.push(`tags: [${meta.tags.join(', ')}]`);
+  }
+
+  lines.push('---');
+  return lines.join('\n');
+}
+
+/**
+ * Read knowledge document with parsed frontmatter metadata.
+ */
+export function readKnowledgeDocWithMeta(
+  topic: string,
+  category: KnowledgeCategory,
+  doc: string,
+  cwd?: string
+): KnowledgeDocWithMeta | null {
+  const rawContent = readKnowledgeDoc(topic, category, doc, cwd);
+  if (!rawContent) return null;
+
+  const { meta, content } = parseFrontmatter(rawContent);
+
+  // Provide defaults if frontmatter missing
+  return {
+    meta: {
+      name: meta.name || doc,
+      description: meta.description || '',
+      category: meta.category || category,
+      topic: meta.topic || topic,
+      created_at: meta.created_at,
+      updated_at: meta.updated_at,
+      tags: meta.tags,
+    },
+    content,
+  };
+}
+
+/**
+ * List all knowledge documents with brief metadata.
+ * Enables progressive loading without reading full content.
+ */
+export function listKnowledgeDocsBrief(
+  topic?: string,
+  category?: KnowledgeCategory,
+  cwd?: string
+): KnowledgeDocMeta[] {
+  const index = readKnowledgeIndex(cwd);
+  const results: KnowledgeDocMeta[] = [];
+
+  const topicsToScan = topic ? [topic] : Object.keys(index.topics);
+
+  for (const t of topicsToScan) {
+    const topicData = index.topics[t];
+    if (!topicData) continue;
+
+    const categoriesToScan = category
+      ? [category]
+      : (Object.keys(topicData.domains) as KnowledgeCategory[]);
+
+    for (const c of categoriesToScan) {
+      const docs = topicData.domains[c] || [];
+      for (const doc of docs) {
+        // Try to read frontmatter, fall back to index data
+        const docWithMeta = readKnowledgeDocWithMeta(t, c, doc, cwd);
+        if (docWithMeta) {
+          results.push(docWithMeta.meta);
+        } else {
+          // Fallback: create minimal metadata from index
+          results.push({
+            name: doc,
+            description: topicData.description || '',
+            category: c,
+            topic: t,
+          });
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 // ============================================================

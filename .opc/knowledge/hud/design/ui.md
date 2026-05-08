@@ -1,3 +1,11 @@
+---
+name: ui
+description: 生成 HUD 知识库 - 为 OPC Marketplace 的 HUD 组件创建完整的知识库文档
+category: design
+topic: hud
+created_at: 2026-05-07T04:30:24.788Z
+updated_at: 2026-05-08T06:43:10.615Z
+---
 # HUD UI Design Specification
 
 ## HUD Layout

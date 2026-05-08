@@ -15,6 +15,7 @@ import {
   writeKnowledgeDoc,
   knowledgeExists,
   listKnowledgeDocs,
+  listKnowledgeDocsBrief,
 } from '../knowledge.js';
 import { getCurrentTask } from '../session.js';
 import type { ToolResult } from './index.js';
@@ -230,6 +231,36 @@ export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string |
       text: `## ${topic}/${category} Documents
 
 ${docList}`,
+    }],
+  };
+}
+
+export function handleKnowledgeListBrief(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
+  const topic = args.topic as string | undefined;
+  const category = args.category as KnowledgeCategory | undefined;
+
+  const docs = listKnowledgeDocsBrief(topic, category, cwd);
+
+  if (docs.length === 0) {
+    return {
+      content: [{ type: 'text', text: 'No knowledge documents found.' }],
+    };
+  }
+
+  const table = docs
+    .map(d => `| ${d.topic} | ${d.category} | ${d.name} | ${d.description || '-'} |`)
+    .join('\n');
+
+  return {
+    content: [{
+      type: 'text',
+      text: `## Knowledge Documents (Brief)
+
+| Topic | Category | Name | Description |
+|-------|----------|------|-------------|
+${table}
+
+💡 Use \`opc_knowledge_read\` to read full content of specific documents.`,
     }],
   };
 }

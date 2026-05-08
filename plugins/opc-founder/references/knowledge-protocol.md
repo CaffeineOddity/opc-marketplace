@@ -8,19 +8,44 @@ The knowledge library enables:
 - **Self-evolution**: Each task builds upon previous knowledge
 - **Cross-stage continuity**: Later stages learn from earlier stages
 - **Team memory**: Knowledge persists across sessions and team members
+- **Progressive loading**: Documents include metadata for efficient browsing
+
+## Document Frontmatter
+
+Each knowledge document includes YAML frontmatter for self-description:
+
+```yaml
+---
+name: 文档名称
+description: 简短描述（用于列表展示和渐进加载）
+category: requirement | design | backend | ios | android | harmony | web | miniprogram | qa | ship | growth
+topic: 主题标识（如 "hud", "state-management"）
+created_at: 创建时间
+updated_at: 更新时间
+tags: [可选标签]
+---
+```
+
+### Benefits
+
+| Feature | Without Frontmatter | With Frontmatter |
+|---------|---------------------|------------------|
+| Document discovery | Read full content | Read metadata only |
+| List views | No context | Name + description |
+| Progressive loading | All-or-nothing | Load metadata first |
+| Self-describing | Requires index.json | Document is complete |
 
 ## Path Format
 
 ```
-.opc/knowledgebase/{REQ-ID}/{category}/**/*/xxx.md
+.opc/knowledge/{topic}/{category}/xxx.md
 ```
 
 | Component | Description | Example |
 |-----------|-------------|---------|
-| `{REQ-ID}` | Requirement unique ID | REQ-001 |
+| `{topic}` | Topic identifier | hud, state-management |
 | `{category}` | Knowledge category | requirement, design, backend... |
-| `**/*/` | Optional subdirectory hierarchy | plugins/, api/, components/ |
-| `xxx.md` | Markdown document | main.md, tech.md |
+| `xxx.md` | Markdown document with frontmatter | main.md, tech.md |
 
 ## Directory Structure
 

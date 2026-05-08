@@ -337,6 +337,18 @@ const knowledgeTools: Tool[] = [
       required: ['category'],
     },
   },
+  {
+    name: 'opc_knowledge_list_brief',
+    description: 'List all knowledge documents with brief metadata (name, description, topic, category). Enables progressive loading without reading full document content.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'Filter by topic' },
+        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Filter by category' },
+        workingDirectory: { type: 'string' },
+      },
+    },
+  },
 ];
 
 // ============================================================

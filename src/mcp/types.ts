@@ -294,3 +294,38 @@ export interface KnowledgeIndex {
     domains: Record<string, string[]>;  // domain -> [doc names]
   }>;
 }
+
+// ============================================================
+// Knowledge Document Metadata (Frontmatter)
+// ============================================================
+
+/**
+ * Frontmatter metadata embedded in knowledge documents.
+ * Enables self-describing documents and progressive loading.
+ */
+export interface KnowledgeDocMeta {
+  /** Document name (human-readable) */
+  name: string;
+  /** Brief description for list views and progressive loading */
+  description: string;
+  /** Knowledge category */
+  category: KnowledgeCategory;
+  /** Topic identifier (e.g., "hud", "state-management") */
+  topic: string;
+  /** Creation timestamp */
+  created_at?: string;
+  /** Last update timestamp */
+  updated_at?: string;
+  /** Optional tags for filtering */
+  tags?: string[];
+}
+
+/**
+ * Parsed knowledge document with metadata and content.
+ */
+export interface KnowledgeDocWithMeta {
+  /** Parsed frontmatter metadata */
+  meta: KnowledgeDocMeta;
+  /** Document content without frontmatter */
+  content: string;
+}
