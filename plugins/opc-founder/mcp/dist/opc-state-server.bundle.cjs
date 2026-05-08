@@ -14179,38 +14179,37 @@ var KNOWLEDGE_CATEGORIES = ["requirement", "design", "backend", "ios", "android"
 var knowledgeTools = [
   {
     name: "opc_knowledge_init",
-    description: "Initialize knowledge library for a requirement. Creates directory structure and index entry.",
+    description: "Initialize knowledge library for a topic. Creates directory structure and index entry.",
     inputSchema: {
       type: "object",
       properties: {
-        requirementId: { type: "string", description: "Requirement ID (e.g., REQ-001)" },
-        title: { type: "string", description: "Requirement title" },
+        title: { type: "string", description: "Topic title" },
         workingDirectory: { type: "string" }
       },
-      required: ["requirementId", "title"]
+      required: ["title"]
     }
   },
   {
     name: "opc_knowledge_read",
-    description: "Read knowledge from knowledge library. Can read specific doc or all docs in a category.",
+    description: "Read knowledge from knowledge library. Can read specific doc or all docs in a category. Uses topic from current task if not specified.",
     inputSchema: {
       type: "object",
       properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
+        topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
         category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
         doc: { type: "string", description: "Document name (without .md extension)" },
         workingDirectory: { type: "string" }
       },
-      required: ["requirementId", "category"]
+      required: ["category"]
     }
   },
   {
     name: "opc_knowledge_write",
-    description: "Write or update knowledge document. Supports append, update section, or overwrite.",
+    description: "Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite.",
     inputSchema: {
       type: "object",
       properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
+        topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
         category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
         doc: { type: "string", description: "Document name (without .md extension)" },
         content: { type: "string", description: "Content to write" },
@@ -14218,26 +14217,26 @@ var knowledgeTools = [
         mode: { type: "string", enum: ["append", "update", "overwrite"], description: "Write mode (default: append)" },
         workingDirectory: { type: "string" }
       },
-      required: ["requirementId", "category", "doc", "content"]
+      required: ["category", "doc", "content"]
     }
   },
   {
     name: "opc_knowledge_exists",
-    description: "Check if knowledge document exists.",
+    description: "Check if knowledge document exists. Uses topic from current task if not specified.",
     inputSchema: {
       type: "object",
       properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
+        topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
         category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
         doc: { type: "string", description: "Document name" },
         workingDirectory: { type: "string" }
       },
-      required: ["requirementId"]
+      required: []
     }
   },
   {
     name: "opc_knowledge_list",
-    description: "List requirements in knowledge library.",
+    description: "List topics in knowledge library.",
     inputSchema: {
       type: "object",
       properties: {
@@ -14249,15 +14248,15 @@ var knowledgeTools = [
   },
   {
     name: "opc_knowledge_docs",
-    description: "List available documents in a category for a requirement.",
+    description: "List available documents in a category. Uses topic from current task if not specified.",
     inputSchema: {
       type: "object",
       properties: {
-        requirementId: { type: "string", description: "Requirement ID" },
+        topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
         category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
         workingDirectory: { type: "string" }
       },
-      required: ["requirementId", "category"]
+      required: ["category"]
     }
   }
 ];
@@ -14871,15 +14870,6 @@ function listKnowledgeDocs(topic, category, cwd) {
   }
   return docs;
 }
-function generateNextRequirementId(cwd) {
-  const index = readKnowledgeIndex(cwd);
-  const existingIds = Object.keys(index.topics).filter((id) => id.startsWith("REQ-")).map((id) => {
-    const num = parseInt(id.replace("REQ-", ""), 10);
-    return isNaN(num) ? 0 : num;
-  });
-  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-  return `REQ-${String(nextNum).padStart(3, "0")}`;
-}
 
 // dist/session.js
 var import_fs8 = require("fs");
@@ -15152,6 +15142,18 @@ function getTaskGroups(state, stage, groupId) {
 }
 
 // dist/session.js
+function generateNextRequirementId(cwd) {
+  const stateDir = ensureOpcDir("state", cwd);
+  if (!(0, import_fs8.existsSync)(stateDir)) {
+    return "REQ-001";
+  }
+  const existingIds = (0, import_fs8.readdirSync)(stateDir).filter((f) => f.startsWith("REQ-") && f.includes("_")).map((f) => {
+    const match = f.match(/^REQ-(\d+)_/);
+    return match ? parseInt(match[1], 10) : 0;
+  }).filter((n) => !isNaN(n));
+  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+  return `REQ-${String(nextNum).padStart(3, "0")}`;
+}
 function getSessionIndexPath(cwd) {
   const stateDir = ensureOpcDir("state", cwd);
   return (0, import_path7.join)(stateDir, "sessions.json");
@@ -15788,9 +15790,6 @@ This ensures consistency regardless of current working directory.`
 
 // dist/handlers/knowledge.js
 function resolveTopic(args, cwd) {
-  if (args.requirementId) {
-    return args.requirementId;
-  }
   if (args.topic) {
     return args.topic;
   }
@@ -15801,10 +15800,9 @@ function resolveTopic(args, cwd) {
   return null;
 }
 function handleKnowledgeInit(args, cwd) {
-  const requirementId = args.requirementId;
   const title = args.title;
   const result = findOrCreateTopic(title, "", cwd);
-  const topic = requirementId || result.topic;
+  const topic = result.topic;
   const topicData = getTopic(topic, cwd);
   return {
     content: [{
@@ -15836,7 +15834,7 @@ function handleKnowledgeRead(args, cwd) {
   const doc = args.doc;
   if (!topic) {
     return {
-      content: [{ type: "text", text: "No topic specified. Provide requirementId/topic or start a task first." }],
+      content: [{ type: "text", text: "No topic specified. Provide topic or start a task first." }],
       isError: true
     };
   }
@@ -15868,7 +15866,7 @@ function handleKnowledgeWrite(args, cwd) {
     return {
       content: [{
         type: "text",
-        text: "No topic specified. Provide requirementId/topic or start a task first."
+        text: "No topic specified. Provide topic or start a task first."
       }],
       isError: true
     };
@@ -15940,7 +15938,7 @@ function handleKnowledgeDocs(args, cwd) {
   const category = args.category;
   if (!topic) {
     return {
-      content: [{ type: "text", text: "No topic specified. Provide requirementId/topic or start a task first." }],
+      content: [{ type: "text", text: "No topic specified. Provide topic or start a task first." }],
       isError: true
     };
   }

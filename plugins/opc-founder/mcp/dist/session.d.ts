@@ -4,6 +4,11 @@
  * Session index maps lock_id to requirement_id with workflow source.
  */
 import type { SessionIndex, ProjectState } from './types.js';
+/**
+ * Generate the next available requirement ID
+ * Scans existing task directories to find the next number
+ */
+export declare function generateNextRequirementId(cwd?: string): string;
 export declare function readSessionIndex(cwd?: string): SessionIndex;
 export declare function bindSessionToRequirement(lockId: string, requirementId: string, source: 'matched' | 'auto_assembled', workflowName?: string, cwd?: string): void;
 export declare function getCurrentSession(lockId: string, cwd?: string): SessionIndex['sessions'][string] | null;
