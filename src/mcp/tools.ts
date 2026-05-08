@@ -261,10 +261,11 @@ const knowledgeTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        title: { type: 'string', description: 'Topic title' },
+        title: { type: 'string', description: 'Topic title (can be Chinese or English)' },
+        en_topic_name: { type: 'string', description: 'English topic name for directory naming (e.g., "localization", "app-login", "image-upload-r2")' },
         workingDirectory: { type: 'string' },
       },
-      required: ['title'],
+      required: ['title', 'en_topic_name'],
     },
   },
   {

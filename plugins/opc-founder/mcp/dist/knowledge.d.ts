@@ -19,7 +19,7 @@ export declare function generateTopicSlug(title: string): string;
  * Find or create a topic for a given task
  * Returns the topic slug
  */
-export declare function findOrCreateTopic(taskTitle: string, taskDescription: string, cwd?: string): {
+export declare function findOrCreateTopic(taskTitle: string, taskDescription: string, cwd?: string, enTopicName?: string): {
     topic: string;
     isNew: boolean;
     title: string;

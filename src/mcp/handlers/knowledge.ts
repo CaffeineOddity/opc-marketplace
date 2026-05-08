@@ -41,9 +41,10 @@ function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): s
 
 export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const title = args.title as string;
+  const enTopicName = args.en_topic_name as string;
 
-  // Create/find topic from title
-  const result = findOrCreateTopic(title, '', cwd);
+  // Create topic with required en_topic_name
+  const result = findOrCreateTopic(title, '', cwd, enTopicName);
   const topic = result.topic;
 
   const topicData = getTopic(topic, cwd);

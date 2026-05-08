@@ -129,12 +129,47 @@ export function generateTopicSlug(title: string): string {
 export function findOrCreateTopic(
   taskTitle: string,
   taskDescription: string,
-  cwd?: string
+  cwd?: string,
+  enTopicName?: string
 ): { topic: string; isNew: boolean; title: string } {
   const index = readKnowledgeIndex(cwd);
+
+  // If en_topic_name is provided, use it directly
+  if (enTopicName) {
+    // Check if topic already exists
+    if (index.topics[enTopicName]) {
+      return {
+        topic: enTopicName,
+        isNew: false,
+        title: index.topics[enTopicName].title,
+      };
+    }
+
+    // Create new topic with provided en_topic_name
+    const now = new Date().toISOString();
+    index.topics[enTopicName] = {
+      title: taskTitle,
+      description: taskDescription,
+      status: 'in_progress',
+      created_at: now,
+      updated_at: now,
+      domains: {},
+    };
+
+    writeKnowledgeIndex(index, cwd);
+
+    // Create topic directory
+    const topicPath = getTopicPath(enTopicName, cwd);
+    if (!existsSync(topicPath)) {
+      mkdirSync(topicPath, { recursive: true });
+    }
+
+    return { topic: enTopicName, isNew: true, title: taskTitle };
+  }
+
+  // Original logic: try to find existing topic by title similarity
   const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
 
-  // Try to find existing topic by title similarity
   const candidates = Object.entries(index.topics)
     .map(([slug, data]) => {
       const titleWords = data.title.toLowerCase().split(/\s+/);
@@ -165,7 +200,7 @@ export function findOrCreateTopic(
     };
   }
 
-  // Create new topic
+  // Create new topic with auto-generated slug
   const now = new Date().toISOString();
   const slug = generateTopicSlug(taskTitle);
 

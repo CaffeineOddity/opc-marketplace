@@ -14183,10 +14183,11 @@ var knowledgeTools = [
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Topic title" },
+        title: { type: "string", description: "Topic title (can be Chinese or English)" },
+        en_topic_name: { type: "string", description: 'English topic name for directory naming (e.g., "localization", "app-login", "image-upload-r2")' },
         workingDirectory: { type: "string" }
       },
-      required: ["title"]
+      required: ["title", "en_topic_name"]
     }
   },
   {
@@ -14770,8 +14771,32 @@ function generateTopicSlug(title) {
   }
   return `topic-${Date.now().toString(36)}`;
 }
-function findOrCreateTopic(taskTitle, taskDescription, cwd) {
+function findOrCreateTopic(taskTitle, taskDescription, cwd, enTopicName) {
   const index = readKnowledgeIndex(cwd);
+  if (enTopicName) {
+    if (index.topics[enTopicName]) {
+      return {
+        topic: enTopicName,
+        isNew: false,
+        title: index.topics[enTopicName].title
+      };
+    }
+    const now2 = (/* @__PURE__ */ new Date()).toISOString();
+    index.topics[enTopicName] = {
+      title: taskTitle,
+      description: taskDescription,
+      status: "in_progress",
+      created_at: now2,
+      updated_at: now2,
+      domains: {}
+    };
+    writeKnowledgeIndex(index, cwd);
+    const topicPath2 = getTopicPath(enTopicName, cwd);
+    if (!(0, import_fs6.existsSync)(topicPath2)) {
+      (0, import_fs6.mkdirSync)(topicPath2, { recursive: true });
+    }
+    return { topic: enTopicName, isNew: true, title: taskTitle };
+  }
   const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
   const candidates = Object.entries(index.topics).map(([slug2, data]) => {
     const titleWords = data.title.toLowerCase().split(/\s+/);
@@ -16026,7 +16051,8 @@ function resolveTopic(args, cwd) {
 }
 function handleKnowledgeInit(args, cwd) {
   const title = args.title;
-  const result = findOrCreateTopic(title, "", cwd);
+  const enTopicName = args.en_topic_name;
+  const result = findOrCreateTopic(title, "", cwd, enTopicName);
   const topic = result.topic;
   const topicData = getTopic(topic, cwd);
   return {
