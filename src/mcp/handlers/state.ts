@@ -105,6 +105,34 @@ export function handleStateInit(args: Record<string, unknown>, cwd: string | und
   const projectName = args.project_name as string;
   const projectDescription = (args.project_description as string) || '';
   const providedRequirementId = args.requirement_id as string | undefined;
+  const enTopicName = args.en_topic_name as string;
+
+  // en_topic_name is required
+  if (!enTopicName) {
+    return {
+      content: [{
+        type: 'text',
+        text: `## Missing Required Parameter
+
+**Error:** \`en_topic_name\` is required.
+
+Please provide a semantic English topic name for the knowledge library directory.
+
+**Examples:**
+- \`ios-localization\` for iOS多语言技术方案
+- \`app-login\` for 登录功能开发
+- \`app-launch\` for 应用启动优化
+- \`hud-status-update\` for HUD状态栏更新
+
+**Naming convention:**
+- Format: \`{platform}-{feature}\` or \`{feature}\`
+- Use lowercase and hyphens
+- Be concise and semantic`,
+      }],
+      isError: true,
+    };
+  }
+
   const lockId = getCurrentLockId(cwd);
 
   const currentSession = getCurrentSession(lockId, cwd);
@@ -137,8 +165,8 @@ Options:
     }
   }
 
-  // Step 1: Find or create knowledge topic
-  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd);
+  // Step 1: Find or create knowledge topic with required en_topic_name
+  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd, enTopicName);
   const topic = topicResult.topic;
   const topicInfo = topicResult.isNew
     ? `🆕 **Created new knowledge topic:** ${topic}`

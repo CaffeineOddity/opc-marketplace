@@ -48,9 +48,10 @@ const stateTools: Tool[] = [
         project_name: { type: 'string', description: 'Project name' },
         project_description: { type: 'string', description: 'Project description' },
         requirement_id: { type: 'string', description: 'Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing.' },
+        en_topic_name: { type: 'string', description: 'English topic name for knowledge library directory (e.g., "localization", "app-login", "app-launch"). Must be semantic and concise.' },
         workingDirectory: { type: 'string' },
       },
-      required: ['project_name'],
+      required: ['project_name', 'en_topic_name'],
     },
   },
   {

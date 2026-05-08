@@ -14006,9 +14006,10 @@ var stateTools = [
         project_name: { type: "string", description: "Project name" },
         project_description: { type: "string", description: "Project description" },
         requirement_id: { type: "string", description: "Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing." },
+        en_topic_name: { type: "string", description: 'English topic name for knowledge library directory (e.g., "localization", "app-login", "app-launch"). Must be semantic and concise.' },
         workingDirectory: { type: "string" }
       },
-      required: ["project_name"]
+      required: ["project_name", "en_topic_name"]
     }
   },
   {
@@ -15522,6 +15523,31 @@ function handleStateInit(args, cwd) {
   const projectName = args.project_name;
   const projectDescription = args.project_description || "";
   const providedRequirementId = args.requirement_id;
+  const enTopicName = args.en_topic_name;
+  if (!enTopicName) {
+    return {
+      content: [{
+        type: "text",
+        text: `## Missing Required Parameter
+
+**Error:** \`en_topic_name\` is required.
+
+Please provide a semantic English topic name for the knowledge library directory.
+
+**Examples:**
+- \`ios-localization\` for iOS\u591A\u8BED\u8A00\u6280\u672F\u65B9\u6848
+- \`app-login\` for \u767B\u5F55\u529F\u80FD\u5F00\u53D1
+- \`app-launch\` for \u5E94\u7528\u542F\u52A8\u4F18\u5316
+- \`hud-status-update\` for HUD\u72B6\u6001\u680F\u66F4\u65B0
+
+**Naming convention:**
+- Format: \`{platform}-{feature}\` or \`{feature}\`
+- Use lowercase and hyphens
+- Be concise and semantic`
+      }],
+      isError: true
+    };
+  }
   const lockId = getCurrentLockId(cwd);
   const currentSession = getCurrentSession(lockId, cwd);
   if (currentSession) {
@@ -15551,7 +15577,7 @@ Options:
       }
     }
   }
-  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd);
+  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd, enTopicName);
   const topic = topicResult.topic;
   const topicInfo = topicResult.isNew ? `\u{1F195} **Created new knowledge topic:** ${topic}` : `\u{1F517} **Matched existing topic:** ${topic} (${topicResult.title})`;
   let requirementId = providedRequirementId;
@@ -16075,7 +16101,29 @@ Knowledge documents will be created on-demand when writing to each category.
 | Dev | backend, ios, android, harmony, web, miniprogram | Platform-specific implementation |
 | QA | qa | Test plans, test cases |
 | Ship | ship | Deployment, CI/CD, infrastructure |
-| Growth | growth | Metrics, analytics, marketing |`
+| Growth | growth | Metrics, analytics, marketing |
+
+### Naming Convention
+
+**Topic name** should be semantic and concise:
+- Format: \`{platform}-{feature}\` or \`{feature}\`
+- Examples: \`ios-localization\`, \`app-login\`, \`app-launch\`, \`hud-status-update\`
+
+**Document name** should describe the *purpose*, not the topic:
+- Use: \`architecture\`, \`guide\`, \`api\`, \`test-plan\`
+- Avoid: \`localization-architecture\`, \`login-guide\` (redundant with topic path)
+
+**Example path structure:**
+\`\`\`
+.opc/knowledge/ios-localization/
+\u251C\u2500\u2500 requirement/
+\u2502   \u2514\u2500\u2500 main.md
+\u251C\u2500\u2500 ios/
+\u2502   \u251C\u2500\u2500 architecture.md
+\u2502   \u2514\u2500\u2500 guide.md
+\u2514\u2500\u2500 qa/
+    \u2514\u2500\u2500 test-plan.md
+\`\`\``
     }]
   };
 }
@@ -16150,14 +16198,12 @@ function handleKnowledgeWrite(args, cwd) {
 
 Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.
 
-\u{1F4A1} **Tip:** Provide meaningful \`name\` and \`description\` in the \`meta\` parameter for better document discoverability. Example:
-\`\`\`json
-{
-  "name": "iOS\u591A\u8BED\u8A00\u7CFB\u7EDF\u67B6\u6784\u8BBE\u8BA1",
-  "description": "\u63CF\u8FF0iOS\u9879\u76EE\u4E2D\u591A\u8BED\u8A00\u7CFB\u7EDF\u7684\u67B6\u6784\u8BBE\u8BA1\uFF0C\u5305\u62ECLanguageManager\u3001BundleProvider\u7B49\u6838\u5FC3\u7EC4\u4EF6\u3002",
-  "tags": ["ios", "localization", "architecture"]
-}
-\`\`\``
+\u{1F4A1} **Naming Convention:**
+- **Document name** should describe the *purpose*, not the topic (e.g., \`architecture\`, \`guide\`, \`api\`, \`test-plan\`)
+- Since the path already includes topic and category, avoid redundant prefixes
+- Example: For topic \`ios-localization\` with category \`ios\`, use \`architecture.md\` not \`localization-architecture.md\`
+
+\u{1F4C1} **Path:** \`.opc/knowledge/${topic}/${category}/${doc}.md\``
     }]
   };
 }

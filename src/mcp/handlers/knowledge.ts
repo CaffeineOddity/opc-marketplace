@@ -69,7 +69,29 @@ Knowledge documents will be created on-demand when writing to each category.
 | Dev | backend, ios, android, harmony, web, miniprogram | Platform-specific implementation |
 | QA | qa | Test plans, test cases |
 | Ship | ship | Deployment, CI/CD, infrastructure |
-| Growth | growth | Metrics, analytics, marketing |`,
+| Growth | growth | Metrics, analytics, marketing |
+
+### Naming Convention
+
+**Topic name** should be semantic and concise:
+- Format: \`{platform}-{feature}\` or \`{feature}\`
+- Examples: \`ios-localization\`, \`app-login\`, \`app-launch\`, \`hud-status-update\`
+
+**Document name** should describe the *purpose*, not the topic:
+- Use: \`architecture\`, \`guide\`, \`api\`, \`test-plan\`
+- Avoid: \`localization-architecture\`, \`login-guide\` (redundant with topic path)
+
+**Example path structure:**
+\`\`\`
+.opc/knowledge/ios-localization/
+├── requirement/
+│   └── main.md
+├── ios/
+│   ├── architecture.md
+│   └── guide.md
+└── qa/
+    └── test-plan.md
+\`\`\``,
     }],
   };
 }
@@ -163,14 +185,12 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
 
 Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.
 
-💡 **Tip:** Provide meaningful \`name\` and \`description\` in the \`meta\` parameter for better document discoverability. Example:
-\`\`\`json
-{
-  "name": "iOS多语言系统架构设计",
-  "description": "描述iOS项目中多语言系统的架构设计，包括LanguageManager、BundleProvider等核心组件。",
-  "tags": ["ios", "localization", "architecture"]
-}
-\`\`\``,
+💡 **Naming Convention:**
+- **Document name** should describe the *purpose*, not the topic (e.g., \`architecture\`, \`guide\`, \`api\`, \`test-plan\`)
+- Since the path already includes topic and category, avoid redundant prefixes
+- Example: For topic \`ios-localization\` with category \`ios\`, use \`architecture.md\` not \`localization-architecture.md\`
+
+📁 **Path:** \`.opc/knowledge/${topic}/${category}/${doc}.md\``,
     }],
   };
 }
