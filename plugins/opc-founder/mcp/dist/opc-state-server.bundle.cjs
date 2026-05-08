@@ -14737,10 +14737,36 @@ function writeKnowledgeIndex(index, cwd) {
   atomicWriteJson(path, index);
 }
 function generateTopicSlug(title) {
+  const categoryNames = /* @__PURE__ */ new Set([
+    "requirement",
+    "design",
+    "backend",
+    "ios",
+    "android",
+    "harmony",
+    "web",
+    "miniprogram",
+    "qa",
+    "ship",
+    "growth"
+  ]);
   const englishWords = title.match(/[a-zA-Z]+/g);
   if (englishWords && englishWords.length > 0) {
-    const significant = englishWords.find((w) => w.length > 2) || englishWords[0];
-    return significant.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const words = englishWords.filter((w) => w.length > 2).map((w) => w.toLowerCase());
+    if (words.length >= 2) {
+      const slug = words.slice(0, 2).join("-");
+      if (!categoryNames.has(slug)) {
+        return slug;
+      }
+      return `topic-${slug}`;
+    }
+    if (words.length === 1) {
+      const word = words[0];
+      if (!categoryNames.has(word)) {
+        return word;
+      }
+      return `topic-${word}`;
+    }
   }
   return `topic-${Date.now().toString(36)}`;
 }
@@ -14812,6 +14838,88 @@ ${content}`);
   }
   return results.length > 0 ? results.join("\n\n---\n\n") : null;
 }
+var DOC_TYPE_DEFAULTS = {
+  // Architecture documents
+  architecture: {
+    name: "\u6280\u672F\u67B6\u6784\u6587\u6863",
+    description: "\u63CF\u8FF0\u7CFB\u7EDF\u7684\u6574\u4F53\u67B6\u6784\u8BBE\u8BA1\uFF0C\u5305\u62EC\u7EC4\u4EF6\u5173\u7CFB\u3001\u6280\u672F\u9009\u578B\u3001\u5206\u5C42\u7ED3\u6784\u548C\u6838\u5FC3\u6A21\u5757\u3002"
+  },
+  tech: {
+    name: "\u6280\u672F\u65B9\u6848\u6587\u6863",
+    description: "\u63CF\u8FF0\u6280\u672F\u5B9E\u73B0\u65B9\u6848\uFF0C\u5305\u62EC\u6280\u672F\u6808\u9009\u62E9\u3001\u5B9E\u73B0\u7EC6\u8282\u548C\u5173\u952E\u51B3\u7B56\u3002"
+  },
+  api: {
+    name: "API\u63A5\u53E3\u6587\u6863",
+    description: "\u63CF\u8FF0API\u7AEF\u70B9\u3001\u8BF7\u6C42/\u54CD\u5E94\u683C\u5F0F\u3001\u8BA4\u8BC1\u65B9\u5F0F\u548C\u9519\u8BEF\u5904\u7406\u3002"
+  },
+  // Requirement documents
+  main: {
+    name: "\u9700\u6C42\u89C4\u683C\u6587\u6863",
+    description: "\u63CF\u8FF0\u529F\u80FD\u9700\u6C42\u3001\u7528\u6237\u6545\u4E8B\u3001\u9A8C\u6536\u6807\u51C6\u548C\u4E1A\u52A1\u76EE\u6807\u3002"
+  },
+  "user-stories": {
+    name: "\u7528\u6237\u6545\u4E8B\u6587\u6863",
+    description: "\u63CF\u8FF0\u7528\u6237\u6545\u4E8B\u3001\u9A8C\u6536\u6807\u51C6\u548C\u4F18\u5148\u7EA7\u6392\u5E8F\u3002"
+  },
+  // Design documents
+  ui: {
+    name: "UI\u8BBE\u8BA1\u6587\u6863",
+    description: "\u63CF\u8FF0\u7528\u6237\u754C\u9762\u8BBE\u8BA1\uFF0C\u5305\u62EC\u5E03\u5C40\u3001\u7EC4\u4EF6\u3001\u4EA4\u4E92\u548C\u89C6\u89C9\u89C4\u8303\u3002"
+  },
+  interaction: {
+    name: "\u4EA4\u4E92\u8BBE\u8BA1\u6587\u6863",
+    description: "\u63CF\u8FF0\u7528\u6237\u4EA4\u4E92\u6D41\u7A0B\u3001\u72B6\u6001\u8F6C\u6362\u548C\u52A8\u753B\u6548\u679C\u3002"
+  },
+  // Test documents
+  "test-plan": {
+    name: "\u6D4B\u8BD5\u8BA1\u5212\u6587\u6863",
+    description: "\u63CF\u8FF0\u6D4B\u8BD5\u7B56\u7565\u3001\u6D4B\u8BD5\u8303\u56F4\u3001\u6D4B\u8BD5\u73AF\u5883\u548C\u8D44\u6E90\u5B89\u6392\u3002"
+  },
+  cases: {
+    name: "\u6D4B\u8BD5\u7528\u4F8B\u6587\u6863",
+    description: "\u63CF\u8FF0\u6D4B\u8BD5\u7528\u4F8B\u3001\u9884\u671F\u7ED3\u679C\u548C\u8986\u76D6\u7387\u5206\u6790\u3002"
+  },
+  // Deployment documents
+  deployment: {
+    name: "\u90E8\u7F72\u6587\u6863",
+    description: "\u63CF\u8FF0\u90E8\u7F72\u6D41\u7A0B\u3001\u73AF\u5883\u914D\u7F6E\u548C\u53D1\u5E03\u68C0\u67E5\u6E05\u5355\u3002"
+  },
+  infrastructure: {
+    name: "\u57FA\u7840\u8BBE\u65BD\u6587\u6863",
+    description: "\u63CF\u8FF0\u57FA\u7840\u8BBE\u65BD\u67B6\u6784\u3001\u8D44\u6E90\u914D\u7F6E\u548C\u8FD0\u7EF4\u6307\u5357\u3002"
+  },
+  // Growth documents
+  metrics: {
+    name: "\u6307\u6807\u4F53\u7CFB\u6587\u6863",
+    description: "\u63CF\u8FF0\u4E1A\u52A1\u6307\u6807\u3001\u76D1\u63A7\u7EF4\u5EA6\u548C\u6570\u636E\u91C7\u96C6\u65B9\u6848\u3002"
+  },
+  analytics: {
+    name: "\u6570\u636E\u5206\u6790\u6587\u6863",
+    description: "\u63CF\u8FF0\u5206\u6790\u65B9\u6CD5\u3001\u6570\u636E\u6A21\u578B\u548C\u6D1E\u5BDF\u7ED3\u8BBA\u3002"
+  }
+};
+function getDocTypeDefaults(doc, category) {
+  if (DOC_TYPE_DEFAULTS[doc]) {
+    return DOC_TYPE_DEFAULTS[doc];
+  }
+  const categoryNames = {
+    requirement: "\u9700\u6C42",
+    design: "\u8BBE\u8BA1",
+    backend: "\u540E\u7AEF",
+    ios: "iOS",
+    android: "Android",
+    harmony: "\u9E3F\u8499",
+    web: "Web",
+    miniprogram: "\u5C0F\u7A0B\u5E8F",
+    qa: "\u6D4B\u8BD5",
+    ship: "\u90E8\u7F72",
+    growth: "\u589E\u957F"
+  };
+  return {
+    name: `${categoryNames[category] || ""}${doc}\u6587\u6863`,
+    description: `\u63CF\u8FF0${categoryNames[category] || ""}\u76F8\u5173\u7684${doc}\u5185\u5BB9\u3002`
+  };
+}
 function writeKnowledgeDoc(topic, category, doc, content, mode = "append", section, cwd, meta) {
   const path = getKnowledgeDocPath(topic, category, doc, cwd);
   const dir = (0, import_path5.join)(path, "..");
@@ -14849,9 +14957,10 @@ ${content}`;
   }
   const index = readKnowledgeIndex(cwd);
   const topicData = index.topics[topic];
+  const docDefaults = getDocTypeDefaults(doc, category);
   const frontmatterMeta = {
-    name: meta?.name || existingMeta.name || doc,
-    description: meta?.description || existingMeta.description || topicData?.description || "",
+    name: meta?.name || existingMeta.name || docDefaults.name,
+    description: meta?.description || existingMeta.description || docDefaults.description,
     category: meta?.category || category,
     topic: meta?.topic || topic,
     created_at: existingMeta.created_at || now,
@@ -15978,6 +16087,7 @@ function handleKnowledgeWrite(args, cwd) {
   const content = args.content;
   const mode = args.mode || "append";
   const section = args.section;
+  const meta = args.meta;
   if (!topic) {
     return {
       content: [{
@@ -15991,7 +16101,15 @@ function handleKnowledgeWrite(args, cwd) {
   if (!index.topics[topic]) {
     findOrCreateTopic(topic, "", cwd);
   }
-  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd);
+  const docMeta = meta ? {
+    name: meta.name,
+    description: meta.description,
+    tags: meta.tags
+  } : void 0;
+  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd, docMeta);
+  const docWithMeta = readKnowledgeDocWithMeta(topic, category, doc, cwd);
+  const actualName = docWithMeta?.meta.name || doc;
+  const actualDesc = docWithMeta?.meta.description || "";
   return {
     content: [{
       type: "text",
@@ -15999,10 +16117,21 @@ function handleKnowledgeWrite(args, cwd) {
 
 **Topic:** ${topic}
 **Document:** ${category}/${doc}.md
+**Name:** ${actualName}
+**Description:** ${actualDesc}
 **Mode:** ${mode}${section ? `
 **Section:** ${section}` : ""}
 
-Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.`
+Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.
+
+\u{1F4A1} **Tip:** Provide meaningful \`name\` and \`description\` in the \`meta\` parameter for better document discoverability. Example:
+\`\`\`json
+{
+  "name": "iOS\u591A\u8BED\u8A00\u7CFB\u7EDF\u67B6\u6784\u8BBE\u8BA1",
+  "description": "\u63CF\u8FF0iOS\u9879\u76EE\u4E2D\u591A\u8BED\u8A00\u7CFB\u7EDF\u7684\u67B6\u6784\u8BBE\u8BA1\uFF0C\u5305\u62ECLanguageManager\u3001BundleProvider\u7B49\u6838\u5FC3\u7EC4\u4EF6\u3002",
+  "tags": ["ios", "localization", "architecture"]
+}
+\`\`\``
     }]
   };
 }

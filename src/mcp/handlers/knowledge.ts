@@ -16,6 +16,7 @@ import {
   knowledgeExists,
   listKnowledgeDocs,
   listKnowledgeDocsBrief,
+  readKnowledgeDocWithMeta,
 } from '../knowledge.js';
 import { getCurrentTask } from '../session.js';
 import type { ToolResult } from './index.js';
@@ -114,6 +115,8 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
   const content = args.content as string;
   const mode = (args.mode as 'append' | 'update' | 'overwrite') || 'append';
   const section = args.section as string | undefined;
+  // Optional metadata from caller
+  const meta = args.meta as Record<string, unknown> | undefined;
 
   if (!topic) {
     return {
@@ -132,7 +135,19 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
     findOrCreateTopic(topic, '', cwd);
   }
 
-  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd);
+  // Prepare metadata if provided
+  const docMeta = meta ? {
+    name: meta.name as string | undefined,
+    description: meta.description as string | undefined,
+    tags: meta.tags as string[] | undefined,
+  } : undefined;
+
+  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd, docMeta);
+
+  // Get the actual metadata that was written
+  const docWithMeta = readKnowledgeDocWithMeta(topic, category, doc, cwd);
+  const actualName = docWithMeta?.meta.name || doc;
+  const actualDesc = docWithMeta?.meta.description || '';
 
   return {
     content: [{
@@ -141,9 +156,20 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
 
 **Topic:** ${topic}
 **Document:** ${category}/${doc}.md
+**Name:** ${actualName}
+**Description:** ${actualDesc}
 **Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
 
-Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.`,
+Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.
+
+💡 **Tip:** Provide meaningful \`name\` and \`description\` in the \`meta\` parameter for better document discoverability. Example:
+\`\`\`json
+{
+  "name": "iOS多语言系统架构设计",
+  "description": "描述iOS项目中多语言系统的架构设计，包括LanguageManager、BundleProvider等核心组件。",
+  "tags": ["ios", "localization", "architecture"]
+}
+\`\`\``,
     }],
   };
 }

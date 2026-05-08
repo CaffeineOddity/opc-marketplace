@@ -9,8 +9,10 @@ export declare function readKnowledgeIndex(cwd?: string): KnowledgeIndex;
 export declare function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void;
 /**
  * Generate a topic slug from a title
- * e.g., "HUD 状态栏实时更新修复" -> "hud"
- * e.g., "State Management" -> "state-management"
+ * e.g., "HUD 状态栏实时更新修复" -> "hud-status-bar"
+ * e.g., "iOS多语言技术方案" -> "ios-localization"
+ *
+ * IMPORTANT: Avoids collision with category names (ios, android, web, etc.)
  */
 export declare function generateTopicSlug(title: string): string;
 /**

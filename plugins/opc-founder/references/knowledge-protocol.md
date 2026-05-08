@@ -16,15 +16,36 @@ Each knowledge document includes YAML frontmatter for self-description:
 
 ```yaml
 ---
-name: 文档名称
-description: 简短描述（用于列表展示和渐进加载）
+name: 文档名称（人类可读，如"iOS多语言系统架构设计"）
+description: 文档功能描述（用于列表展示和渐进加载，说明文档的作用和内容）
 category: requirement | design | backend | ios | android | harmony | web | miniprogram | qa | ship | growth
-topic: 主题标识（如 "hud", "state-management"）
+topic: 主题标识（如 "ios-localization", "user-auth"）
 created_at: 创建时间
 updated_at: 更新时间
 tags: [可选标签]
 ---
 ```
+
+### Frontmatter Guidelines
+
+**IMPORTANT: When writing knowledge documents, AI should provide meaningful metadata:**
+
+| Field | Guidelines | Example |
+|-------|------------|---------|
+| `name` | Human-readable document name, describe what the document is | `iOS多语言系统架构设计` (NOT just `architecture`) |
+| `description` | What the document contains and its purpose | `描述iOS项目中多语言系统的架构设计，包括LanguageManager、BundleProvider等核心组件的实现细节和使用方式。` |
+| `topic` | Semantic topic identifier, avoid category names | `ios-localization` (NOT `ios`) |
+| `tags` | Optional keywords for filtering | `[ios, localization, architecture, i18n]` |
+
+### Why Meaningful Metadata Matters
+
+| Without Good Metadata | With Good Metadata |
+|-----------------------|-------------------|
+| `name: architecture` | `name: iOS多语言系统架构设计` |
+| `description: 生成iOS多语言方案` (task description) | `description: 描述iOS项目中多语言系统的架构设计...` (document purpose) |
+| `topic: ios` (collision with category) | `topic: ios-localization` (semantic identifier) |
+| Hard to find in list views | Easy to identify and select |
+| No context before reading | Clear understanding from metadata |
 
 ### Benefits
 

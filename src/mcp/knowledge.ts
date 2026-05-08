@@ -76,16 +76,46 @@ export function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void {
 
 /**
  * Generate a topic slug from a title
- * e.g., "HUD 状态栏实时更新修复" -> "hud"
- * e.g., "State Management" -> "state-management"
+ * e.g., "HUD 状态栏实时更新修复" -> "hud-status-bar"
+ * e.g., "iOS多语言技术方案" -> "ios-localization"
+ *
+ * IMPORTANT: Avoids collision with category names (ios, android, web, etc.)
  */
 export function generateTopicSlug(title: string): string {
+  // Category names to avoid as topic slugs
+  const categoryNames = new Set([
+    'requirement', 'design', 'backend', 'ios', 'android',
+    'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'
+  ]);
+
   // Try to extract meaningful English words first
   const englishWords = title.match(/[a-zA-Z]+/g);
   if (englishWords && englishWords.length > 0) {
-    // Use the longest English word or first significant word
-    const significant = englishWords.find(w => w.length > 2) || englishWords[0];
-    return significant.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    // Filter words longer than 2 chars and lowercase
+    const words = englishWords
+      .filter(w => w.length > 2)
+      .map(w => w.toLowerCase());
+
+    if (words.length >= 2) {
+      // Use first two significant words
+      const slug = words.slice(0, 2).join('-');
+      // Avoid collision with category names
+      if (!categoryNames.has(slug)) {
+        return slug;
+      }
+      // If collision, prefix with 'topic-'
+      return `topic-${slug}`;
+    }
+
+    if (words.length === 1) {
+      const word = words[0];
+      // Avoid collision with category names
+      if (!categoryNames.has(word)) {
+        return word;
+      }
+      // If collision, prefix with 'topic-'
+      return `topic-${word}`;
+    }
   }
 
   // For Chinese or other languages, generate a slug based on timestamp
@@ -210,6 +240,109 @@ function isDirectory(path: string): boolean {
   }
 }
 
+// ============================================================
+// Document Type Metadata Defaults
+// ============================================================
+
+/**
+ * Default metadata for common document types.
+ * Provides meaningful name and description when caller doesn't specify.
+ */
+const DOC_TYPE_DEFAULTS: Record<string, { name: string; description: string }> = {
+  // Architecture documents
+  architecture: {
+    name: '技术架构文档',
+    description: '描述系统的整体架构设计，包括组件关系、技术选型、分层结构和核心模块。',
+  },
+  tech: {
+    name: '技术方案文档',
+    description: '描述技术实现方案，包括技术栈选择、实现细节和关键决策。',
+  },
+  api: {
+    name: 'API接口文档',
+    description: '描述API端点、请求/响应格式、认证方式和错误处理。',
+  },
+  // Requirement documents
+  main: {
+    name: '需求规格文档',
+    description: '描述功能需求、用户故事、验收标准和业务目标。',
+  },
+  'user-stories': {
+    name: '用户故事文档',
+    description: '描述用户故事、验收标准和优先级排序。',
+  },
+  // Design documents
+  ui: {
+    name: 'UI设计文档',
+    description: '描述用户界面设计，包括布局、组件、交互和视觉规范。',
+  },
+  interaction: {
+    name: '交互设计文档',
+    description: '描述用户交互流程、状态转换和动画效果。',
+  },
+  // Test documents
+  'test-plan': {
+    name: '测试计划文档',
+    description: '描述测试策略、测试范围、测试环境和资源安排。',
+  },
+  cases: {
+    name: '测试用例文档',
+    description: '描述测试用例、预期结果和覆盖率分析。',
+  },
+  // Deployment documents
+  deployment: {
+    name: '部署文档',
+    description: '描述部署流程、环境配置和发布检查清单。',
+  },
+  infrastructure: {
+    name: '基础设施文档',
+    description: '描述基础设施架构、资源配置和运维指南。',
+  },
+  // Growth documents
+  metrics: {
+    name: '指标体系文档',
+    description: '描述业务指标、监控维度和数据采集方案。',
+  },
+  analytics: {
+    name: '数据分析文档',
+    description: '描述分析方法、数据模型和洞察结论。',
+  },
+};
+
+/**
+ * Get default metadata for a document type.
+ * Falls back to generic defaults if type not found.
+ */
+function getDocTypeDefaults(
+  doc: string,
+  category: KnowledgeCategory
+): { name: string; description: string } {
+  // Check explicit defaults first
+  if (DOC_TYPE_DEFAULTS[doc]) {
+    return DOC_TYPE_DEFAULTS[doc];
+  }
+
+  // Generate category-aware defaults
+  const categoryNames: Record<KnowledgeCategory, string> = {
+    requirement: '需求',
+    design: '设计',
+    backend: '后端',
+    ios: 'iOS',
+    android: 'Android',
+    harmony: '鸿蒙',
+    web: 'Web',
+    miniprogram: '小程序',
+    qa: '测试',
+    ship: '部署',
+    growth: '增长',
+  };
+
+  return {
+    name: `${categoryNames[category] || ''}${doc}文档`,
+    description: `描述${categoryNames[category] || ''}相关的${doc}内容。`,
+  };
+}
+
 export function writeKnowledgeDoc(
   topic: string,
   category: KnowledgeCategory,
@@ -256,10 +389,14 @@ export function writeKnowledgeDoc(
   const index = readKnowledgeIndex(cwd);
   const topicData = index.topics[topic];
 
+  // Get document type defaults
+  const docDefaults = getDocTypeDefaults(doc, category);
+
   // Build frontmatter metadata
+  // Priority: explicit meta > existing meta > doc type defaults
   const frontmatterMeta: KnowledgeDocMeta = {
-    name: meta?.name || existingMeta.name || doc,
-    description: meta?.description || existingMeta.description || topicData?.description || '',
+    name: meta?.name || existingMeta.name || docDefaults.name,
+    description: meta?.description || existingMeta.description || docDefaults.description,
     category: meta?.category || category,
     topic: meta?.topic || topic,
     created_at: existingMeta.created_at || now,
