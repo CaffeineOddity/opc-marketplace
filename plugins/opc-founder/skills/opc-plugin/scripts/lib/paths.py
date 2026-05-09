@@ -7,6 +7,7 @@ marketplace locations, and git roots.
 
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
 def get_home() -> Path:
@@ -20,7 +21,7 @@ def get_claude_dir() -> Path:
 
 
 
-def get_marketplace_path() -> Path | None:
+def get_marketplace_path() -> Optional[Path]:
     """
     Find opc-marketplace path.
 
@@ -64,7 +65,7 @@ def get_settings_path() -> Path:
     return get_claude_dir() / "settings.json"
 
 
-def get_git_toplevel(path: Path = None) -> Path | None:
+def get_git_toplevel(path: Path = None) -> Optional[Path]:
     """
     Get git toplevel directory using git rev-parse.
 

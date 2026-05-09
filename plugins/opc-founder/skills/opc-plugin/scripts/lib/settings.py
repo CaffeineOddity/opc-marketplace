@@ -7,10 +7,10 @@ Handles reading/writing Claude settings.json and installed_plugins.json.
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
-def read_json(path: Path) -> dict | None:
+def read_json(path: Path) -> Optional[dict]:
     """
     Read JSON file safely.
 
