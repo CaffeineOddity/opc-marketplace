@@ -32,6 +32,11 @@ def get_opc_founder_path(marketplace_path: Path) -> Path:
     return marketplace_path / "plugins" / "opc-founder"
 
 
+def get_workflows_path(marketplace_path: Path) -> Path:
+    """Get workflows path (at marketplace root, sibling to src)."""
+    return marketplace_path / "workflows"
+
+
 def run_project_init(project_root: Path, marketplace_path: Path, force: bool = False, dry_run: bool = False) -> dict:
     """
     Run project initialization.
@@ -45,7 +50,7 @@ def run_project_init(project_root: Path, marketplace_path: Path, force: bool = F
     Returns:
         dict with results
     """
-    opc_founder_path = get_opc_founder_path(marketplace_path)
+    workflows_path = get_workflows_path(marketplace_path)
     marker_file = project_root / ".opc" / ".project-init"
     gitignore_path = project_root / ".gitignore"
 
@@ -93,7 +98,7 @@ def run_project_init(project_root: Path, marketplace_path: Path, force: bool = F
                 results["gitignore"] = {"status": "already_configured", "action": ".gitignore already has .opc/state/ entry"}
 
     # 2. Copy built-in workflows
-    workflows_source = opc_founder_path / "workflows" / "built-in"
+    workflows_source = workflows_path / "built-in"
     workflows_target = project_root / ".opc" / "workflows"
 
     if not workflows_source.exists():

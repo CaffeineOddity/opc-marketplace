@@ -19,11 +19,11 @@ def install_hud(marketplace_path: Path) -> tuple[bool, str]:
     """
     from .settings import update_statusline
 
-    # HUD is located in opc-founder plugin (no copy needed)
-    hud_path = marketplace_path / "plugins" / "opc-founder" / "hud" / "opc-hud.mjs"
+    # HUD bundle is located in build/hud (built from TypeScript)
+    hud_path = marketplace_path / "build" / "hud" / "opc-hud.bundle.cjs"
 
     if not hud_path.exists():
-        return (False, "HUD source not found, skipping HUD installation.")
+        return (False, "HUD source not found. Please run 'npm run build' in src/hud first.")
 
     # Update settings.json with statusLine pointing to the fixed location
     update_statusline(f"node {hud_path}")
@@ -64,7 +64,7 @@ def check_hud_status() -> dict:
     settings = read_json(settings_path)
     statusline = settings.get("statusLine", {})
     command = statusline.get("command", "")
-    statusline_is_hud = "opc-hud.mjs" in command
+    statusline_is_hud = "opc-hud" in command
 
     return {
         "statusline_configured": statusline_is_hud,

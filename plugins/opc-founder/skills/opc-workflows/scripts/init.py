@@ -29,6 +29,11 @@ def get_opc_founder_path(marketplace_path: Path) -> Path:
     return marketplace_path / "plugins" / "opc-founder"
 
 
+def get_workflows_path(marketplace_path: Path) -> Path:
+    """Get workflows path (at marketplace root, sibling to src)."""
+    return marketplace_path / "workflows"
+
+
 def run_workflows_init(project_root: Path, marketplace_path: Path, force: bool = False, dry_run: bool = False) -> dict:
     """
     Copy built-in workflows to project.
@@ -42,8 +47,8 @@ def run_workflows_init(project_root: Path, marketplace_path: Path, force: bool =
     Returns:
         dict with results
     """
-    opc_founder_path = get_opc_founder_path(marketplace_path)
-    workflows_source = opc_founder_path / "workflows" / "built-in"
+    workflows_path = get_workflows_path(marketplace_path)
+    workflows_source = workflows_path / "built-in"
     workflows_target = project_root / ".opc" / "workflows"
     marker_file = project_root / ".opc" / ".workflows-init"
 

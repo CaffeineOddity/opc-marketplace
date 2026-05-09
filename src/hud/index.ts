@@ -16,6 +16,83 @@
 import { homedir } from "node:os";
 import { join, basename } from "node:path";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface StdinInput {
+  transcript_path?: string;
+  cwd?: string;
+  model?: {
+    display_name?: string;
+  };
+  context_window?: {
+    used_percentage?: number;
+  };
+}
+
+interface TranscriptEntry {
+  timestamp?: string;
+  message?: {
+    content?: Array<{
+      type: string;
+      name?: string;
+      input?: {
+        skill?: string;
+      };
+    }>;
+  };
+}
+
+interface SessionInfo {
+  requirement_id?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface SessionsData {
+  sessions: Record<string, SessionInfo>;
+}
+
+interface StageData {
+  status?: "completed" | "in_progress" | "blocked" | "pending";
+}
+
+interface PipelineState {
+  stages?: Record<string, StageData>;
+  stage_order?: string[];
+  current_stage?: string;
+}
+
+interface ProjectState {
+  project?: {
+    requirement_id?: string;
+  };
+  pipeline?: PipelineState;
+}
+
+interface TranscriptData {
+  skillCallCount: number;
+  toolCallCount: number;
+  agentCallCount: number;
+  lastSkill: string | null;
+}
+
+interface Context {
+  contextPercent: number;
+  modelName: string;
+  opcVersion: string | null;
+  sessionDuration: number;
+  lastSkill: string | null;
+  toolCallCount: number;
+  agentCallCount: number;
+  skillCallCount: number;
+  requirementId: string | null;
+  pipelineStatus: string | null;
+}
 
 // ============================================================================
 // Stdin Parsing
@@ -25,9 +102,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
  * Read stdin from Claude Code statusline
  * Claude Code sends JSON with: transcript_path, cwd, model, context_window
  */
-async function readStdin() {
+async function readStdin(): Promise<StdinInput | null> {
   try {
-    const chunks = [];
+    const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) {
       chunks.push(chunk);
     }
@@ -42,7 +119,7 @@ async function readStdin() {
 /**
  * Get context window percentage from stdin
  */
-function getContextPercent(stdin) {
+function getContextPercent(stdin: StdinInput | null): number {
   if (!stdin?.context_window?.used_percentage) return 0;
   return Math.round(stdin.context_window.used_percentage);
 }
@@ -50,7 +127,7 @@ function getContextPercent(stdin) {
 /**
  * Get model display name
  */
-function getModelName(stdin) {
+function getModelName(stdin: StdinInput | null): string {
   if (!stdin?.model?.display_name) return "Claude";
   const name = stdin.model.display_name;
   // Shorten model names: "Claude Opus 4.6" -> "Opus"
@@ -67,7 +144,7 @@ function getModelName(stdin) {
 /**
  * Parse transcript to extract skill calls, tool calls, and agent calls
  */
-function parseTranscript(transcriptPath) {
+function parseTranscript(transcriptPath: string | undefined): TranscriptData {
   if (!transcriptPath || !existsSync(transcriptPath)) {
     return { skillCallCount: 0, toolCallCount: 0, agentCallCount: 0, lastSkill: null };
   }
@@ -79,11 +156,11 @@ function parseTranscript(transcriptPath) {
     let skillCallCount = 0;
     let toolCallCount = 0;
     let agentCallCount = 0;
-    let lastSkill = null;
+    let lastSkill: string | null = null;
 
     for (const line of lines) {
       try {
-        const entry = JSON.parse(line);
+        const entry: TranscriptEntry = JSON.parse(line);
 
         // Count tool calls
         if (entry.message?.content) {
@@ -122,7 +199,7 @@ function parseTranscript(transcriptPath) {
 /**
  * Get session duration from transcript
  */
-function getSessionDuration(transcriptPath) {
+function getSessionDuration(transcriptPath: string | undefined): number {
   if (!transcriptPath || !existsSync(transcriptPath)) return 0;
 
   try {
@@ -131,7 +208,7 @@ function getSessionDuration(transcriptPath) {
     if (lines.length === 0) return 0;
 
     // First line has session start timestamp
-    const firstEntry = JSON.parse(lines[0]);
+    const firstEntry: TranscriptEntry = JSON.parse(lines[0]);
     const startTime = new Date(firstEntry.timestamp || Date.now());
     const durationMs = Date.now() - startTime.getTime();
     return Math.floor(durationMs / 60_000); // minutes
@@ -147,9 +224,8 @@ function getSessionDuration(transcriptPath) {
 /**
  * Get git toplevel root using spawnSync
  */
-function getGitToplevel(cwd) {
+function getGitToplevel(cwd: string | undefined): string {
   try {
-    const { spawnSync } = require('child_process');
     const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: cwd || process.cwd(),
       encoding: 'utf-8',
@@ -168,7 +244,7 @@ function getGitToplevel(cwd) {
  * Find the most recent project state file
  * Uses sessions.json to find current session, then reads the state file
  */
-function findProjectState(cwd) {
+function findProjectState(cwd: string | undefined): ProjectState | null {
   const gitRoot = getGitToplevel(cwd);
   const stateDir = join(gitRoot, '.opc', 'state');
 
@@ -180,7 +256,7 @@ function findProjectState(cwd) {
     if (!existsSync(sessionsPath)) return null;
 
     const sessionsContent = readFileSync(sessionsPath, 'utf-8');
-    const sessionsData = JSON.parse(sessionsContent);
+    const sessionsData: SessionsData = JSON.parse(sessionsContent);
     const sessions = sessionsData.sessions || {};
 
     // Find the most recent session by updated_at
@@ -210,7 +286,7 @@ function findProjectState(cwd) {
 /**
  * Get stage status icon
  */
-function getStageIcon(status) {
+function getStageIcon(status: string | undefined): string {
   switch (status) {
     case 'completed': return '✅';
     case 'in_progress': return '🔄';
@@ -224,7 +300,7 @@ function getStageIcon(status) {
  * Uses stage_order from project state to respect dynamic pipeline configuration
  * Returns: "product ✅" or "product ✅ → dev 🔄" (arrow flow with status icons)
  */
-function formatPipelineStatus(state) {
+function formatPipelineStatus(state: ProjectState | null): string | null {
   if (!state?.pipeline?.stages) return null;
 
   // Use stage_order from state if available, otherwise fall back to stages keys
@@ -232,7 +308,7 @@ function formatPipelineStatus(state) {
   const currentStage = state.pipeline.current_stage;
 
   // Build pipeline flow showing only stages defined in the project
-  const parts = [];
+  const parts: string[] = [];
 
   for (const stage of stageOrder) {
     const stageData = state.pipeline.stages[stage];
@@ -260,7 +336,7 @@ function formatPipelineStatus(state) {
 /**
  * Get requirement ID for display
  */
-function getRequirementId(state) {
+function getRequirementId(state: ProjectState | null): string | null {
   if (!state?.project?.requirement_id) return null;
   return state.project.requirement_id;
 }
@@ -272,7 +348,7 @@ function getRequirementId(state) {
 /**
  * Get OPC marketplace version from git or manifest
  */
-function getOpcVersion(cwd) {
+function getOpcVersion(cwd: string | undefined): string | null {
   try {
     // Try to get version from git tag or commit
     // For now, just return a placeholder
@@ -296,7 +372,7 @@ const colors = {
   red: "\x1b[31m",
 };
 
-function colorize(text, color) {
+function colorize(text: string, color: keyof typeof colors): string {
   // In safe mode, skip colors
   if (process.env.OPC_HUD_SAFE === "1" || process.platform === "win32") {
     return text;
@@ -311,8 +387,8 @@ function colorize(text, color) {
 /**
  * Render the statusline
  */
-function render(context) {
-  const elements = [];
+function render(context: Context): string {
+  const elements: string[] = [];
 
   // [OPC] label
   elements.push(colorize("[OPC]", "bold"));
@@ -333,7 +409,7 @@ function render(context) {
 
   // Context percentage with color
   const ctxPercent = context.contextPercent;
-  let ctxColor = "green";
+  let ctxColor: keyof typeof colors = "green";
   if (ctxPercent > 85) ctxColor = "red";
   else if (ctxPercent > 70) ctxColor = "yellow";
   elements.push(colorize(`ctx:${ctxPercent}%`, ctxColor));
@@ -372,7 +448,7 @@ function render(context) {
 // Main
 // ============================================================================
 
-async function main() {
+async function main(): Promise<void> {
   try {
     const stdin = await readStdin();
 
@@ -392,7 +468,7 @@ async function main() {
     const opcState = findProjectState(cwd);
 
     // Build context
-    const context = {
+    const context: Context = {
       contextPercent: getContextPercent(stdin),
       modelName: getModelName(stdin),
       opcVersion: getOpcVersion(cwd),
@@ -413,12 +489,12 @@ async function main() {
     if (process.env.OPC_HUD_SAFE === "1" || process.platform === "win32") {
       console.log(output);
     } else {
-      console.log(output.replace(/ /g, " "));
+      console.log(output.replace(/ /g, "\xa0"));
     }
   } catch (error) {
     console.log("[OPC] HUD error");
     if (process.env.OPC_DEBUG) {
-      console.error("[OPC HUD Error]", error.message);
+      console.error("[OPC HUD Error]", (error as Error).message);
     }
   }
 }

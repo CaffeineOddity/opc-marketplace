@@ -3,10 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc && npm run bundle && npm run copy-declarations && npm run update-cache",
-    "bundle": "esbuild dist/index.js --bundle --platform=node --format=cjs --outfile=../../plugins/opc-founder/mcp/dist/opc-state-server.bundle.cjs --external:fs --external:path --external:crypto --external:child_process --external:os",
-    "copy-declarations": "cp dist/*.d.ts ../../plugins/opc-founder/mcp/dist/",
-    "update-cache": "cp ../../plugins/opc-founder/mcp/dist/opc-state-server.bundle.cjs ~/.claude/plugins/cache/opc-marketplace/opc-founder/1.4.1/mcp/dist/ 2>/dev/null || echo 'Cache not found, skipping'"
+    "build": "tsc && npm run bundle",
+    "bundle": "esbuild ../../build/mcp/index.js --bundle --platform=node --format=cjs --outfile=../../build/mcp/opc-state-server.bundle.cjs --external:fs --external:path --external:crypto --external:child_process --external:os --external:@modelcontextprotocol/sdk"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

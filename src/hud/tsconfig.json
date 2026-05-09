@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "../../build/mcp",
+    "outDir": "../../build/hud",
     "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
@@ -12,5 +12,5 @@
     "declaration": true
   },
   "include": ["./*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist"]
 }
