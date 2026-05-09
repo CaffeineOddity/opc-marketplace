@@ -8,7 +8,7 @@
   "mcpServers": {
     "opc": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/../../build/mcp/opc-state-server.bundle.cjs"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../../../marketplaces/opc-marketplace/build/mcp/opc-state-server.bundle.cjs"]
     }
   }
 }
