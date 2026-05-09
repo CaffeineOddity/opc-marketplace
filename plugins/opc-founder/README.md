@@ -22,16 +22,12 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 
 | Tool | Description |
 |------|-------------|
-| `opc_state_init` | Initialize a new project with pipeline tracking |
+| `opc_state_init` | Initialize a new project with pipeline tracking and auto knowledge topic matching |
 | `opc_state_read` | Read current project state and progress |
-| `opc_state_write` | Update stage status, progress, artifacts |
+| `opc_state_write` | Update stage status, progress, artifacts, knowledge_topic |
 | `opc_state_clear` | Clear current task state |
 | `opc_sessions_list` | List all OPC task sessions |
-| `opc_checkpoint_create` | Create a checkpoint before risky operations |
-| `opc_checkpoint_list` | List available checkpoints |
-| `opc_checkpoint_rollback` | Restore state from a checkpoint |
 | `opc_handoff` | Record agent handoff with context |
-| `opc_memory` | Read/write project decisions and patterns |
 | `opc_task_group_create` | Create a parallel/serial task group |
 | `opc_task_update` | Update task status and progress |
 | `opc_task_group_status` | Get status of task groups |
@@ -41,12 +37,14 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 
 | Tool | Description |
 |------|-------------|
-| `opc_knowledge_init` | Initialize knowledge library for a requirement |
-| `opc_knowledge_read` | Read knowledge from a domain/platform/doc |
+| `opc_knowledge_init` | Initialize knowledge library for a topic (requires en_topic_name) |
+| `opc_knowledge_read` | Read knowledge from a category/doc |
 | `opc_knowledge_write` | Write or update knowledge document |
 | `opc_knowledge_exists` | Check if knowledge document exists |
-| `opc_knowledge_list` | List requirements in knowledge library |
-| `opc_knowledge_docs` | List available documents in a domain |
+| `opc_knowledge_list` | List topics in knowledge library |
+| `opc_knowledge_list_brief` | List all documents with brief metadata (progressive loading) |
+| `opc_knowledge_docs` | List available documents in a category |
+| `opc_knowledge_rebuild_index` | Rebuild index.json from filesystem (use when corrupted or out of sync) |
 
 ## Quick Start
 
@@ -76,18 +74,17 @@ OPC provides persistent state management for multi-stage projects:
 - **Stage tracking** — Track progress through product → design → dev → qa → ship → growth
 - **Parallel task groups** — Track concurrent agents with progress per task
 - **Agent handoffs** — Preserve context when passing work between agents
-- **Checkpoints** — Create restore points before risky operations
-- **Project memory** — Store decisions, patterns, and lessons learned
+- **Knowledge library** — Self-evolving knowledge accumulation across stages
 
 ### State Files
 
 ```
 .opc/
 ├── state/
-│   ├── sessions/{session-id}/project-state.json
-│   └── checkpoints/{checkpoint-id}.json
-├── memory/project-memory.json
-└── logs/
+│   └── sessions/{session-id}/project-state.json
+├── knowledge/
+│   └── {topic}/{category}/xxx.md
+└── workflows/
 ```
 
 ### Usage
@@ -162,85 +159,127 @@ OPC provides a self-evolving knowledge library that accumulates project knowledg
 ### Directory Structure
 
 ```
-.opc/knowledgebase/
-├── REQ-001/
+.opc/knowledge/
+├── ios-localization/           # Topic: iOS多语言功能
 │   ├── requirement/
-│   │   └── main.md              # Requirement knowledge
+│   │   └── main.md             # Requirement knowledge
 │   ├── design/
-│   │   ├── ui.md                # UI design
-│   │   └── interaction.md       # Interaction design
-│   ├── platforms/
-│   │   ├── web/
-│   │   │   ├── tech.md          # Web frontend tech
-│   │   │   └── test.md          # Web tests
-│   │   ├── ios/
-│   │   │   ├── tech.md          # iOS tech
-│   │   │   └── test.md          # iOS tests
-│   │   ├── android/
-│   │   │   ├── tech.md          # Android tech
-│   │   │   └── test.md          # Android tests
-│   │   └── miniprogram/
-│   │       ├── tech.md          # Miniprogram tech
-│   │       └── test.md          # Miniprogram tests
-│   ├── backend/
-│   │   ├── api.md               # API documentation
-│   │   ├── architecture.md      # Backend architecture
-│   │   └── test.md              # Backend tests
-│   ├── shared/
-│   │   ├── database.md          # Database schema
-│   │   └── infrastructure.md    # Infrastructure
-│   └── growth/
-│       ├── metrics.md           # Growth metrics
-│       └── analytics.md         # Analytics
-├── REQ-002/
-│   └── ...
-└── index.json                    # Global index
+│   │   └── ui.md               # UI design
+│   ├── ios/
+│   │   └── tech.md             # iOS tech decisions
+│   └── backend/
+│       └── api.md              # API documentation
+├── user-auth/                  # Topic: 用户认证
+│   ├── requirement/
+│   │   └── main.md
+│   ├── design/
+│   │   └── ui.md
+│   ├── web/
+│   │   └── tech.md
+│   └── backend/
+│       └── api.md
+└── index.json                  # Global index
 ```
+
+### Topic-Based Organization
+
+Knowledge library uses **semantic topics** instead of requirement IDs:
+
+| Topic | Description |
+|-------|-------------|
+| `ios-localization` | iOS多语言功能 |
+| `user-auth` | 用户认证功能 |
+| `payment-integration` | 支付集成 |
+
+**Benefits:**
+- Self-describing topics that match task semantics
+- Automatic similarity matching for knowledge reuse
+- No manual ID management
 
 ### Usage Flow
 
 ```
-1. Task Start → Read existing knowledge
-2. Task Execute → Based on knowledge
-3. Task Complete → Update knowledge
+1. Task Start → opc_state_init auto-matches/sets knowledge_topic
+2. Before Stage → Read existing knowledge
+3. After Stage → Write/update knowledge
 ```
 
 ### MCP Tool Usage
 
 ```typescript
-// Initialize knowledge library for a requirement
-opc_knowledge_init("REQ-001", "User Login Feature")
+// Initialize knowledge library for a topic
+opc_knowledge_init("iOS多语言功能", "ios-localization")
 
 // Read requirement before design phase
-opc_knowledge_read("REQ-001", "requirement")
+opc_knowledge_read("ios-localization", "requirement")
 
-// Write design after design phase
-opc_knowledge_write("REQ-001", "design", "ui", "## Login Page Layout\n...")
+// Write design after design phase (with name and description)
+opc_knowledge_write(
+  topic: "ios-localization",
+  category: "design",
+  doc: "ui",
+  content: "## Login Page Layout\n...",
+  name: "UI设计文档",
+  description: "登录页面和主界面的UI设计规范"
+)
 
-// Read web tech before frontend development
-opc_knowledge_read("REQ-001", "platforms", "web", "tech")
+// Read ios tech before development
+opc_knowledge_read("ios-localization", "ios", "tech")
 
-// Write web tech after development
-opc_knowledge_write("REQ-001", "platforms", "web", "tech", "## 2025-05-03\n- LoginForm component\n- useAuth hook")
+// Write ios tech after development
+opc_knowledge_write(
+  topic: "ios-localization",
+  category: "ios",
+  doc: "tech",
+  content: "## 2025-05-03\n- LanguageManager component",
+  name: "技术方案文档",
+  description: "iOS多语言技术实现方案"
+)
 
 // Check if knowledge exists
-opc_knowledge_exists("REQ-001", "platforms", "web", "tech")
+opc_knowledge_exists("ios-localization", "ios", "tech")
 
-// List all requirements
+// List all topics
 opc_knowledge_list()
 
-// List docs in a domain
-opc_knowledge_docs("REQ-001", "platforms")
+// List docs in a category
+opc_knowledge_docs("ios-localization", "ios")
+
+// List all documents with brief metadata (progressive loading)
+opc_knowledge_list_brief()
+
+// Rebuild index from filesystem (use when corrupted or out of sync)
+opc_knowledge_rebuild_index()
 ```
+
+### Index Recovery
+
+If `index.json` becomes corrupted or out of sync with the actual files:
+
+```typescript
+// Rebuild index from filesystem
+opc_knowledge_rebuild_index()
+
+// Returns:
+// - Statistics: topics found, categories found, documents found
+// - Changes: topics added/removed
+// - Current index state
+```
+
+**Use cases:**
+- `index.json` is missing or corrupted
+- Manual file operations (create/delete) were performed
+- Migrating from older versions
+- Syncing index with actual filesystem state
 
 ### Self-Evolution
 
 The knowledge library evolves automatically:
 
-1. **New Requirement** → Initialize knowledge library
-2. **Stage Start** → Read domain knowledge (if exists)
-3. **Stage Complete** → Write/update domain knowledge
-4. **Future Tasks** → Read and build upon existing knowledge
+1. **New Task** → opc_state_init auto-matches or creates knowledge_topic
+2. **Stage Start** → Read category knowledge (if exists)
+3. **Stage Complete** → Write/update category knowledge
+4. **Future Tasks** → Auto-match similar topics and reuse knowledge
 
 **Note:** Knowledge files should be committed to git for team sharing.
 

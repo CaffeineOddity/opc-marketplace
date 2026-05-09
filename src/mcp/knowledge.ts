@@ -630,3 +630,161 @@ export function listKnowledgeDocs(
 
   return docs;
 }
+
+// ============================================================
+// Knowledge Index Rebuild
+// ============================================================
+
+/**
+ * Rebuild the knowledge index from the filesystem.
+ * Scans all topic directories and their categories to reconstruct index.json.
+ *
+ * Use cases:
+ * - index.json is corrupted or missing
+ * - Manual file operations (create/delete) were performed
+ * - Migrating from older versions
+ * - Syncing index with actual filesystem state
+ *
+ * @param cwd Working directory
+ * @returns Rebuilt index and summary of changes
+ */
+export function rebuildKnowledgeIndex(cwd?: string): {
+  index: KnowledgeIndex;
+  stats: {
+    topicsFound: number;
+    categoriesFound: number;
+    docsFound: number;
+    topicsAdded: string[];
+    topicsRemoved: string[];
+  };
+} {
+  const knowledgePath = getKnowledgePath(cwd);
+  const oldIndex = readKnowledgeIndex(cwd);
+  const oldTopics = Object.keys(oldIndex.topics);
+
+  const newIndex: KnowledgeIndex = { topics: {} };
+  const stats = {
+    topicsFound: 0,
+    categoriesFound: 0,
+    docsFound: 0,
+    topicsAdded: [] as string[],
+    topicsRemoved: [] as string[],
+  };
+
+  // Check if knowledge directory exists
+  if (!existsSync(knowledgePath)) {
+    // No knowledge directory, return empty index
+    writeKnowledgeIndex(newIndex, cwd);
+    stats.topicsRemoved = oldTopics;
+    return { index: newIndex, stats };
+  }
+
+  // Scan all directories in knowledge path (each is a topic)
+  const entries = readdirSync(knowledgePath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    // Skip special directories (like .git, etc.)
+    if (entry.name.startsWith('.')) continue;
+
+    const topicSlug = entry.name;
+    const topicPath = join(knowledgePath, topicSlug);
+
+    // Scan categories within topic
+    const domains: Record<string, string[]> = {};
+    let topicUpdatedAt = '';
+    let latestDocTime = 0;
+
+    const categoryEntries = readdirSync(topicPath, { withFileTypes: true });
+
+    for (const catEntry of categoryEntries) {
+      if (!catEntry.isDirectory()) continue;
+
+      const categorySlug = catEntry.name;
+      const categoryPath = join(topicPath, categorySlug);
+
+      // Scan documents within category
+      const docs: string[] = [];
+      const docEntries = readdirSync(categoryPath, { withFileTypes: true });
+
+      for (const docEntry of docEntries) {
+        if (!docEntry.isFile() || !docEntry.name.endsWith('.md')) continue;
+
+        const docName = docEntry.name.replace('.md', '');
+        docs.push(docName);
+        stats.docsFound++;
+
+        // Track latest modification time
+        const docPath = join(categoryPath, docEntry.name);
+        try {
+          const stat = statSync(docPath);
+          if (stat.mtimeMs > latestDocTime) {
+            latestDocTime = stat.mtimeMs;
+          }
+        } catch {
+          // Ignore stat errors
+        }
+      }
+
+      if (docs.length > 0) {
+        domains[categorySlug] = docs.sort();
+        stats.categoriesFound++;
+      }
+    }
+
+    // Only add topic if it has documents
+    if (Object.keys(domains).length > 0) {
+      stats.topicsFound++;
+
+      // Preserve existing metadata if available
+      const existingTopic = oldIndex.topics[topicSlug];
+      const now = new Date().toISOString();
+
+      // Try to extract title from frontmatter of first document found
+      let title = existingTopic?.title || topicSlug;
+      let description = existingTopic?.description || '';
+
+      // Find first document to extract title from frontmatter
+      if (!existingTopic?.title) {
+        for (const [category, docs] of Object.entries(domains)) {
+          if (docs.length > 0) {
+            const docWithMeta = readKnowledgeDocWithMeta(topicSlug, category, docs[0], cwd);
+            if (docWithMeta?.meta.topic) {
+              // Use topic from frontmatter if it matches
+              title = topicSlug;
+              break;
+            }
+          }
+        }
+      }
+
+      newIndex.topics[topicSlug] = {
+        title,
+        description,
+        status: existingTopic?.status || 'in_progress',
+        created_at: existingTopic?.created_at || now,
+        updated_at: latestDocTime > 0 ? new Date(latestDocTime).toISOString() : now,
+        domains,
+      };
+
+      // Track if this is a new topic
+      if (!oldTopics.includes(topicSlug)) {
+        stats.topicsAdded.push(topicSlug);
+      }
+    }
+  }
+
+  // Track removed topics
+  const newTopics = Object.keys(newIndex.topics);
+  for (const oldTopic of oldTopics) {
+    if (!newTopics.includes(oldTopic)) {
+      stats.topicsRemoved.push(oldTopic);
+    }
+  }
+
+  // Write the rebuilt index
+  writeKnowledgeIndex(newIndex, cwd);
+
+  return { index: newIndex, stats };
+}

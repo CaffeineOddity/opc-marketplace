@@ -6,6 +6,7 @@
 export declare const OPC_PATHS: {
     readonly ROOT: ".opc";
     readonly STATE: ".opc/state";
+    readonly SESSIONS: ".opc/state/sessions";
     readonly LOCKS: ".opc/state/locks";
     readonly ARTIFACTS: ".opc/artifacts";
     readonly LOGS: ".opc/logs";

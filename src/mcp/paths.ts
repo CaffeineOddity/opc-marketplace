@@ -14,6 +14,7 @@ import { existsSync, mkdirSync } from 'fs';
 export const OPC_PATHS = {
   ROOT: '.opc',
   STATE: '.opc/state',
+  SESSIONS: '.opc/state/sessions',
   LOCKS: '.opc/state/locks',
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',

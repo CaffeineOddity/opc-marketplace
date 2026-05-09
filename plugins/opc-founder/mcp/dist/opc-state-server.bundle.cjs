@@ -14177,7 +14177,7 @@ var knowledgeTools = [
   },
   {
     name: "opc_knowledge_write",
-    description: "Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite.",
+    description: "Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite. IMPORTANT: Provide name and description for clear document identification.",
     inputSchema: {
       type: "object",
       properties: {
@@ -14185,11 +14185,14 @@ var knowledgeTools = [
         category: { type: "string", description: CATEGORY_DESCRIPTION },
         doc: { type: "string", description: "Document name (without .md extension)" },
         content: { type: "string", description: "Content to write" },
+        name: { type: "string", description: 'Document title (human-readable name, e.g., "\u6280\u672F\u67B6\u6784\u6587\u6863", "API\u63A5\u53E3\u6587\u6863")' },
+        description: { type: "string", description: "Brief description of the document content" },
+        tags: { type: "array", items: { type: "string" }, description: "Optional tags for filtering" },
         section: { type: "string", description: "Section header to update (optional)" },
         mode: { type: "string", enum: ["append", "update", "overwrite"], description: "Write mode (default: append)" },
         workingDirectory: { type: "string" }
       },
-      required: ["category", "doc", "content"]
+      required: ["category", "doc", "content", "name", "description", "tags"]
     }
   },
   {
@@ -14242,6 +14245,16 @@ var knowledgeTools = [
         workingDirectory: { type: "string" }
       }
     }
+  },
+  {
+    name: "opc_knowledge_rebuild_index",
+    description: "Rebuild the knowledge library index.json from the filesystem. Use when index is corrupted, missing, or out of sync with actual files. Scans all topic directories and reconstructs the index with current filesystem state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workingDirectory: { type: "string" }
+      }
+    }
   }
 ];
 var tools = [
@@ -14264,6 +14277,7 @@ var import_fs = require("fs");
 var OPC_PATHS = {
   ROOT: ".opc",
   STATE: ".opc/state",
+  SESSIONS: ".opc/state/sessions",
   LOCKS: ".opc/state/locks",
   ARTIFACTS: ".opc/artifacts",
   LOGS: ".opc/logs",
@@ -15040,6 +15054,101 @@ function listKnowledgeDocs(topic, category, cwd) {
   }
   return docs;
 }
+function rebuildKnowledgeIndex(cwd) {
+  const knowledgePath = getKnowledgePath(cwd);
+  const oldIndex = readKnowledgeIndex(cwd);
+  const oldTopics = Object.keys(oldIndex.topics);
+  const newIndex = { topics: {} };
+  const stats = {
+    topicsFound: 0,
+    categoriesFound: 0,
+    docsFound: 0,
+    topicsAdded: [],
+    topicsRemoved: []
+  };
+  if (!(0, import_fs6.existsSync)(knowledgePath)) {
+    writeKnowledgeIndex(newIndex, cwd);
+    stats.topicsRemoved = oldTopics;
+    return { index: newIndex, stats };
+  }
+  const entries = (0, import_fs6.readdirSync)(knowledgePath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory())
+      continue;
+    if (entry.name.startsWith("."))
+      continue;
+    const topicSlug = entry.name;
+    const topicPath = (0, import_path5.join)(knowledgePath, topicSlug);
+    const domains = {};
+    let topicUpdatedAt = "";
+    let latestDocTime = 0;
+    const categoryEntries = (0, import_fs6.readdirSync)(topicPath, { withFileTypes: true });
+    for (const catEntry of categoryEntries) {
+      if (!catEntry.isDirectory())
+        continue;
+      const categorySlug = catEntry.name;
+      const categoryPath = (0, import_path5.join)(topicPath, categorySlug);
+      const docs = [];
+      const docEntries = (0, import_fs6.readdirSync)(categoryPath, { withFileTypes: true });
+      for (const docEntry of docEntries) {
+        if (!docEntry.isFile() || !docEntry.name.endsWith(".md"))
+          continue;
+        const docName = docEntry.name.replace(".md", "");
+        docs.push(docName);
+        stats.docsFound++;
+        const docPath = (0, import_path5.join)(categoryPath, docEntry.name);
+        try {
+          const stat = (0, import_fs6.statSync)(docPath);
+          if (stat.mtimeMs > latestDocTime) {
+            latestDocTime = stat.mtimeMs;
+          }
+        } catch {
+        }
+      }
+      if (docs.length > 0) {
+        domains[categorySlug] = docs.sort();
+        stats.categoriesFound++;
+      }
+    }
+    if (Object.keys(domains).length > 0) {
+      stats.topicsFound++;
+      const existingTopic = oldIndex.topics[topicSlug];
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      let title = existingTopic?.title || topicSlug;
+      let description = existingTopic?.description || "";
+      if (!existingTopic?.title) {
+        for (const [category, docs] of Object.entries(domains)) {
+          if (docs.length > 0) {
+            const docWithMeta = readKnowledgeDocWithMeta(topicSlug, category, docs[0], cwd);
+            if (docWithMeta?.meta.topic) {
+              title = topicSlug;
+              break;
+            }
+          }
+        }
+      }
+      newIndex.topics[topicSlug] = {
+        title,
+        description,
+        status: existingTopic?.status || "in_progress",
+        created_at: existingTopic?.created_at || now,
+        updated_at: latestDocTime > 0 ? new Date(latestDocTime).toISOString() : now,
+        domains
+      };
+      if (!oldTopics.includes(topicSlug)) {
+        stats.topicsAdded.push(topicSlug);
+      }
+    }
+  }
+  const newTopics = Object.keys(newIndex.topics);
+  for (const oldTopic of oldTopics) {
+    if (!newTopics.includes(oldTopic)) {
+      stats.topicsRemoved.push(oldTopic);
+    }
+  }
+  writeKnowledgeIndex(newIndex, cwd);
+  return { index: newIndex, stats };
+}
 
 // dist/session.js
 var import_fs8 = require("fs");
@@ -15048,11 +15157,48 @@ var import_path7 = require("path");
 // dist/state.js
 var import_fs7 = require("fs");
 var import_path6 = require("path");
+function generateSessionFilename(source, cwd) {
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  const today = /* @__PURE__ */ new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
+  let nextNum = 1;
+  if ((0, import_fs7.existsSync)(sessionsDir)) {
+    const existingFiles = (0, import_fs7.readdirSync)(sessionsDir).filter((f) => f.startsWith(dateStr) && f.endsWith(".json")).map((f) => {
+      const match = f.match(/^\d{8}_(\d{3})_/);
+      return match ? parseInt(match[1], 10) : 0;
+    }).filter((n) => !isNaN(n));
+    if (existingFiles.length > 0) {
+      nextNum = Math.max(...existingFiles) + 1;
+    }
+  }
+  const numStr = String(nextNum).padStart(3, "0");
+  return `${dateStr}_${numStr}_${source}.json`;
+}
 function getProjectStatePath(requirementId, source, cwd) {
-  const stateDir = ensureOpcDir("state", cwd);
-  return (0, import_path6.join)(stateDir, `${requirementId}_${source}`, "project-state.json");
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  const filename = generateSessionFilename(source, cwd);
+  return (0, import_path6.join)(sessionsDir, filename);
+}
+function findSessionByRequirementId(requirementId, cwd) {
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  if (!(0, import_fs7.existsSync)(sessionsDir)) {
+    return null;
+  }
+  const files = (0, import_fs7.readdirSync)(sessionsDir).filter((f) => f.endsWith(".json"));
+  for (const file of files) {
+    const path = (0, import_path6.join)(sessionsDir, file);
+    const state = readJsonFile(path);
+    if (state?.project?.requirement_id === requirementId) {
+      return path;
+    }
+  }
+  return null;
 }
 function readProjectState(requirementId, source, cwd) {
+  const existingPath = findSessionByRequirementId(requirementId, cwd);
+  if (existingPath) {
+    return readJsonFile(existingPath);
+  }
   const path = getProjectStatePath(requirementId, source, cwd);
   return readJsonFile(path);
 }
@@ -15062,7 +15208,10 @@ function writeProjectState(state, cwd) {
     throw new Error("Cannot write project state without requirement_id");
   }
   const source = state.workflow?.source || "auto_assembled";
-  const path = getProjectStatePath(requirementId, source, cwd);
+  let path = findSessionByRequirementId(requirementId, cwd);
+  if (!path) {
+    path = getProjectStatePath(requirementId, source, cwd);
+  }
   const dir = (0, import_path6.join)(path, "..");
   if (!(0, import_fs7.existsSync)(dir)) {
     (0, import_fs7.mkdirSync)(dir, { recursive: true });
@@ -15246,14 +15395,22 @@ function getTaskGroups(state, stage, groupId) {
 
 // dist/session.js
 function generateNextRequirementId(cwd) {
-  const stateDir = ensureOpcDir("state", cwd);
-  if (!(0, import_fs8.existsSync)(stateDir)) {
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  if (!(0, import_fs8.existsSync)(sessionsDir)) {
     return "REQ-001";
   }
-  const existingIds = (0, import_fs8.readdirSync)(stateDir).filter((f) => f.startsWith("REQ-") && f.includes("_")).map((f) => {
-    const match = f.match(/^REQ-(\d+)_/);
-    return match ? parseInt(match[1], 10) : 0;
-  }).filter((n) => !isNaN(n));
+  const sessionFiles = (0, import_fs8.readdirSync)(sessionsDir).filter((f) => f.endsWith(".json"));
+  const existingIds = [];
+  for (const file of sessionFiles) {
+    const path = (0, import_path7.join)(sessionsDir, file);
+    const state = readJsonFile(path);
+    if (state?.project?.requirement_id) {
+      const match = state.project.requirement_id.match(/^REQ-(\d+)$/);
+      if (match) {
+        existingIds.push(parseInt(match[1], 10));
+      }
+    }
+  }
   const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
   return `REQ-${String(nextNum).padStart(3, "0")}`;
 }
@@ -15294,22 +15451,16 @@ function getCurrentSession(lockId, cwd) {
   return index.sessions[lockId] || null;
 }
 function findSimilarTask(projectName, projectDescription, cwd, threshold = 0.5) {
-  const stateDir = ensureOpcDir("state", cwd);
-  if (!(0, import_fs8.existsSync)(stateDir))
-    return null;
-  const taskDirs = (0, import_fs8.readdirSync)(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/));
-  if (taskDirs.length === 0)
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  if (!(0, import_fs8.existsSync)(sessionsDir))
     return null;
   const query = `${projectName} ${projectDescription}`.toLowerCase();
   const queryWords = query.split(/\s+/).filter((w) => w.length > 1);
   let bestMatch = null;
-  for (const dirName of taskDirs) {
-    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
-    if (!match)
-      continue;
-    const requirementId = match[1];
-    const source = match[2];
-    const state = readProjectState(requirementId, source, cwd);
+  const sessionFiles = (0, import_fs8.readdirSync)(sessionsDir).filter((f) => f.endsWith(".json"));
+  for (const file of sessionFiles) {
+    const path = (0, import_path7.join)(sessionsDir, file);
+    const state = readJsonFile(path);
     if (!state)
       continue;
     const titleWords = state.project.name.toLowerCase().split(/\s+/);
@@ -15326,6 +15477,8 @@ function findSimilarTask(projectName, projectDescription, cwd, threshold = 0.5) 
     }
     const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
     if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      const requirementId = state.project.requirement_id || "";
+      const source = state.workflow?.source || "auto_assembled";
       bestMatch = { requirementId, source, state, score };
     }
   }
@@ -15937,6 +16090,9 @@ function handleKnowledgeWrite(args, cwd) {
   const content = args.content;
   const mode = args.mode || "append";
   const section = args.section;
+  const name = args.name;
+  const description = args.description;
+  const tags = args.tags;
   const meta = args.meta;
   if (!topic) {
     return {
@@ -15976,15 +16132,22 @@ Please provide a knowledge category for the document.
   if (!topicExists(topic, cwd)) {
     createTopic(topic, topic, "", cwd);
   }
-  const docMeta = meta ? {
-    name: meta.name,
-    description: meta.description,
-    tags: meta.tags
-  } : void 0;
+  const docMeta = {
+    name: name || meta?.name,
+    description: description || meta?.description,
+    tags: tags || meta?.tags
+  };
   writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd, docMeta);
   const docWithMeta = readKnowledgeDocWithMeta(topic, category, doc, cwd);
   const actualName = docWithMeta?.meta.name || doc;
   const actualDesc = docWithMeta?.meta.description || "";
+  const suggestions = [];
+  if (!name && !docMeta.name) {
+    suggestions.push("\u{1F4A1} **Tip:** Provide `name` parameter for a human-readable document title.");
+  }
+  if (!description && !docMeta.description) {
+    suggestions.push("\u{1F4A1} **Tip:** Provide `description` parameter for a brief document summary.");
+  }
   return {
     content: [{
       type: "text",
@@ -15998,6 +16161,7 @@ Please provide a knowledge category for the document.
 **Section:** ${section}` : ""}
 
 Content has been ${mode === "overwrite" ? "written" : mode === "update" ? "updated" : "appended"}.
+${suggestions.length > 0 ? "\n" + suggestions.join("\n") : ""}
 
 \u{1F4A1} **Naming Convention:**
 - **Document name** should describe the *purpose*, not the topic (e.g., \`architecture\`, \`guide\`, \`api\`, \`test-plan\`)
@@ -16099,6 +16263,48 @@ ${table}
     }]
   };
 }
+function handleKnowledgeRebuild(args, cwd) {
+  const { index, stats } = rebuildKnowledgeIndex(cwd);
+  const changes = [];
+  if (stats.topicsAdded.length > 0) {
+    changes.push(`**Added topics:** ${stats.topicsAdded.join(", ")}`);
+  }
+  if (stats.topicsRemoved.length > 0) {
+    changes.push(`**Removed topics:** ${stats.topicsRemoved.join(", ")}`);
+  }
+  if (changes.length === 0) {
+    changes.push("**No structural changes** - index was in sync with filesystem");
+  }
+  const topicList = Object.entries(index.topics).map(([slug, t]) => {
+    const categories = Object.keys(t.domains).join(", ") || "-";
+    const docCount = Object.values(t.domains).flat().length;
+    return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${docCount} |`;
+  }).join("\n");
+  return {
+    content: [{
+      type: "text",
+      text: `## Knowledge Index Rebuilt
+
+### Statistics
+- **Topics found:** ${stats.topicsFound}
+- **Categories found:** ${stats.categoriesFound}
+- **Documents found:** ${stats.docsFound}
+
+### Changes
+${changes.join("\n")}
+
+### Current Index
+
+| Topic | Title | Status | Categories | Docs |
+|-------|-------|--------|------------|------|
+${topicList}
+
+\u{1F4C1} **Path:** \`.opc/knowledge/index.json\`
+
+\u{1F4A1} Use \`opc_knowledge_list\` to see detailed document listing.`
+    }]
+  };
+}
 
 // dist/handlers/index.js
 var handlers = {
@@ -16118,7 +16324,8 @@ var handlers = {
   opc_knowledge_exists: (args, cwd) => handleKnowledgeExists(args, cwd),
   opc_knowledge_list: (args, cwd) => handleKnowledgeList(args, cwd),
   opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd),
-  opc_knowledge_list_brief: (args, cwd) => handleKnowledgeListBrief(args, cwd)
+  opc_knowledge_list_brief: (args, cwd) => handleKnowledgeListBrief(args, cwd),
+  opc_knowledge_rebuild_index: (args, cwd) => handleKnowledgeRebuild(args, cwd)
 };
 async function handleToolCall(name, args) {
   const cwd = args.workingDirectory;

@@ -4,7 +4,24 @@
  * Project state and handoffs.
  */
 import type { ProjectState, HandoffRecord, TaskGroup, WorkflowSpec } from './types.js';
+/**
+ * Generate session filename: {YYYYMMDD}_{NUM}_{source}.json
+ * NUM is a 3-digit sequence number for the day
+ */
+export declare function generateSessionFilename(source: 'matched' | 'auto_assembled', cwd?: string): string;
+/**
+ * Get the path for a new session file
+ */
 export declare function getProjectStatePath(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): string;
+/**
+ * Get session file path by filename (for existing sessions)
+ */
+export declare function getSessionPathByFilename(filename: string, cwd?: string): string;
+/**
+ * Find session file by requirement_id
+ * Returns the path if found, null otherwise
+ */
+export declare function findSessionByRequirementId(requirementId: string, cwd?: string): string | null;
 export declare function readProjectState(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): ProjectState | null;
 export declare function writeProjectState(state: ProjectState, cwd?: string): void;
 export declare function initializeProjectState(name: string, description: string, lockId: string, requirementId?: string, cwd?: string, workflow?: WorkflowSpec | null, workflowSource?: 'matched' | 'auto_assembled', workflowConfidence?: number, knowledgeTopic?: string, knowledgeCategory?: string): ProjectState;

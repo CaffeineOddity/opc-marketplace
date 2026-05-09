@@ -224,7 +224,7 @@ const knowledgeTools: Tool[] = [
   },
   {
     name: 'opc_knowledge_write',
-    description: 'Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite.',
+    description: 'Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite. IMPORTANT: Provide name and description for clear document identification.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -232,11 +232,14 @@ const knowledgeTools: Tool[] = [
         category: { type: 'string', description: CATEGORY_DESCRIPTION },
         doc: { type: 'string', description: 'Document name (without .md extension)' },
         content: { type: 'string', description: 'Content to write' },
+        name: { type: 'string', description: 'Document title (human-readable name, e.g., "技术架构文档", "API接口文档")' },
+        description: { type: 'string', description: 'Brief description of the document content' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags for filtering' },
         section: { type: 'string', description: 'Section header to update (optional)' },
         mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
         workingDirectory: { type: 'string' },
       },
-      required: ['category', 'doc', 'content'],
+      required: ['category', 'doc', 'content', 'name', 'description', 'tags'],
     },
   },
   {
@@ -286,6 +289,16 @@ const knowledgeTools: Tool[] = [
       properties: {
         topic: { type: 'string', description: 'Filter by topic' },
         category: { type: 'string', description: CATEGORY_DESCRIPTION },
+        workingDirectory: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'opc_knowledge_rebuild_index',
+    description: 'Rebuild the knowledge library index.json from the filesystem. Use when index is corrupted, missing, or out of sync with actual files. Scans all topic directories and reconstructs the index with current filesystem state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
         workingDirectory: { type: 'string' },
       },
     },

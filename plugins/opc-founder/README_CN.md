@@ -22,16 +22,12 @@
 
 | 工具 | 描述 |
 |------|------|
-| `opc_state_init` | 初始化项目状态，创建 session |
+| `opc_state_init` | 初始化项目状态，自动匹配知识库主题 |
 | `opc_state_read` | 读取项目进度和阶段状态 |
-| `opc_state_write` | 更新阶段状态、进度、产出物 |
+| `opc_state_write` | 更新阶段状态、进度、产出物、知识主题 |
 | `opc_state_clear` | 清除当前任务状态 |
 | `opc_sessions_list` | 列出所有 OPC 任务会话 |
-| `opc_checkpoint_create` | 创建检查点 |
-| `opc_checkpoint_list` | 列出所有检查点 |
-| `opc_checkpoint_rollback` | 回滚到检查点 |
 | `opc_handoff` | 记录代理交接上下文 |
-| `opc_memory` | 读写项目记忆 |
 | `opc_task_group_create` | 创建并行/串行任务组 |
 | `opc_task_update` | 更新任务状态和进度 |
 | `opc_task_group_status` | 获取任务组状态 |
@@ -41,12 +37,14 @@
 
 | 工具 | 描述 |
 |------|------|
-| `opc_knowledge_init` | 为需求初始化知识库 |
-| `opc_knowledge_read` | 从域/平台/文档读取知识 |
+| `opc_knowledge_init` | 为主题初始化知识库（需要 en_topic_name） |
+| `opc_knowledge_read` | 从分类/文档读取知识 |
 | `opc_knowledge_write` | 写入或更新知识文档 |
 | `opc_knowledge_exists` | 检查知识文档是否存在 |
-| `opc_knowledge_list` | 列出知识库中的需求 |
-| `opc_knowledge_docs` | 列出域中的可用文档 |
+| `opc_knowledge_list` | 列出知识库中的主题 |
+| `opc_knowledge_list_brief` | 列出所有文档的简要元数据（渐进加载） |
+| `opc_knowledge_docs` | 列出分类中的可用文档 |
+| `opc_knowledge_rebuild_index` | 从文件系统重建 index.json（用于损坏或不同步时） |
 
 ## 快速开始
 
@@ -76,18 +74,17 @@ OPC 为多阶段项目提供持久化状态管理：
 - **阶段追踪** — 追踪 product → design → dev → qa → ship → growth 进度
 - **并行任务组** — 追踪并发代理，支持每个任务的进度
 - **代理交接** — 在代理之间传递工作时保留上下文
-- **检查点** — 在风险操作前创建恢复点
-- **项目记忆** — 存储决策、模式和经验教训
+- **知识库** — 自演化的知识积累，跨阶段共享
 
 ### 状态文件
 
 ```
 .opc/
 ├── state/
-│   ├── sessions/{session-id}/project-state.json
-│   └── checkpoints/{checkpoint-id}.json
-├── memory/project-memory.json
-└── logs/
+│   └── sessions/{session-id}/project-state.json
+├── knowledge/
+│   └── {topic}/{category}/xxx.md
+└── workflows/
 ```
 
 ### 使用方式

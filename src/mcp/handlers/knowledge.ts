@@ -19,6 +19,7 @@ import {
   listKnowledgeDocs,
   listKnowledgeDocsBrief,
   readKnowledgeDocWithMeta,
+  rebuildKnowledgeIndex,
 } from '../knowledge.js';
 import { getCurrentTask } from '../session.js';
 import type { ToolResult } from './index.js';
@@ -152,7 +153,11 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
   const content = args.content as string;
   const mode = (args.mode as 'append' | 'update' | 'overwrite') || 'append';
   const section = args.section as string | undefined;
-  // Optional metadata from caller
+  // Direct metadata parameters (recommended)
+  const name = args.name as string | undefined;
+  const description = args.description as string | undefined;
+  const tags = args.tags as string[] | undefined;
+  // Legacy meta object support (for backward compatibility)
   const meta = args.meta as Record<string, unknown> | undefined;
 
   if (!topic) {
@@ -197,12 +202,12 @@ Please provide a knowledge category for the document.
     createTopic(topic, topic, '', cwd);
   }
 
-  // Prepare metadata if provided
-  const docMeta = meta ? {
-    name: meta.name as string | undefined,
-    description: meta.description as string | undefined,
-    tags: meta.tags as string[] | undefined,
-  } : undefined;
+  // Prepare metadata: direct parameters take precedence over meta object
+  const docMeta = {
+    name: name || (meta?.name as string | undefined),
+    description: description || (meta?.description as string | undefined),
+    tags: tags || (meta?.tags as string[] | undefined),
+  };
 
   writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd, docMeta);
 
@@ -210,6 +215,15 @@ Please provide a knowledge category for the document.
   const docWithMeta = readKnowledgeDocWithMeta(topic, category, doc, cwd);
   const actualName = docWithMeta?.meta.name || doc;
   const actualDesc = docWithMeta?.meta.description || '';
+
+  // Build suggestion if name/description not provided
+  const suggestions: string[] = [];
+  if (!name && !docMeta.name) {
+    suggestions.push('💡 **Tip:** Provide `name` parameter for a human-readable document title.');
+  }
+  if (!description && !docMeta.description) {
+    suggestions.push('💡 **Tip:** Provide `description` parameter for a brief document summary.');
+  }
 
   return {
     content: [{
@@ -223,6 +237,7 @@ Please provide a knowledge category for the document.
 **Mode:** ${mode}${section ? `\n**Section:** ${section}` : ''}
 
 Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updated' : 'appended'}.
+${suggestions.length > 0 ? '\n' + suggestions.join('\n') : ''}
 
 💡 **Naming Convention:**
 - **Document name** should describe the *purpose*, not the topic (e.g., \`architecture\`, \`guide\`, \`api\`, \`test-plan\`)
@@ -347,6 +362,55 @@ export function handleKnowledgeListBrief(args: Record<string, unknown>, cwd: str
 ${table}
 
 💡 Use \`opc_knowledge_read\` to read full content of specific documents.`,
+    }],
+  };
+}
+
+export function handleKnowledgeRebuild(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
+  const { index, stats } = rebuildKnowledgeIndex(cwd);
+
+  const changes: string[] = [];
+
+  if (stats.topicsAdded.length > 0) {
+    changes.push(`**Added topics:** ${stats.topicsAdded.join(', ')}`);
+  }
+  if (stats.topicsRemoved.length > 0) {
+    changes.push(`**Removed topics:** ${stats.topicsRemoved.join(', ')}`);
+  }
+  if (changes.length === 0) {
+    changes.push('**No structural changes** - index was in sync with filesystem');
+  }
+
+  const topicList = Object.entries(index.topics)
+    .map(([slug, t]) => {
+      const categories = Object.keys(t.domains).join(', ') || '-';
+      const docCount = Object.values(t.domains).flat().length;
+      return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${docCount} |`;
+    })
+    .join('\n');
+
+  return {
+    content: [{
+      type: 'text',
+      text: `## Knowledge Index Rebuilt
+
+### Statistics
+- **Topics found:** ${stats.topicsFound}
+- **Categories found:** ${stats.categoriesFound}
+- **Documents found:** ${stats.docsFound}
+
+### Changes
+${changes.join('\n')}
+
+### Current Index
+
+| Topic | Title | Status | Categories | Docs |
+|-------|-------|--------|------------|------|
+${topicList}
+
+📁 **Path:** \`.opc/knowledge/index.json\`
+
+💡 Use \`opc_knowledge_list\` to see detailed document listing.`,
     }],
   };
 }

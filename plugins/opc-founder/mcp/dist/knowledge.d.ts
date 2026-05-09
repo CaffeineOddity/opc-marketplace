@@ -69,3 +69,26 @@ export declare function readKnowledgeDocWithMeta(topic: string, category: Knowle
  */
 export declare function listKnowledgeDocsBrief(topic?: string, category?: KnowledgeCategory, cwd?: string): KnowledgeDocMeta[];
 export declare function listKnowledgeDocs(topic: string, category: KnowledgeCategory, cwd?: string): string[];
+/**
+ * Rebuild the knowledge index from the filesystem.
+ * Scans all topic directories and their categories to reconstruct index.json.
+ *
+ * Use cases:
+ * - index.json is corrupted or missing
+ * - Manual file operations (create/delete) were performed
+ * - Migrating from older versions
+ * - Syncing index with actual filesystem state
+ *
+ * @param cwd Working directory
+ * @returns Rebuilt index and summary of changes
+ */
+export declare function rebuildKnowledgeIndex(cwd?: string): {
+    index: KnowledgeIndex;
+    stats: {
+        topicsFound: number;
+        categoriesFound: number;
+        docsFound: number;
+        topicsAdded: string[];
+        topicsRemoved: string[];
+    };
+};

@@ -6,7 +6,7 @@
 import type { SessionIndex, ProjectState } from './types.js';
 /**
  * Generate the next available requirement ID
- * Scans existing task directories to find the next number
+ * Scans existing session files to find the next number
  */
 export declare function generateNextRequirementId(cwd?: string): string;
 export declare function readSessionIndex(cwd?: string): SessionIndex;

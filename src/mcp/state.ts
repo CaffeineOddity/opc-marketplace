@@ -12,15 +12,94 @@ import type { ProjectState, HandoffRecord, TaskGroup, StageState, WorkflowSpec }
 import { buildStagesFromWorkflow, buildStagesAuto, buildDefaultGates } from './workflow.js';
 
 // ============================================================
-// Project State Paths
+// Session File Naming
 // ============================================================
 
-export function getProjectStatePath(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): string {
-  const stateDir = ensureOpcDir('state', cwd);
-  return join(stateDir, `${requirementId}_${source}`, 'project-state.json');
+/**
+ * Generate session filename: {YYYYMMDD}_{NUM}_{source}.json
+ * NUM is a 3-digit sequence number for the day
+ */
+export function generateSessionFilename(
+  source: 'matched' | 'auto_assembled',
+  cwd?: string
+): string {
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+
+  // Find existing sessions for today to determine next number
+  let nextNum = 1;
+  if (existsSync(sessionsDir)) {
+    const existingFiles = readdirSync(sessionsDir)
+      .filter(f => f.startsWith(dateStr) && f.endsWith('.json'))
+      .map(f => {
+        const match = f.match(/^\d{8}_(\d{3})_/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => !isNaN(n));
+
+    if (existingFiles.length > 0) {
+      nextNum = Math.max(...existingFiles) + 1;
+    }
+  }
+
+  const numStr = String(nextNum).padStart(3, '0');
+  return `${dateStr}_${numStr}_${source}.json`;
+}
+
+/**
+ * Get the path for a new session file
+ */
+export function getProjectStatePath(
+  requirementId: string,
+  source: 'matched' | 'auto_assembled',
+  cwd?: string
+): string {
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  const filename = generateSessionFilename(source, cwd);
+  return join(sessionsDir, filename);
+}
+
+/**
+ * Get session file path by filename (for existing sessions)
+ */
+export function getSessionPathByFilename(filename: string, cwd?: string): string {
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  return join(sessionsDir, filename);
+}
+
+/**
+ * Find session file by requirement_id
+ * Returns the path if found, null otherwise
+ */
+export function findSessionByRequirementId(
+  requirementId: string,
+  cwd?: string
+): string | null {
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  if (!existsSync(sessionsDir)) {
+    return null;
+  }
+
+  const files = readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+  for (const file of files) {
+    const path = join(sessionsDir, file);
+    const state = readJsonFile<ProjectState>(path);
+    if (state?.project?.requirement_id === requirementId) {
+      return path;
+    }
+  }
+
+  return null;
 }
 
 export function readProjectState(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): ProjectState | null {
+  // First try to find existing session by requirement_id
+  const existingPath = findSessionByRequirementId(requirementId, cwd);
+  if (existingPath) {
+    return readJsonFile<ProjectState>(existingPath);
+  }
+  // Fallback to old path logic for backward compatibility
   const path = getProjectStatePath(requirementId, source, cwd);
   return readJsonFile<ProjectState>(path);
 }
@@ -31,7 +110,14 @@ export function writeProjectState(state: ProjectState, cwd?: string): void {
     throw new Error('Cannot write project state without requirement_id');
   }
   const source = state.workflow?.source || 'auto_assembled';
-  const path = getProjectStatePath(requirementId, source, cwd);
+
+  // Try to find existing session file to update
+  let path = findSessionByRequirementId(requirementId, cwd);
+  if (!path) {
+    // Create new session file
+    path = getProjectStatePath(requirementId, source, cwd);
+  }
+
   const dir = join(path, '..');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });

@@ -30,6 +30,7 @@ import {
   handleKnowledgeList,
   handleKnowledgeDocs,
   handleKnowledgeListBrief,
+  handleKnowledgeRebuild,
 } from './knowledge.js';
 
 // ============================================================
@@ -56,6 +57,7 @@ const handlers: Record<string, HandlerFn> = {
   opc_knowledge_list: (args, cwd) => handleKnowledgeList(args, cwd),
   opc_knowledge_docs: (args, cwd) => handleKnowledgeDocs(args, cwd),
   opc_knowledge_list_brief: (args, cwd) => handleKnowledgeListBrief(args, cwd),
+  opc_knowledge_rebuild_index: (args, cwd) => handleKnowledgeRebuild(args, cwd),
 };
 
 // ============================================================

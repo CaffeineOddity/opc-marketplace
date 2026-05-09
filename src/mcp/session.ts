@@ -18,21 +18,29 @@ import { getCurrentLockId } from './lock.js';
 
 /**
  * Generate the next available requirement ID
- * Scans existing task directories to find the next number
+ * Scans existing session files to find the next number
  */
 export function generateNextRequirementId(cwd?: string): string {
-  const stateDir = ensureOpcDir('state', cwd);
-  if (!existsSync(stateDir)) {
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+
+  if (!existsSync(sessionsDir)) {
     return 'REQ-001';
   }
 
-  const existingIds = readdirSync(stateDir)
-    .filter(f => f.startsWith('REQ-') && f.includes('_'))
-    .map(f => {
-      const match = f.match(/^REQ-(\d+)_/);
-      return match ? parseInt(match[1], 10) : 0;
-    })
-    .filter(n => !isNaN(n));
+  const sessionFiles = readdirSync(sessionsDir)
+    .filter(f => f.endsWith('.json'));
+
+  const existingIds: number[] = [];
+  for (const file of sessionFiles) {
+    const path = join(sessionsDir, file);
+    const state = readJsonFile<ProjectState>(path);
+    if (state?.project?.requirement_id) {
+      const match = state.project.requirement_id.match(/^REQ-(\d+)$/);
+      if (match) {
+        existingIds.push(parseInt(match[1], 10));
+      }
+    }
+  }
 
   const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
   return `REQ-${String(nextNum).padStart(3, '0')}`;
@@ -109,11 +117,17 @@ export function getCurrentRequirementId(lockId: string, cwd?: string): string | 
 // ============================================================
 
 export function listAllTasks(cwd?: string): string[] {
-  const stateDir = ensureOpcDir('state', cwd);
-  if (!existsSync(stateDir)) return [];
-  return readdirSync(stateDir).filter(f =>
-    f.startsWith('REQ-') || f.match(/^REQ-\d+_(matched|auto_assembled)$/)
-  );
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  if (!existsSync(sessionsDir)) return [];
+
+  return readdirSync(sessionsDir)
+    .filter(f => f.endsWith('.json'))
+    .map(f => {
+      const path = join(sessionsDir, f);
+      const state = readJsonFile<ProjectState>(path);
+      return state?.project?.requirement_id;
+    })
+    .filter((id): id is string => !!id);
 }
 
 /**
@@ -126,27 +140,19 @@ export function findSimilarTask(
   cwd?: string,
   threshold: number = 0.5
 ): { requirementId: string; source: 'matched' | 'auto_assembled'; state: ProjectState; score: number } | null {
-  const stateDir = ensureOpcDir('state', cwd);
-  if (!existsSync(stateDir)) return null;
-
-  const taskDirs = readdirSync(stateDir).filter(f =>
-    f.match(/^REQ-\d+_(matched|auto_assembled)$/)
-  );
-
-  if (taskDirs.length === 0) return null;
+  const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  if (!existsSync(sessionsDir)) return null;
 
   const query = `${projectName} ${projectDescription}`.toLowerCase();
   const queryWords = query.split(/\s+/).filter(w => w.length > 1);
 
   let bestMatch: { requirementId: string; source: 'matched' | 'auto_assembled'; state: ProjectState; score: number } | null = null;
 
-  for (const dirName of taskDirs) {
-    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
-    if (!match) continue;
+  const sessionFiles = readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
 
-    const requirementId = match[1];
-    const source = match[2] as 'matched' | 'auto_assembled';
-    const state = readProjectState(requirementId, source, cwd);
+  for (const file of sessionFiles) {
+    const path = join(sessionsDir, file);
+    const state = readJsonFile<ProjectState>(path);
     if (!state) continue;
 
     // Calculate similarity score
@@ -167,6 +173,8 @@ export function findSimilarTask(
     const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
 
     if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      const requirementId = state.project.requirement_id || '';
+      const source = state.workflow?.source || 'auto_assembled';
       bestMatch = { requirementId, source, state, score };
     }
   }
