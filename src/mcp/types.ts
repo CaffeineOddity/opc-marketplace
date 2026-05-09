@@ -110,6 +110,7 @@ export interface ProjectState {
     description: string;
     requirement_id?: string;
     knowledge_topic?: string;  // Links to knowledge topic (e.g., "hud", "state-management")
+    knowledge_category?: string;  // Primary knowledge category (e.g., "ios", "web", "backend")
     created_at: string;
     updated_at: string;
   };

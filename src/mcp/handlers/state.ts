@@ -55,7 +55,7 @@ export function handleStateRead(cwd: string | undefined): ToolResult {
     : '';
 
   const topicInfo = state.project.knowledge_topic
-    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}`
+    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
     : '';
 
   const workflowInfo = state.workflow
@@ -171,32 +171,37 @@ Options:
     }
   }
 
+  // Match knowledge topic BEFORE initializing state
+  let matchedKnowledgeTopic: string | undefined;
+  let matchedKnowledgeCategory: string | undefined;
+  let knowledgeTopicInfo = '';
+  if (!isReused || !similarTask!.state.project.knowledge_topic) {
+    const similarTopic = findSimilarKnowledgeTopic(projectName, projectDescription, cwd, 0.5);
+    if (similarTopic) {
+      matchedKnowledgeTopic = similarTopic.topic;
+      matchedKnowledgeCategory = similarTopic.category;
+      knowledgeTopicInfo = `\n\n📚 **Matched knowledge topic:** ${similarTopic.topic}${similarTopic.category ? ` (${similarTopic.category})` : ''} (${Math.round(similarTopic.score * 100)}% similarity)`;
+    }
+  } else {
+    // Reused task already has knowledge topic
+    matchedKnowledgeTopic = similarTask!.state.project.knowledge_topic;
+    matchedKnowledgeCategory = similarTask!.state.project.knowledge_category;
+  }
+
   bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
 
   const state = isReused
     ? similarTask!.state
     : initializeProjectState(
         projectName, projectDescription, lockId, requirementId, cwd,
-        matchedWorkflow, workflowSource, workflowConfidence
+        matchedWorkflow, workflowSource, workflowConfidence,
+        matchedKnowledgeTopic, matchedKnowledgeCategory
       );
 
   // Update project name/description if reused (task evolved)
   if (isReused) {
     state.project.name = projectName;
     state.project.description = projectDescription;
-  }
-
-  // Smart knowledge topic matching
-  let knowledgeTopicInfo = '';
-  if (!state.project.knowledge_topic) {
-    // Try to find similar knowledge topic
-    const similarTopic = findSimilarKnowledgeTopic(projectName, projectDescription, cwd, 0.5);
-    if (similarTopic) {
-      state.project.knowledge_topic = similarTopic.topic;
-      knowledgeTopicInfo = `\n\n📚 **Matched knowledge topic:** ${similarTopic.topic} (${Math.round(similarTopic.score * 100)}% similarity)`;
-    } else {
-      state.project.knowledge_topic = '';
-    }
   }
 
   const firstStage = state.pipeline.current_stage;
@@ -230,7 +235,7 @@ Options:
     : `\n\n🆕 **Created new task:** ${requirementId}`;
 
   const knowledgeTopicDisplay = state.project.knowledge_topic
-    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}`
+    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
     : '\n**Knowledge Topic:** (not set)';
 
   const nextSteps = state.project.knowledge_topic

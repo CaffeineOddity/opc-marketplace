@@ -129,7 +129,7 @@ export function findSimilarKnowledgeTopic(
   taskDescription: string,
   cwd?: string,
   threshold: number = 0.5
-): { topic: string; title: string; score: number } | null {
+): { topic: string; title: string; score: number; category?: string } | null {
   const index = readKnowledgeIndex(cwd);
   const topics = Object.entries(index.topics);
 
@@ -138,7 +138,7 @@ export function findSimilarKnowledgeTopic(
   const query = `${taskTitle} ${taskDescription}`.toLowerCase();
   const queryWords = query.split(/\s+/).filter(w => w.length > 1);
 
-  let bestMatch: { topic: string; title: string; score: number } | null = null;
+  let bestMatch: { topic: string; title: string; score: number; category?: string } | null = null;
 
   for (const [slug, data] of topics) {
     const titleWords = data.title.toLowerCase().split(/\s+/);
@@ -158,7 +158,16 @@ export function findSimilarKnowledgeTopic(
     const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
 
     if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
-      bestMatch = { topic: slug, title: data.title, score };
+      // Infer primary category from domains (first non-empty category)
+      const categories = Object.keys(data.domains);
+      const primaryCategory = categories.find(c => data.domains[c]?.length > 0);
+
+      bestMatch = {
+        topic: slug,
+        title: data.title,
+        score,
+        category: primaryCategory
+      };
     }
   }
 

@@ -14,5 +14,15 @@ export declare function bindSessionToRequirement(lockId: string, requirementId: 
 export declare function getCurrentSession(lockId: string, cwd?: string): SessionIndex['sessions'][string] | null;
 export declare function getCurrentRequirementId(lockId: string, cwd?: string): string | null;
 export declare function listAllTasks(cwd?: string): string[];
+/**
+ * Find similar existing task by project name/description similarity.
+ * Returns the most similar task if similarity >= threshold.
+ */
+export declare function findSimilarTask(projectName: string, projectDescription: string, cwd?: string, threshold?: number): {
+    requirementId: string;
+    source: 'matched' | 'auto_assembled';
+    state: ProjectState;
+    score: number;
+} | null;
 export declare function getCurrentTask(cwd?: string): ProjectState | null;
 export declare function clearCurrentTask(cwd?: string): boolean;

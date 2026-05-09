@@ -76,6 +76,7 @@ export interface ProjectState {
         description: string;
         requirement_id?: string;
         knowledge_topic?: string;
+        knowledge_category?: string;
         created_at: string;
         updated_at: string;
     };
@@ -198,8 +199,12 @@ export interface ProjectMemory {
     entries: MemoryEntry[];
     updated_at: string;
 }
-export declare const KNOWLEDGE_CATEGORIES: readonly ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"];
-export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number];
+export type KnowledgeCategory = string;
+export declare const RECOMMENDED_CATEGORIES: readonly ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth", "bug-fix", "issue", "tech-doc", "guide", "api", "architecture"];
+export declare const TASK_STAGES: readonly ["product", "design", "dev", "qa", "ship", "growth"];
+export type TaskStage = typeof TASK_STAGES[number];
+export declare const STAGE_STATUSES: readonly ["pending", "in_progress", "completed", "blocked"];
+export type StageStatus = typeof STAGE_STATUSES[number];
 export interface KnowledgeIndex {
     topics: Record<string, {
         title: string;

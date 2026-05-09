@@ -16,14 +16,27 @@ export declare function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string)
  */
 export declare function generateTopicSlug(title: string): string;
 /**
- * Find or create a topic for a given task
- * Returns the topic slug
+ * Find similar existing topic by title/description similarity.
+ * Used for automatic knowledge topic matching.
  */
-export declare function findOrCreateTopic(taskTitle: string, taskDescription: string, cwd?: string, enTopicName?: string): {
+export declare function findSimilarKnowledgeTopic(taskTitle: string, taskDescription: string, cwd?: string, threshold?: number): {
     topic: string;
-    isNew: boolean;
+    title: string;
+    score: number;
+    category?: string;
+} | null;
+/**
+ * Create a new knowledge topic.
+ * Returns the created topic info.
+ */
+export declare function createTopic(topicSlug: string, title: string, description: string, cwd?: string): {
+    topic: string;
     title: string;
 };
+/**
+ * Check if a topic exists.
+ */
+export declare function topicExists(topicSlug: string, cwd?: string): boolean;
 /**
  * Get topic info by slug
  */

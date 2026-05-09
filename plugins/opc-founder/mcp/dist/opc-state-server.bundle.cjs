@@ -13967,6 +13967,29 @@ var StdioServerTransport = class {
   }
 };
 
+// dist/types.js
+var RECOMMENDED_CATEGORIES = [
+  "requirement",
+  "design",
+  "backend",
+  "ios",
+  "android",
+  "harmony",
+  "web",
+  "miniprogram",
+  "qa",
+  "ship",
+  "growth",
+  "bug-fix",
+  "issue",
+  "tech-doc",
+  "guide",
+  "api",
+  "architecture"
+];
+var TASK_STAGES = ["product", "design", "dev", "qa", "ship", "growth"];
+var STAGE_STATUSES = ["pending", "in_progress", "completed", "blocked"];
+
 // dist/tools.js
 var stateTools = [
   {
@@ -13981,14 +14004,15 @@ var stateTools = [
   },
   {
     name: "opc_state_write",
-    description: "Update OPC project state. Used by founder-agent to track pipeline progress.",
+    description: "Update OPC project state. Used by founder-agent to track pipeline progress and set knowledge topic.",
     inputSchema: {
       type: "object",
       properties: {
         project_name: { type: "string", description: "Project name (for new projects)" },
         project_description: { type: "string", description: "Project description" },
-        stage: { type: "string", enum: ["product", "design", "dev", "qa", "ship", "growth"] },
-        stage_status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
+        knowledge_topic: { type: "string", description: 'Knowledge topic to associate with this task (e.g., "ios-localization")' },
+        stage: { type: "string", enum: [...TASK_STAGES] },
+        stage_status: { type: "string", enum: [...STAGE_STATUSES] },
         agent: { type: "string", description: "Agent name to record" },
         artifact: { type: "string", description: "Artifact path to record" },
         progress: { type: "object", description: "Progress percentages by subtask" },
@@ -13999,17 +14023,15 @@ var stateTools = [
   },
   {
     name: "opc_state_init",
-    description: "Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.",
+    description: "Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window. Skills should first check opc_sessions_list, opc_knowledge_list to decide whether to reuse existing resources or create new ones. Automatically matches workflows from .opc/workflows/ directory.",
     inputSchema: {
       type: "object",
       properties: {
         project_name: { type: "string", description: "Project name" },
         project_description: { type: "string", description: "Project description" },
-        requirement_id: { type: "string", description: "Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing." },
-        en_topic_name: { type: "string", description: 'English topic name for knowledge library directory (e.g., "localization", "app-login", "app-launch"). Must be semantic and concise.' },
         workingDirectory: { type: "string" }
       },
-      required: ["project_name", "en_topic_name"]
+      required: ["project_name"]
     }
   },
   {
@@ -14113,7 +14135,7 @@ var taskGroupTools = [
     inputSchema: {
       type: "object",
       properties: {
-        stage: { type: "string", description: "Stage name (product/design/dev/qa/ship/growth)" },
+        stage: { type: "string", enum: [...TASK_STAGES] },
         group_name: { type: "string", description: "Name for this task group" },
         tasks: {
           type: "array",
@@ -14157,7 +14179,7 @@ var taskGroupTools = [
     inputSchema: {
       type: "object",
       properties: {
-        stage: { type: "string", description: "Stage name" },
+        stage: { type: "string", enum: [...TASK_STAGES], description: "Stage name" },
         group_id: { type: "string", description: "Group ID (optional, shows all if omitted)" },
         workingDirectory: { type: "string" }
       }
@@ -14176,7 +14198,8 @@ var workflowTools = [
     }
   }
 ];
-var KNOWLEDGE_CATEGORIES = ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth"];
+var CATEGORY_EXAMPLES = RECOMMENDED_CATEGORIES.slice(0, 8).join(", ");
+var CATEGORY_DESCRIPTION = `Knowledge category. Examples: ${CATEGORY_EXAMPLES}. You can also use custom categories.`;
 var knowledgeTools = [
   {
     name: "opc_knowledge_init",
@@ -14198,7 +14221,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         doc: { type: "string", description: "Document name (without .md extension)" },
         workingDirectory: { type: "string" }
       },
@@ -14212,7 +14235,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         doc: { type: "string", description: "Document name (without .md extension)" },
         content: { type: "string", description: "Content to write" },
         section: { type: "string", description: "Section header to update (optional)" },
@@ -14229,7 +14252,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         doc: { type: "string", description: "Document name" },
         workingDirectory: { type: "string" }
       },
@@ -14243,7 +14266,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         status: { type: "string", enum: ["in_progress", "completed", "paused"], description: "Filter by status" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Filter by category" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: "string" }
       }
     }
@@ -14255,7 +14278,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Knowledge topic (uses current task topic if not specified)" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Knowledge category (pipeline stage)" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: "string" }
       },
       required: ["category"]
@@ -14268,7 +14291,7 @@ var knowledgeTools = [
       type: "object",
       properties: {
         topic: { type: "string", description: "Filter by topic" },
-        category: { type: "string", enum: KNOWLEDGE_CATEGORIES, description: "Filter by category" },
+        category: { type: "string", description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: "string" }
       }
     }
@@ -14738,105 +14761,62 @@ function writeKnowledgeIndex(index, cwd) {
   }
   atomicWriteJson(path, index);
 }
-function generateTopicSlug(title) {
-  const categoryNames = /* @__PURE__ */ new Set([
-    "requirement",
-    "design",
-    "backend",
-    "ios",
-    "android",
-    "harmony",
-    "web",
-    "miniprogram",
-    "qa",
-    "ship",
-    "growth"
-  ]);
-  const englishWords = title.match(/[a-zA-Z]+/g);
-  if (englishWords && englishWords.length > 0) {
-    const words = englishWords.filter((w) => w.length > 2).map((w) => w.toLowerCase());
-    if (words.length >= 2) {
-      const slug = words.slice(0, 2).join("-");
-      if (!categoryNames.has(slug)) {
-        return slug;
-      }
-      return `topic-${slug}`;
-    }
-    if (words.length === 1) {
-      const word = words[0];
-      if (!categoryNames.has(word)) {
-        return word;
-      }
-      return `topic-${word}`;
-    }
-  }
-  return `topic-${Date.now().toString(36)}`;
-}
-function findOrCreateTopic(taskTitle, taskDescription, cwd, enTopicName) {
+function findSimilarKnowledgeTopic(taskTitle, taskDescription, cwd, threshold = 0.5) {
   const index = readKnowledgeIndex(cwd);
-  if (enTopicName) {
-    if (index.topics[enTopicName]) {
-      return {
-        topic: enTopicName,
-        isNew: false,
-        title: index.topics[enTopicName].title
-      };
-    }
-    const now2 = (/* @__PURE__ */ new Date()).toISOString();
-    index.topics[enTopicName] = {
-      title: taskTitle,
-      description: taskDescription,
-      status: "in_progress",
-      created_at: now2,
-      updated_at: now2,
-      domains: {}
-    };
-    writeKnowledgeIndex(index, cwd);
-    const topicPath2 = getTopicPath(enTopicName, cwd);
-    if (!(0, import_fs6.existsSync)(topicPath2)) {
-      (0, import_fs6.mkdirSync)(topicPath2, { recursive: true });
-    }
-    return { topic: enTopicName, isNew: true, title: taskTitle };
-  }
-  const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
-  const candidates = Object.entries(index.topics).map(([slug2, data]) => {
+  const topics = Object.entries(index.topics);
+  if (topics.length === 0)
+    return null;
+  const query = `${taskTitle} ${taskDescription}`.toLowerCase();
+  const queryWords = query.split(/\s+/).filter((w) => w.length > 1);
+  let bestMatch = null;
+  for (const [slug, data] of topics) {
     const titleWords = data.title.toLowerCase().split(/\s+/);
-    const queryWords = searchQuery.split(/\s+/).filter((w) => w.length > 1);
+    const descWords = (data.description || "").toLowerCase().split(/\s+/);
+    const allWords = [...titleWords, ...descWords].filter((w) => w.length > 1);
     let matchCount = 0;
     for (const queryWord of queryWords) {
-      for (const titleWord of titleWords) {
-        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+      for (const word of allWords) {
+        if (queryWord === word || queryWord.includes(word) || word.includes(queryWord)) {
           matchCount++;
           break;
         }
       }
     }
     const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
-    return { slug: slug2, data, score };
-  }).filter((c) => c.score >= 0.3).sort((a, b) => b.score - a.score);
-  if (candidates.length > 0 && candidates[0].score >= 0.5) {
-    return {
-      topic: candidates[0].slug,
-      isNew: false,
-      title: candidates[0].data.title
-    };
+    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      const categories = Object.keys(data.domains);
+      const primaryCategory = categories.find((c) => data.domains[c]?.length > 0);
+      bestMatch = {
+        topic: slug,
+        title: data.title,
+        score,
+        category: primaryCategory
+      };
+    }
   }
+  return bestMatch;
+}
+function createTopic(topicSlug, title, description, cwd) {
+  const index = readKnowledgeIndex(cwd);
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const slug = generateTopicSlug(taskTitle);
-  index.topics[slug] = {
-    title: taskTitle,
-    description: taskDescription,
+  index.topics[topicSlug] = {
+    title,
+    description,
     status: "in_progress",
     created_at: now,
     updated_at: now,
     domains: {}
   };
   writeKnowledgeIndex(index, cwd);
-  const topicPath = getTopicPath(slug, cwd);
+  const topicPath = getTopicPath(topicSlug, cwd);
   if (!(0, import_fs6.existsSync)(topicPath)) {
     (0, import_fs6.mkdirSync)(topicPath, { recursive: true });
   }
-  return { topic: slug, isNew: true, title: taskTitle };
+  return { topic: topicSlug, title };
+}
+function topicExists(topicSlug, cwd) {
+  const index = readKnowledgeIndex(cwd);
+  return !!index.topics[topicSlug];
 }
 function getTopic(topic, cwd) {
   const index = readKnowledgeIndex(cwd);
@@ -15152,7 +15132,7 @@ function writeProjectState(state, cwd) {
   state._meta.updated_by = "opc_state_write";
   atomicWriteJson(path, state);
 }
-function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence) {
+function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence, knowledgeTopic, knowledgeCategory) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   let stages;
   let gates;
@@ -15190,6 +15170,8 @@ function initializeProjectState(name, description, lockId, requirementId, cwd, w
       name,
       description,
       requirement_id: requirementId,
+      knowledge_topic: knowledgeTopic || "",
+      knowledge_category: knowledgeCategory || "",
       created_at: now,
       updated_at: now
     },
@@ -15441,6 +15423,44 @@ function getCurrentSession(lockId, cwd) {
   const index = readSessionIndex(cwd);
   return index.sessions[lockId] || null;
 }
+function findSimilarTask(projectName, projectDescription, cwd, threshold = 0.5) {
+  const stateDir = ensureOpcDir("state", cwd);
+  if (!(0, import_fs8.existsSync)(stateDir))
+    return null;
+  const taskDirs = (0, import_fs8.readdirSync)(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/));
+  if (taskDirs.length === 0)
+    return null;
+  const query = `${projectName} ${projectDescription}`.toLowerCase();
+  const queryWords = query.split(/\s+/).filter((w) => w.length > 1);
+  let bestMatch = null;
+  for (const dirName of taskDirs) {
+    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
+    if (!match)
+      continue;
+    const requirementId = match[1];
+    const source = match[2];
+    const state = readProjectState(requirementId, source, cwd);
+    if (!state)
+      continue;
+    const titleWords = state.project.name.toLowerCase().split(/\s+/);
+    const descWords = (state.project.description || "").toLowerCase().split(/\s+/);
+    const allTitleWords = [...titleWords, ...descWords].filter((w) => w.length > 1);
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const titleWord of allTitleWords) {
+        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { requirementId, source, state, score };
+    }
+  }
+  return bestMatch;
+}
 function getCurrentTask(cwd) {
   const lockId = getCurrentLockId(cwd);
   const session = getCurrentSession(lockId, cwd);
@@ -15484,7 +15504,7 @@ function handleStateRead(cwd) {
   const requirementInfo = state.project.requirement_id ? `
 **Requirement ID:** ${state.project.requirement_id}` : "";
   const topicInfo = state.project.knowledge_topic ? `
-**Knowledge Topic:** ${state.project.knowledge_topic}` : "";
+**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ""}` : "";
   const workflowInfo = state.workflow ? `
 **Workflow:** ${state.workflow.name} (${state.workflow.source}${state.workflow.confidence ? `, ${Math.round(state.workflow.confidence * 100)}% match` : ""})` : "";
   const rulesInfo = state.rules ? `
@@ -15522,32 +15542,6 @@ ${Object.entries(state.pipeline.stages).filter(([, data]) => data.artifacts?.len
 function handleStateInit(args, cwd) {
   const projectName = args.project_name;
   const projectDescription = args.project_description || "";
-  const providedRequirementId = args.requirement_id;
-  const enTopicName = args.en_topic_name;
-  if (!enTopicName) {
-    return {
-      content: [{
-        type: "text",
-        text: `## Missing Required Parameter
-
-**Error:** \`en_topic_name\` is required.
-
-Please provide a semantic English topic name for the knowledge library directory.
-
-**Examples:**
-- \`ios-localization\` for iOS\u591A\u8BED\u8A00\u6280\u672F\u65B9\u6848
-- \`app-login\` for \u767B\u5F55\u529F\u80FD\u5F00\u53D1
-- \`app-launch\` for \u5E94\u7528\u542F\u52A8\u4F18\u5316
-- \`hud-status-update\` for HUD\u72B6\u6001\u680F\u66F4\u65B0
-
-**Naming convention:**
-- Format: \`{platform}-{feature}\` or \`{feature}\`
-- Use lowercase and hyphens
-- Be concise and semantic`
-      }],
-      isError: true
-    };
-  }
   const lockId = getCurrentLockId(cwd);
   const currentSession = getCurrentSession(lockId, cwd);
   if (currentSession) {
@@ -15577,46 +15571,58 @@ Options:
       }
     }
   }
-  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd, enTopicName);
-  const topic = topicResult.topic;
-  const topicInfo = topicResult.isNew ? `\u{1F195} **Created new knowledge topic:** ${topic}` : `\u{1F517} **Matched existing topic:** ${topic} (${topicResult.title})`;
-  let requirementId = providedRequirementId;
-  let requirementMatchInfo = "";
-  if (!requirementId) {
-    requirementId = generateNextRequirementId(cwd);
-    requirementMatchInfo = `
-
-\u{1F195} **Generated requirement ID:** ${requirementId}`;
-  } else if (requirementId === "new") {
-    requirementId = generateNextRequirementId(cwd);
-    requirementMatchInfo = `
-
-\u{1F195} **Generated requirement ID:** ${requirementId}`;
-  }
-  const taskDescription = `${projectName} ${projectDescription}`.trim();
-  const workflows = readAllWorkflows(cwd);
-  const workflowMatch = matchWorkflow(taskDescription, workflows);
-  let workflowInfo = "";
+  const similarTask = findSimilarTask(projectName, projectDescription, cwd, 0.5);
+  let requirementId;
+  let workflowSource;
   let matchedWorkflow = null;
-  let workflowSource = "auto_assembled";
   let workflowConfidence;
-  if (workflowMatch && workflowMatch.score >= 0.3) {
-    matchedWorkflow = workflowMatch.workflow;
-    workflowSource = "matched";
-    workflowConfidence = workflowMatch.score;
-    workflowInfo = `
-
-\u{1F4CB} **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowMatch.score * 100)}% confidence)`;
+  let isReused = false;
+  if (similarTask) {
+    requirementId = similarTask.requirementId;
+    workflowSource = similarTask.source;
+    matchedWorkflow = similarTask.state.workflow?.name ? readAllWorkflows(cwd).find((w) => w.name === similarTask.state.workflow.name) || null : null;
+    workflowConfidence = similarTask.state.workflow?.confidence;
+    isReused = true;
   } else {
-    workflowInfo = "\n\n\u{1F527} **Pipeline:** Auto-assembled based on task analysis";
+    requirementId = generateNextRequirementId(cwd);
+    const taskDescription = `${projectName} ${projectDescription}`.trim();
+    const workflows = readAllWorkflows(cwd);
+    const workflowMatch = matchWorkflow(taskDescription, workflows);
+    workflowSource = "auto_assembled";
+    if (workflowMatch && workflowMatch.score >= 0.3) {
+      matchedWorkflow = workflowMatch.workflow;
+      workflowSource = "matched";
+      workflowConfidence = workflowMatch.score;
+    }
+  }
+  let matchedKnowledgeTopic;
+  let matchedKnowledgeCategory;
+  let knowledgeTopicInfo = "";
+  if (!isReused || !similarTask.state.project.knowledge_topic) {
+    const similarTopic = findSimilarKnowledgeTopic(projectName, projectDescription, cwd, 0.5);
+    if (similarTopic) {
+      matchedKnowledgeTopic = similarTopic.topic;
+      matchedKnowledgeCategory = similarTopic.category;
+      knowledgeTopicInfo = `
+
+\u{1F4DA} **Matched knowledge topic:** ${similarTopic.topic}${similarTopic.category ? ` (${similarTopic.category})` : ""} (${Math.round(similarTopic.score * 100)}% similarity)`;
+    }
+  } else {
+    matchedKnowledgeTopic = similarTask.state.project.knowledge_topic;
+    matchedKnowledgeCategory = similarTask.state.project.knowledge_category;
   }
   bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
-  const state = initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence);
-  state.project.knowledge_topic = topic;
+  const state = isReused ? similarTask.state : initializeProjectState(projectName, projectDescription, lockId, requirementId, cwd, matchedWorkflow, workflowSource, workflowConfidence, matchedKnowledgeTopic, matchedKnowledgeCategory);
+  if (isReused) {
+    state.project.name = projectName;
+    state.project.description = projectDescription;
+  }
   const firstStage = state.pipeline.current_stage;
   if (state.pipeline.stages[firstStage]) {
     state.pipeline.stages[firstStage].status = "in_progress";
-    state.pipeline.stages[firstStage].started_at = (/* @__PURE__ */ new Date()).toISOString();
+    if (!state.pipeline.stages[firstStage].started_at) {
+      state.pipeline.stages[firstStage].started_at = (/* @__PURE__ */ new Date()).toISOString();
+    }
   }
   writeProjectState(state, cwd);
   const gitignoreUpdated = updateGitignore(cwd);
@@ -15626,26 +15632,36 @@ Options:
     const desc = stageData.config?.description ? ` - ${stageData.config.description}` : "";
     return `- **${stageName}**${required2}${desc}`;
   }).join("\n");
+  const workflowInfo = matchedWorkflow ? `
+
+\u{1F4CB} **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowConfidence * 100)}% confidence)` : "\n\n\u{1F527} **Pipeline:** Auto-assembled";
+  const reuseInfo = isReused ? `
+
+\u{1F517} **Reused existing task:** ${similarTask.requirementId} (${Math.round(similarTask.score * 100)}% similarity)` : `
+
+\u{1F195} **Created new task:** ${requirementId}`;
+  const knowledgeTopicDisplay = state.project.knowledge_topic ? `
+**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ""}` : "\n**Knowledge Topic:** (not set)";
+  const nextSteps = state.project.knowledge_topic ? `1. **Update Progress:** Use \`opc_state_write\` as you advance through stages
+2. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents` : `1. **Set Knowledge Topic:** Use \`opc_knowledge_list\` to check existing topics, then \`opc_state_write(knowledge_topic="...")\` to set
+2. **Update Progress:** Use \`opc_state_write\` as you advance through stages
+3. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents`;
   return {
     content: [{
       type: "text",
-      text: `## OPC Task Initialized
+      text: `## OPC Task ${isReused ? "Resumed" : "Initialized"}
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}${requirementMatchInfo}
-**Knowledge Topic:** ${topic}${workflowInfo}
+**Requirement ID:** ${requirementId}${knowledgeTopicDisplay}${workflowInfo}${reuseInfo}${knowledgeTopicInfo}
 
 ### Pipeline Stages
 
 ${stageList}
 
-### Knowledge Library
-${topicInfo}
+### Next Steps
 
-The pipeline is ready. Stage "${firstStage}" is now in progress.
-Use \`opc_state_write\` to update progress as you advance through stages.
-Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
+${nextSteps}${gitignoreMsg}
 `
     }]
   };
@@ -15685,6 +15701,9 @@ function handleStateWrite(args, cwd) {
       content: [{ type: "text", text: "No active task. Use opc_state_init to start a new project." }],
       isError: true
     };
+  }
+  if (args.knowledge_topic) {
+    state.project.knowledge_topic = args.knowledge_topic;
   }
   if (args.stage && args.stage_status) {
     const stage = args.stage;
@@ -16078,9 +16097,24 @@ function resolveTopic(args, cwd) {
 function handleKnowledgeInit(args, cwd) {
   const title = args.title;
   const enTopicName = args.en_topic_name;
-  const result = findOrCreateTopic(title, "", cwd, enTopicName);
+  if (topicExists(enTopicName, cwd)) {
+    const topicData = getTopic(enTopicName, cwd);
+    return {
+      content: [{
+        type: "text",
+        text: `## Knowledge Topic Already Exists
+
+**Topic:** ${enTopicName}
+**Title:** ${topicData?.title || title}
+**Path:** .opc/knowledge/${enTopicName}/
+
+Use \`opc_knowledge_write\` to add documents to this topic.`
+      }]
+    };
+  }
+  const result = createTopic(enTopicName, title, "", cwd);
   const topic = result.topic;
-  const topicData = getTopic(topic, cwd);
+  const categoryList = RECOMMENDED_CATEGORIES.map((c) => `- \`${c}\``).join("\n");
   return {
     content: [{
       type: "text",
@@ -16092,16 +16126,11 @@ function handleKnowledgeInit(args, cwd) {
 
 Knowledge documents will be created on-demand when writing to each category.
 
-### Categories (aligned with pipeline stages)
+### Available Categories
 
-| Stage | Category | Description |
-|-------|----------|-------------|
-| Product | requirement | Requirement specs, user stories |
-| Design | design | UI/UX, interaction, visual assets |
-| Dev | backend, ios, android, harmony, web, miniprogram | Platform-specific implementation |
-| QA | qa | Test plans, test cases |
-| Ship | ship | Deployment, CI/CD, infrastructure |
-| Growth | growth | Metrics, analytics, marketing |
+${categoryList}
+
+(You can also use custom categories)
 
 ### Naming Convention
 
@@ -16171,9 +16200,34 @@ function handleKnowledgeWrite(args, cwd) {
       isError: true
     };
   }
-  const index = readKnowledgeIndex(cwd);
-  if (!index.topics[topic]) {
-    findOrCreateTopic(topic, "", cwd);
+  if (!category) {
+    return {
+      content: [{
+        type: "text",
+        text: `## Missing Required Parameter
+
+**Error:** \`category\` is required.
+
+Please provide a knowledge category for the document.
+
+**Examples:**
+- \`ios\` for iOS platform documents
+- \`android\` for Android platform documents
+- \`bug-fix\` for bug fix documentation
+- \`issue\` for issue analysis
+- \`tech-doc\` for technical documentation
+- \`guide\` for usage guides
+
+**Naming convention:**
+- Use lowercase and hyphens
+- Platform: ios, android, web, backend, harmony, miniprogram
+- Type: bug-fix, issue, tech-doc, guide, api, architecture`
+      }],
+      isError: true
+    };
+  }
+  if (!topicExists(topic, cwd)) {
+    createTopic(topic, topic, "", cwd);
   }
   const docMeta = meta ? {
     name: meta.name,

@@ -7,7 +7,7 @@ import type { ProjectState, Checkpoint, HandoffRecord, MemoryEntry, ProjectMemor
 export declare function getProjectStatePath(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): string;
 export declare function readProjectState(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): ProjectState | null;
 export declare function writeProjectState(state: ProjectState, cwd?: string): void;
-export declare function initializeProjectState(name: string, description: string, lockId: string, requirementId?: string, cwd?: string, workflow?: WorkflowSpec | null, workflowSource?: 'matched' | 'auto_assembled', workflowConfidence?: number): ProjectState;
+export declare function initializeProjectState(name: string, description: string, lockId: string, requirementId?: string, cwd?: string, workflow?: WorkflowSpec | null, workflowSource?: 'matched' | 'auto_assembled', workflowConfidence?: number, knowledgeTopic?: string, knowledgeCategory?: string): ProjectState;
 export declare function createCheckpoint(state: ProjectState, description: string, cwd?: string): Checkpoint;
 export declare function readCheckpoint(checkpointId: string, cwd?: string): Checkpoint | null;
 export declare function listCheckpoints(cwd?: string): Checkpoint[];
