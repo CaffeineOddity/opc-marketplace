@@ -67,47 +67,6 @@ const stateTools: Tool[] = [
 ];
 
 // ============================================================
-// Checkpoint Tools
-// ============================================================
-
-const checkpointTools: Tool[] = [
-  {
-    name: 'opc_checkpoint_create',
-    description: 'Create a checkpoint before risky operations. Enables rollback if things go wrong.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        description: { type: 'string', description: 'Description of what this checkpoint captures' },
-        workingDirectory: { type: 'string' },
-      },
-      required: ['description'],
-    },
-  },
-  {
-    name: 'opc_checkpoint_list',
-    description: 'List all available checkpoints.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        workingDirectory: { type: 'string' },
-      },
-    },
-  },
-  {
-    name: 'opc_checkpoint_rollback',
-    description: 'Rollback to a previous checkpoint. Restores state.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        checkpoint_id: { type: 'string', description: 'Checkpoint ID to rollback to' },
-        workingDirectory: { type: 'string' },
-      },
-      required: ['checkpoint_id'],
-    },
-  },
-];
-
-// ============================================================
 // Handoff Tools
 // ============================================================
 
@@ -126,28 +85,6 @@ const handoffTools: Tool[] = [
         workingDirectory: { type: 'string' },
       },
       required: ['from_agent', 'to_agent', 'artifacts'],
-    },
-  },
-];
-
-// ============================================================
-// Memory Tools
-// ============================================================
-
-const memoryTools: Tool[] = [
-  {
-    name: 'opc_memory',
-    description: 'Read, write, or search project memory. Stores decisions, patterns, and lessons.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        action: { type: 'string', enum: ['read', 'write', 'search'] },
-        category: { type: 'string', enum: ['decision', 'pattern', 'lesson', 'constraint'] },
-        content: { type: 'string', description: 'Content to write' },
-        query: { type: 'string', description: 'Search query' },
-        workingDirectory: { type: 'string' },
-      },
-      required: ['action'],
     },
   },
 ];
@@ -361,9 +298,7 @@ const knowledgeTools: Tool[] = [
 
 export const tools: Tool[] = [
   ...stateTools,
-  ...checkpointTools,
   ...handoffTools,
-  ...memoryTools,
   ...sessionTools,
   ...taskGroupTools,
   ...workflowTools,

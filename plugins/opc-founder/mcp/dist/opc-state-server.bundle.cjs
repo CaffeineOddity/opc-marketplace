@@ -14045,42 +14045,6 @@ var stateTools = [
     }
   }
 ];
-var checkpointTools = [
-  {
-    name: "opc_checkpoint_create",
-    description: "Create a checkpoint before risky operations. Enables rollback if things go wrong.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        description: { type: "string", description: "Description of what this checkpoint captures" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["description"]
-    }
-  },
-  {
-    name: "opc_checkpoint_list",
-    description: "List all available checkpoints.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workingDirectory: { type: "string" }
-      }
-    }
-  },
-  {
-    name: "opc_checkpoint_rollback",
-    description: "Rollback to a previous checkpoint. Restores state.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        checkpoint_id: { type: "string", description: "Checkpoint ID to rollback to" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["checkpoint_id"]
-    }
-  }
-];
 var handoffTools = [
   {
     name: "opc_handoff",
@@ -14096,23 +14060,6 @@ var handoffTools = [
         workingDirectory: { type: "string" }
       },
       required: ["from_agent", "to_agent", "artifacts"]
-    }
-  }
-];
-var memoryTools = [
-  {
-    name: "opc_memory",
-    description: "Read, write, or search project memory. Stores decisions, patterns, and lessons.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: { type: "string", enum: ["read", "write", "search"] },
-        category: { type: "string", enum: ["decision", "pattern", "lesson", "constraint"] },
-        content: { type: "string", description: "Content to write" },
-        query: { type: "string", description: "Search query" },
-        workingDirectory: { type: "string" }
-      },
-      required: ["action"]
     }
   }
 ];
@@ -14299,9 +14246,7 @@ var knowledgeTools = [
 ];
 var tools = [
   ...stateTools,
-  ...checkpointTools,
   ...handoffTools,
-  ...memoryTools,
   ...sessionTools,
   ...taskGroupTools,
   ...workflowTools,
@@ -14319,9 +14264,7 @@ var import_fs = require("fs");
 var OPC_PATHS = {
   ROOT: ".opc",
   STATE: ".opc/state",
-  CHECKPOINTS: ".opc/state/checkpoints",
   LOCKS: ".opc/state/locks",
-  MEMORY: ".opc/memory",
   ARTIFACTS: ".opc/artifacts",
   LOGS: ".opc/logs",
   WORKFLOWS: ".opc/workflows",
@@ -14359,10 +14302,6 @@ function ensureOpcDir(subdir, cwd) {
     (0, import_fs.mkdirSync)(dir, { recursive: true });
   }
   return dir;
-}
-function generateCheckpointId() {
-  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").substring(0, 19);
-  return `cp-${timestamp}`;
 }
 
 // dist/lock.js
@@ -15194,40 +15133,6 @@ function initializeProjectState(name, description, lockId, requirementId, cwd, w
     }
   };
 }
-function getCheckpointPath(checkpointId, cwd) {
-  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
-  return (0, import_path6.join)(checkpointsDir, `${checkpointId}.json`);
-}
-function createCheckpoint(state, description, cwd) {
-  const checkpointId = generateCheckpointId();
-  const checkpoint = {
-    checkpoint_id: checkpointId,
-    created_at: (/* @__PURE__ */ new Date()).toISOString(),
-    stage: state.pipeline.current_stage,
-    description,
-    snapshot: {
-      files_changed: [],
-      tests_status: "unknown",
-      git_status: "unknown"
-    },
-    state_snapshot: JSON.parse(JSON.stringify(state)),
-    can_rollback: true
-  };
-  const path = getCheckpointPath(checkpointId, cwd);
-  atomicWriteJson(path, checkpoint);
-  return checkpoint;
-}
-function readCheckpoint(checkpointId, cwd) {
-  const path = getCheckpointPath(checkpointId, cwd);
-  return readJsonFile(path);
-}
-function listCheckpoints(cwd) {
-  const checkpointsDir = ensureOpcDir("state/checkpoints", cwd);
-  if (!(0, import_fs7.existsSync)(checkpointsDir))
-    return [];
-  const files = (0, import_fs7.readdirSync)(checkpointsDir).filter((f) => f.endsWith(".json"));
-  return files.map((f) => readJsonFile((0, import_path6.join)(checkpointsDir, f))).filter((c) => c !== null).sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
 function getHandoffPath(lockId, cwd) {
   const stateDir = ensureOpcDir("state", cwd);
   return (0, import_path6.join)(stateDir, lockId, "handoffs.json");
@@ -15248,41 +15153,6 @@ function recordHandoff(fromAgent, toAgent, artifacts, constraints, context, lock
   handoffs.push(handoff);
   atomicWriteJson(path, handoffs);
   return handoff;
-}
-function getMemoryPath(cwd) {
-  return (0, import_path6.join)(ensureOpcDir("", cwd), "memory", "project-memory.json");
-}
-function readProjectMemory(cwd) {
-  const path = getMemoryPath(cwd);
-  const memory = readJsonFile(path);
-  return memory || { entries: [], updated_at: (/* @__PURE__ */ new Date()).toISOString() };
-}
-function writeProjectMemory(memory, cwd) {
-  const path = getMemoryPath(cwd);
-  const dir = (0, import_path6.join)(path, "..");
-  if (!(0, import_fs7.existsSync)(dir)) {
-    (0, import_fs7.mkdirSync)(dir, { recursive: true });
-  }
-  memory.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-  atomicWriteJson(path, memory);
-}
-function addMemoryEntry(category, content, metadata, cwd) {
-  const memory = readProjectMemory(cwd);
-  const entry = {
-    id: `mem-${Date.now().toString(36)}`,
-    created_at: (/* @__PURE__ */ new Date()).toISOString(),
-    category,
-    content,
-    metadata
-  };
-  memory.entries.push(entry);
-  writeProjectMemory(memory, cwd);
-  return entry;
-}
-function searchMemory(query, cwd) {
-  const memory = readProjectMemory(cwd);
-  const lowerQuery = query.toLowerCase();
-  return memory.entries.filter((e) => e.content.toLowerCase().includes(lowerQuery) || e.category.toLowerCase().includes(lowerQuery));
 }
 function createTaskGroup(state, stage, groupName, tasks, parallel, completionCondition, threshold, cwd) {
   const groupId = `tg-${Date.now().toString(36)}`;
@@ -15682,7 +15552,7 @@ The current window has been unbound from this requirement.
 You can start a new task with \`opc_state_init\`.
 
 **Note:** The requirement's state file is preserved for history.
-Use \`opc_state_init(requirement_id="${session?.requirement_id}")\` to resume.`
+To resume, use \`opc_state_init\` with a similar project name (auto-matching will find it).`
       }]
     };
   } else {
@@ -15784,71 +15654,6 @@ function handleStateWrite(args, cwd) {
   };
 }
 
-// dist/handlers/checkpoint.js
-function handleCheckpointCreate(args, cwd) {
-  const state = getCurrentTask(cwd);
-  if (!state) {
-    return {
-      content: [{ type: "text", text: "No active task to checkpoint." }],
-      isError: true
-    };
-  }
-  const checkpoint = createCheckpoint(state, args.description, cwd);
-  return {
-    content: [{
-      type: "text",
-      text: `## Checkpoint Created
-
-**Checkpoint ID:** ${checkpoint.checkpoint_id}
-**Stage:** ${checkpoint.stage}
-**Description:** ${checkpoint.description}
-**Can Rollback:** ${checkpoint.can_rollback}
-
-Use \`opc_checkpoint_rollback\` with the checkpoint ID to restore this state.
-`
-    }]
-  };
-}
-function handleCheckpointList(cwd) {
-  const checkpoints = listCheckpoints(cwd);
-  if (checkpoints.length === 0) {
-    return { content: [{ type: "text", text: "No checkpoints found." }] };
-  }
-  const list = checkpoints.map((cp) => `- **${cp.checkpoint_id}**: ${cp.description} (${cp.stage}) - ${cp.created_at}`).join("\n");
-  return {
-    content: [{
-      type: "text",
-      text: `## Checkpoints (${checkpoints.length})
-
-${list}
-`
-    }]
-  };
-}
-function handleCheckpointRollback(args, cwd) {
-  const checkpoint = readCheckpoint(args.checkpoint_id, cwd);
-  if (!checkpoint) {
-    return {
-      content: [{ type: "text", text: `Checkpoint not found: ${args.checkpoint_id}` }],
-      isError: true
-    };
-  }
-  writeProjectState(checkpoint.state_snapshot, cwd);
-  return {
-    content: [{
-      type: "text",
-      text: `## Rolled Back to Checkpoint
-
-**Checkpoint ID:** ${checkpoint.checkpoint_id}
-**Stage:** ${checkpoint.stage}
-**Description:** ${checkpoint.description}
-
-The project state has been restored to the checkpoint.
-`
-    }]
-  };
-}
-
 // dist/handlers/handoff.js
 function handleHandoff(args, cwd) {
   const state = getCurrentTask(cwd);
@@ -15872,63 +15677,6 @@ function handleHandoff(args, cwd) {
 The receiving agent should check constraints and artifacts before starting work.
 `
     }]
-  };
-}
-
-// dist/handlers/memory.js
-function handleMemory(args, cwd) {
-  const action = args.action;
-  if (action === "read") {
-    const memory = readProjectMemory(cwd);
-    const grouped = memory.entries.reduce((acc, entry) => {
-      if (!acc[entry.category])
-        acc[entry.category] = [];
-      acc[entry.category].push(entry);
-      return acc;
-    }, {});
-    const output = Object.entries(grouped).map(([category, entries]) => {
-      const items = entries.map((e) => `- ${e.content}`).join("\n");
-      return `### ${category}
-${items}`;
-    }).join("\n\n");
-    return {
-      content: [{
-        type: "text",
-        text: `## Project Memory (${memory.entries.length} entries)
-
-${output || "No entries yet."}
-`
-      }]
-    };
-  }
-  if (action === "write") {
-    if (!args.category || !args.content) {
-      return {
-        content: [{ type: "text", text: "category and content are required for write action." }],
-        isError: true
-      };
-    }
-    const entry = addMemoryEntry(args.category, args.content, void 0, cwd);
-    return {
-      content: [{ type: "text", text: `Memory entry added: [${entry.category}] ${entry.content}` }]
-    };
-  }
-  if (action === "search") {
-    const results = searchMemory(args.query, cwd);
-    const output = results.map((e) => `- [${e.category}] ${e.content}`).join("\n");
-    return {
-      content: [{
-        type: "text",
-        text: `## Search Results (${results.length})
-
-${output || "No matches found."}
-`
-      }]
-    };
-  }
-  return {
-    content: [{ type: "text", text: "Invalid action. Use read, write, or search." }],
-    isError: true
   };
 }
 
@@ -15966,8 +15714,7 @@ function handleSessionsList(cwd) {
       text: `## All Tasks (${allTaskDirs.length})
 
 ${taskList}
-
-Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`
+`
     }]
   };
 }
@@ -16359,11 +16106,7 @@ var handlers = {
   opc_state_init: (args, cwd) => handleStateInit(args, cwd),
   opc_state_clear: (_, cwd) => handleStateClear(cwd),
   opc_state_write: (args, cwd) => handleStateWrite(args, cwd),
-  opc_checkpoint_create: (args, cwd) => handleCheckpointCreate(args, cwd),
-  opc_checkpoint_list: (_, cwd) => handleCheckpointList(cwd),
-  opc_checkpoint_rollback: (args, cwd) => handleCheckpointRollback(args, cwd),
   opc_handoff: (args, cwd) => handleHandoff(args, cwd),
-  opc_memory: (args, cwd) => handleMemory(args, cwd),
   opc_sessions_list: (_, cwd) => handleSessionsList(cwd),
   opc_task_group_create: (args, cwd) => handleTaskGroupCreate(args, cwd),
   opc_task_update: (args, cwd) => handleTaskUpdate(args, cwd),

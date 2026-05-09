@@ -6,9 +6,7 @@
 export declare const OPC_PATHS: {
     readonly ROOT: ".opc";
     readonly STATE: ".opc/state";
-    readonly CHECKPOINTS: ".opc/state/checkpoints";
     readonly LOCKS: ".opc/state/locks";
-    readonly MEMORY: ".opc/memory";
     readonly ARTIFACTS: ".opc/artifacts";
     readonly LOGS: ".opc/logs";
     readonly WORKFLOWS: ".opc/workflows";
@@ -20,4 +18,3 @@ export declare function getWorkflowsPath(cwd?: string): string;
 export declare function ensureWorkflowsDir(cwd?: string): string;
 export declare function ensureOpcDir(subdir: string, cwd?: string): string;
 export declare function validatePath(inputPath: string): void;
-export declare function generateCheckpointId(): string;

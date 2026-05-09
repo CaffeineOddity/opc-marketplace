@@ -59,8 +59,7 @@ export function handleSessionsList(cwd: string | undefined): ToolResult {
       text: `## All Tasks (${allTaskDirs.length})
 
 ${taskList}
-
-Use \`opc_state_init(requirement_id="REQ-XXX")\` to resume a task.`,
+`,
     }],
   };
 }

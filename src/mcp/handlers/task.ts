@@ -7,8 +7,7 @@
 import { getCurrentTask } from '../session.js';
 import { createTaskGroup, updateTask, getTaskGroups } from '../state.js';
 import type { ToolResult } from './index.js';
-import type { TaskStage, StageStatus } from '../types.js';
-import { TASK_STAGES } from '../types.js';
+import type { TaskStage } from '../types.js';
 
 export function handleTaskGroupCreate(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const state = getCurrentTask(cwd);

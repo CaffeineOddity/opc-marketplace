@@ -165,19 +165,6 @@ export interface WorkflowSpec {
         };
     }>;
 }
-export interface Checkpoint {
-    checkpoint_id: string;
-    created_at: string;
-    stage: string;
-    description: string;
-    snapshot: {
-        files_changed: string[];
-        tests_status: string;
-        git_status: string;
-    };
-    state_snapshot: ProjectState;
-    can_rollback: boolean;
-}
 export interface HandoffRecord {
     handoff_id: string;
     created_at: string;
@@ -187,17 +174,6 @@ export interface HandoffRecord {
     constraints: string[];
     context: string;
     lock_id: string;
-}
-export interface MemoryEntry {
-    id: string;
-    created_at: string;
-    category: 'decision' | 'pattern' | 'lesson' | 'constraint';
-    content: string;
-    metadata?: Record<string, unknown>;
-}
-export interface ProjectMemory {
-    entries: MemoryEntry[];
-    updated_at: string;
 }
 export type KnowledgeCategory = string;
 export declare const RECOMMENDED_CATEGORIES: readonly ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth", "bug-fix", "issue", "tech-doc", "guide", "api", "architecture"];

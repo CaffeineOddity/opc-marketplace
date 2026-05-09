@@ -14,9 +14,7 @@ import { existsSync, mkdirSync } from 'fs';
 export const OPC_PATHS = {
   ROOT: '.opc',
   STATE: '.opc/state',
-  CHECKPOINTS: '.opc/state/checkpoints',
   LOCKS: '.opc/state/locks',
-  MEMORY: '.opc/memory',
   ARTIFACTS: '.opc/artifacts',
   LOGS: '.opc/logs',
   WORKFLOWS: '.opc/workflows',
@@ -84,13 +82,4 @@ export function validatePath(inputPath: string): void {
   if (isAbsolute(inputPath)) {
     throw new Error('Absolute paths not allowed');
   }
-}
-
-// ============================================================
-// ID Generation
-// ============================================================
-
-export function generateCheckpointId(): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-  return `cp-${timestamp}`;
 }

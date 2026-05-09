@@ -1,14 +1,14 @@
 /**
  * OPC State Management
  *
- * Project state, checkpoints, handoffs, and memory.
+ * Project state and handoffs.
  */
 
-import { existsSync, mkdirSync, unlinkSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { ensureOpcDir, getWorktreeRoot, generateCheckpointId } from './paths.js';
+import { ensureOpcDir, getWorktreeRoot } from './paths.js';
 import { readJsonFile, atomicWriteJson } from './io.js';
-import type { ProjectState, Checkpoint, HandoffRecord, MemoryEntry, ProjectMemory, TaskGroup, StageState, WorkflowSpec } from './types.js';
+import type { ProjectState, HandoffRecord, TaskGroup, StageState, WorkflowSpec } from './types.js';
 import { buildStagesFromWorkflow, buildStagesAuto, buildDefaultGates } from './workflow.js';
 
 // ============================================================
@@ -123,56 +123,6 @@ export function initializeProjectState(
 }
 
 // ============================================================
-// Checkpoints
-// ============================================================
-
-function getCheckpointPath(checkpointId: string, cwd?: string): string {
-  const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-  return join(checkpointsDir, `${checkpointId}.json`);
-}
-
-export function createCheckpoint(
-  state: ProjectState,
-  description: string,
-  cwd?: string
-): Checkpoint {
-  const checkpointId = generateCheckpointId();
-  const checkpoint: Checkpoint = {
-    checkpoint_id: checkpointId,
-    created_at: new Date().toISOString(),
-    stage: state.pipeline.current_stage,
-    description,
-    snapshot: {
-      files_changed: [],
-      tests_status: 'unknown',
-      git_status: 'unknown',
-    },
-    state_snapshot: JSON.parse(JSON.stringify(state)),
-    can_rollback: true,
-  };
-
-  const path = getCheckpointPath(checkpointId, cwd);
-  atomicWriteJson(path, checkpoint);
-  return checkpoint;
-}
-
-export function readCheckpoint(checkpointId: string, cwd?: string): Checkpoint | null {
-  const path = getCheckpointPath(checkpointId, cwd);
-  return readJsonFile<Checkpoint>(path);
-}
-
-export function listCheckpoints(cwd?: string): Checkpoint[] {
-  const checkpointsDir = ensureOpcDir('state/checkpoints', cwd);
-  if (!existsSync(checkpointsDir)) return [];
-
-  const files = readdirSync(checkpointsDir).filter(f => f.endsWith('.json'));
-  return files
-    .map(f => readJsonFile<Checkpoint>(join(checkpointsDir, f)))
-    .filter((c): c is Checkpoint => c !== null)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
-
-// ============================================================
 // Handoffs
 // ============================================================
 
@@ -212,58 +162,6 @@ export function recordHandoff(
 export function getHandoffs(lockId: string, cwd?: string): HandoffRecord[] {
   const path = getHandoffPath(lockId, cwd);
   return readJsonFile(path) || [];
-}
-
-// ============================================================
-// Project Memory
-// ============================================================
-
-function getMemoryPath(cwd?: string): string {
-  return join(ensureOpcDir('', cwd), 'memory', 'project-memory.json');
-}
-
-export function readProjectMemory(cwd?: string): ProjectMemory {
-  const path = getMemoryPath(cwd);
-  const memory = readJsonFile<ProjectMemory>(path);
-  return memory || { entries: [], updated_at: new Date().toISOString() };
-}
-
-function writeProjectMemory(memory: ProjectMemory, cwd?: string): void {
-  const path = getMemoryPath(cwd);
-  const dir = join(path, '..');
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  memory.updated_at = new Date().toISOString();
-  atomicWriteJson(path, memory);
-}
-
-export function addMemoryEntry(
-  category: MemoryEntry['category'],
-  content: string,
-  metadata?: Record<string, unknown>,
-  cwd?: string
-): MemoryEntry {
-  const memory = readProjectMemory(cwd);
-  const entry: MemoryEntry = {
-    id: `mem-${Date.now().toString(36)}`,
-    created_at: new Date().toISOString(),
-    category,
-    content,
-    metadata,
-  };
-  memory.entries.push(entry);
-  writeProjectMemory(memory, cwd);
-  return entry;
-}
-
-export function searchMemory(query: string, cwd?: string): MemoryEntry[] {
-  const memory = readProjectMemory(cwd);
-  const lowerQuery = query.toLowerCase();
-  return memory.entries.filter(e =>
-    e.content.toLowerCase().includes(lowerQuery) ||
-    e.category.toLowerCase().includes(lowerQuery)
-  );
 }
 
 // ============================================================

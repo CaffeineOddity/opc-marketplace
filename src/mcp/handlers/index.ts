@@ -18,9 +18,7 @@ export type ToolResult = {
 // ============================================================
 
 import { handleStateRead, handleStateInit, handleStateClear, handleStateWrite } from './state.js';
-import { handleCheckpointCreate, handleCheckpointList, handleCheckpointRollback } from './checkpoint.js';
 import { handleHandoff } from './handoff.js';
-import { handleMemory } from './memory.js';
 import { handleSessionsList } from './session.js';
 import { handleTaskGroupCreate, handleTaskUpdate, handleTaskGroupStatus } from './task.js';
 import { handleWorkflowsPath } from './workflow.js';
@@ -45,11 +43,7 @@ const handlers: Record<string, HandlerFn> = {
   opc_state_init: (args, cwd) => handleStateInit(args, cwd),
   opc_state_clear: (_, cwd) => handleStateClear(cwd),
   opc_state_write: (args, cwd) => handleStateWrite(args, cwd),
-  opc_checkpoint_create: (args, cwd) => handleCheckpointCreate(args, cwd),
-  opc_checkpoint_list: (_, cwd) => handleCheckpointList(cwd),
-  opc_checkpoint_rollback: (args, cwd) => handleCheckpointRollback(args, cwd),
   opc_handoff: (args, cwd) => handleHandoff(args, cwd),
-  opc_memory: (args, cwd) => handleMemory(args, cwd),
   opc_sessions_list: (_, cwd) => handleSessionsList(cwd),
   opc_task_group_create: (args, cwd) => handleTaskGroupCreate(args, cwd),
   opc_task_update: (args, cwd) => handleTaskUpdate(args, cwd),

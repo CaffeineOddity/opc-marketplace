@@ -283,7 +283,7 @@ The current window has been unbound from this requirement.
 You can start a new task with \`opc_state_init\`.
 
 **Note:** The requirement's state file is preserved for history.
-Use \`opc_state_init(requirement_id="${session?.requirement_id}")\` to resume.`,
+To resume, use \`opc_state_init\` with a similar project name (auto-matching will find it).`,
       }],
     };
   } else {

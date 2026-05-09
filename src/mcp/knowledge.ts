@@ -258,13 +258,6 @@ export function readAllKnowledgeDocs(
   return results.length > 0 ? results.join('\n\n---\n\n') : null;
 }
 
-function isDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
-}
 
 // ============================================================
 // Document Type Metadata Defaults
