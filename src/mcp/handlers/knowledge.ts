@@ -6,9 +6,11 @@
  */
 
 import type { KnowledgeCategory } from '../types.js';
+import { RECOMMENDED_CATEGORIES } from '../types.js';
 import {
   readKnowledgeIndex,
-  findOrCreateTopic,
+  createTopic,
+  topicExists,
   getTopic,
   readKnowledgeDoc,
   readAllKnowledgeDocs,
@@ -43,11 +45,28 @@ export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string |
   const title = args.title as string;
   const enTopicName = args.en_topic_name as string;
 
-  // Create topic with required en_topic_name
-  const result = findOrCreateTopic(title, '', cwd, enTopicName);
+  // Create topic (or return existing if already exists)
+  if (topicExists(enTopicName, cwd)) {
+    const topicData = getTopic(enTopicName, cwd);
+    return {
+      content: [{
+        type: 'text',
+        text: `## Knowledge Topic Already Exists
+
+**Topic:** ${enTopicName}
+**Title:** ${topicData?.title || title}
+**Path:** .opc/knowledge/${enTopicName}/
+
+Use \`opc_knowledge_write\` to add documents to this topic.`,
+      }],
+    };
+  }
+
+  const result = createTopic(enTopicName, title, '', cwd);
   const topic = result.topic;
 
-  const topicData = getTopic(topic, cwd);
+  // Build category list from RECOMMENDED_CATEGORIES
+  const categoryList = RECOMMENDED_CATEGORIES.map(c => `- \`${c}\``).join('\n');
 
   return {
     content: [{
@@ -60,16 +79,11 @@ export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string |
 
 Knowledge documents will be created on-demand when writing to each category.
 
-### Categories (aligned with pipeline stages)
+### Available Categories
 
-| Stage | Category | Description |
-|-------|----------|-------------|
-| Product | requirement | Requirement specs, user stories |
-| Design | design | UI/UX, interaction, visual assets |
-| Dev | backend, ios, android, harmony, web, miniprogram | Platform-specific implementation |
-| QA | qa | Test plans, test cases |
-| Ship | ship | Deployment, CI/CD, infrastructure |
-| Growth | growth | Metrics, analytics, marketing |
+${categoryList}
+
+(You can also use custom categories)
 
 ### Naming Convention
 
@@ -151,11 +165,36 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
     };
   }
 
+  if (!category) {
+    return {
+      content: [{
+        type: 'text',
+        text: `## Missing Required Parameter
+
+**Error:** \`category\` is required.
+
+Please provide a knowledge category for the document.
+
+**Examples:**
+- \`ios\` for iOS platform documents
+- \`android\` for Android platform documents
+- \`bug-fix\` for bug fix documentation
+- \`issue\` for issue analysis
+- \`tech-doc\` for technical documentation
+- \`guide\` for usage guides
+
+**Naming convention:**
+- Use lowercase and hyphens
+- Platform: ios, android, web, backend, harmony, miniprogram
+- Type: bug-fix, issue, tech-doc, guide, api, architecture`,
+      }],
+      isError: true,
+    };
+  }
+
   // Ensure topic exists
-  const index = readKnowledgeIndex(cwd);
-  if (!index.topics[topic]) {
-    // Create topic if it doesn't exist
-    findOrCreateTopic(topic, '', cwd);
+  if (!topicExists(topic, cwd)) {
+    createTopic(topic, topic, '', cwd);
   }
 
   // Prepare metadata if provided

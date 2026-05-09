@@ -116,6 +116,64 @@ export function listAllTasks(cwd?: string): string[] {
   );
 }
 
+/**
+ * Find similar existing task by project name/description similarity.
+ * Returns the most similar task if similarity >= threshold.
+ */
+export function findSimilarTask(
+  projectName: string,
+  projectDescription: string,
+  cwd?: string,
+  threshold: number = 0.5
+): { requirementId: string; source: 'matched' | 'auto_assembled'; state: ProjectState; score: number } | null {
+  const stateDir = ensureOpcDir('state', cwd);
+  if (!existsSync(stateDir)) return null;
+
+  const taskDirs = readdirSync(stateDir).filter(f =>
+    f.match(/^REQ-\d+_(matched|auto_assembled)$/)
+  );
+
+  if (taskDirs.length === 0) return null;
+
+  const query = `${projectName} ${projectDescription}`.toLowerCase();
+  const queryWords = query.split(/\s+/).filter(w => w.length > 1);
+
+  let bestMatch: { requirementId: string; source: 'matched' | 'auto_assembled'; state: ProjectState; score: number } | null = null;
+
+  for (const dirName of taskDirs) {
+    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
+    if (!match) continue;
+
+    const requirementId = match[1];
+    const source = match[2] as 'matched' | 'auto_assembled';
+    const state = readProjectState(requirementId, source, cwd);
+    if (!state) continue;
+
+    // Calculate similarity score
+    const titleWords = state.project.name.toLowerCase().split(/\s+/);
+    const descWords = (state.project.description || '').toLowerCase().split(/\s+/);
+    const allTitleWords = [...titleWords, ...descWords].filter(w => w.length > 1);
+
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const titleWord of allTitleWords) {
+        if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
+
+    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { requirementId, source, state, score };
+    }
+  }
+
+  return bestMatch;
+}
+
 // ============================================================
 // Current Task
 // ============================================================

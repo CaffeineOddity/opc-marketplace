@@ -10,6 +10,7 @@ import { join } from 'path';
 import { ensureOpcDir } from './paths.js';
 import { readJsonFile, atomicWriteJson } from './io.js';
 import type { KnowledgeCategory, KnowledgeIndex, KnowledgeDocMeta, KnowledgeDocWithMeta } from './types.js';
+import { RECOMMENDED_CATEGORIES } from './types.js';
 
 // ============================================================
 // Knowledge Paths
@@ -83,10 +84,7 @@ export function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string): void {
  */
 export function generateTopicSlug(title: string): string {
   // Category names to avoid as topic slugs
-  const categoryNames = new Set([
-    'requirement', 'design', 'backend', 'ios', 'android',
-    'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'
-  ]);
+  const categoryNames = new Set<string>(RECOMMENDED_CATEGORIES);
 
   // Try to extract meaningful English words first
   const englishWords = title.match(/[a-zA-Z]+/g);
@@ -123,90 +121,66 @@ export function generateTopicSlug(title: string): string {
 }
 
 /**
- * Find or create a topic for a given task
- * Returns the topic slug
+ * Find similar existing topic by title/description similarity.
+ * Used for automatic knowledge topic matching.
  */
-export function findOrCreateTopic(
+export function findSimilarKnowledgeTopic(
   taskTitle: string,
   taskDescription: string,
   cwd?: string,
-  enTopicName?: string
-): { topic: string; isNew: boolean; title: string } {
+  threshold: number = 0.5
+): { topic: string; title: string; score: number } | null {
   const index = readKnowledgeIndex(cwd);
+  const topics = Object.entries(index.topics);
 
-  // If en_topic_name is provided, use it directly
-  if (enTopicName) {
-    // Check if topic already exists
-    if (index.topics[enTopicName]) {
-      return {
-        topic: enTopicName,
-        isNew: false,
-        title: index.topics[enTopicName].title,
-      };
-    }
+  if (topics.length === 0) return null;
 
-    // Create new topic with provided en_topic_name
-    const now = new Date().toISOString();
-    index.topics[enTopicName] = {
-      title: taskTitle,
-      description: taskDescription,
-      status: 'in_progress',
-      created_at: now,
-      updated_at: now,
-      domains: {},
-    };
+  const query = `${taskTitle} ${taskDescription}`.toLowerCase();
+  const queryWords = query.split(/\s+/).filter(w => w.length > 1);
 
-    writeKnowledgeIndex(index, cwd);
+  let bestMatch: { topic: string; title: string; score: number } | null = null;
 
-    // Create topic directory
-    const topicPath = getTopicPath(enTopicName, cwd);
-    if (!existsSync(topicPath)) {
-      mkdirSync(topicPath, { recursive: true });
-    }
+  for (const [slug, data] of topics) {
+    const titleWords = data.title.toLowerCase().split(/\s+/);
+    const descWords = (data.description || '').toLowerCase().split(/\s+/);
+    const allWords = [...titleWords, ...descWords].filter(w => w.length > 1);
 
-    return { topic: enTopicName, isNew: true, title: taskTitle };
-  }
-
-  // Original logic: try to find existing topic by title similarity
-  const searchQuery = `${taskTitle} ${taskDescription}`.toLowerCase();
-
-  const candidates = Object.entries(index.topics)
-    .map(([slug, data]) => {
-      const titleWords = data.title.toLowerCase().split(/\s+/);
-      const queryWords = searchQuery.split(/\s+/).filter(w => w.length > 1);
-
-      let matchCount = 0;
-      for (const queryWord of queryWords) {
-        for (const titleWord of titleWords) {
-          if (queryWord === titleWord || queryWord.includes(titleWord) || titleWord.includes(queryWord)) {
-            matchCount++;
-            break;
-          }
+    let matchCount = 0;
+    for (const queryWord of queryWords) {
+      for (const word of allWords) {
+        if (queryWord === word || queryWord.includes(word) || word.includes(queryWord)) {
+          matchCount++;
+          break;
         }
       }
+    }
 
-      const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
-      return { slug, data, score };
-    })
-    .filter(c => c.score >= 0.3)
-    .sort((a, b) => b.score - a.score);
+    const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
 
-  // If high similarity found, use existing topic
-  if (candidates.length > 0 && candidates[0].score >= 0.5) {
-    return {
-      topic: candidates[0].slug,
-      isNew: false,
-      title: candidates[0].data.title,
-    };
+    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { topic: slug, title: data.title, score };
+    }
   }
 
-  // Create new topic with auto-generated slug
-  const now = new Date().toISOString();
-  const slug = generateTopicSlug(taskTitle);
+  return bestMatch;
+}
 
-  index.topics[slug] = {
-    title: taskTitle,
-    description: taskDescription,
+/**
+ * Create a new knowledge topic.
+ * Returns the created topic info.
+ */
+export function createTopic(
+  topicSlug: string,
+  title: string,
+  description: string,
+  cwd?: string
+): { topic: string; title: string } {
+  const index = readKnowledgeIndex(cwd);
+
+  const now = new Date().toISOString();
+  index.topics[topicSlug] = {
+    title,
+    description,
     status: 'in_progress',
     created_at: now,
     updated_at: now,
@@ -216,12 +190,20 @@ export function findOrCreateTopic(
   writeKnowledgeIndex(index, cwd);
 
   // Create topic directory
-  const topicPath = getTopicPath(slug, cwd);
+  const topicPath = getTopicPath(topicSlug, cwd);
   if (!existsSync(topicPath)) {
     mkdirSync(topicPath, { recursive: true });
   }
 
-  return { topic: slug, isNew: true, title: taskTitle };
+  return { topic: topicSlug, title };
+}
+
+/**
+ * Check if a topic exists.
+ */
+export function topicExists(topicSlug: string, cwd?: string): boolean {
+  const index = readKnowledgeIndex(cwd);
+  return !!index.topics[topicSlug];
 }
 
 /**

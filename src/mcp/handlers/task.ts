@@ -7,6 +7,8 @@
 import { getCurrentTask } from '../session.js';
 import { createTaskGroup, updateTask, getTaskGroups } from '../state.js';
 import type { ToolResult } from './index.js';
+import type { TaskStage, StageStatus } from '../types.js';
+import { TASK_STAGES } from '../types.js';
 
 export function handleTaskGroupCreate(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const state = getCurrentTask(cwd);
@@ -18,7 +20,7 @@ export function handleTaskGroupCreate(args: Record<string, unknown>, cwd: string
     };
   }
 
-  const stage = args.stage as string;
+  const stage = args.stage as TaskStage;
   const groupName = args.group_name as string;
   const tasks = args.tasks as Array<{ agent: string; description: string; dependencies?: string[] }>;
   const parallel = args.parallel !== false;
@@ -91,7 +93,7 @@ export function handleTaskGroupStatus(args: Record<string, unknown>, cwd: string
     };
   }
 
-  const stage = args.stage as string | undefined;
+  const stage = args.stage as TaskStage | undefined;
   const groupId = args.group_id as string | undefined;
 
   const groups = getTaskGroups(state, stage, groupId);

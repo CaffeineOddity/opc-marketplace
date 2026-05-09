@@ -5,6 +5,7 @@
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { RECOMMENDED_CATEGORIES, TASK_STAGES, STAGE_STATUSES } from './types.js';
 
 // ============================================================
 // State Tools
@@ -23,14 +24,15 @@ const stateTools: Tool[] = [
   },
   {
     name: 'opc_state_write',
-    description: 'Update OPC project state. Used by founder-agent to track pipeline progress.',
+    description: 'Update OPC project state. Used by founder-agent to track pipeline progress and set knowledge topic.',
     inputSchema: {
       type: 'object',
       properties: {
         project_name: { type: 'string', description: 'Project name (for new projects)' },
         project_description: { type: 'string', description: 'Project description' },
-        stage: { type: 'string', enum: ['product', 'design', 'dev', 'qa', 'ship', 'growth'] },
-        stage_status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'blocked'] },
+        knowledge_topic: { type: 'string', description: 'Knowledge topic to associate with this task (e.g., "ios-localization")' },
+        stage: { type: 'string', enum: [...TASK_STAGES] },
+        stage_status: { type: 'string', enum: [...STAGE_STATUSES] },
         agent: { type: 'string', description: 'Agent name to record' },
         artifact: { type: 'string', description: 'Artifact path to record' },
         progress: { type: 'object', description: 'Progress percentages by subtask' },
@@ -41,17 +43,15 @@ const stateTools: Tool[] = [
   },
   {
     name: 'opc_state_init',
-    description: 'Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window.',
+    description: 'Initialize a new OPC project state with automatic knowledge library association. Creates pipeline tracking and links to requirement ID. One task per window. Skills should first check opc_sessions_list, opc_knowledge_list to decide whether to reuse existing resources or create new ones. Automatically matches workflows from .opc/workflows/ directory.',
     inputSchema: {
       type: 'object',
       properties: {
         project_name: { type: 'string', description: 'Project name' },
         project_description: { type: 'string', description: 'Project description' },
-        requirement_id: { type: 'string', description: 'Optional requirement ID (e.g., REQ-001). If not provided, will auto-generate or match existing.' },
-        en_topic_name: { type: 'string', description: 'English topic name for knowledge library directory (e.g., "localization", "app-login", "app-launch"). Must be semantic and concise.' },
         workingDirectory: { type: 'string' },
       },
-      required: ['project_name', 'en_topic_name'],
+      required: ['project_name'],
     },
   },
   {
@@ -180,7 +180,7 @@ const taskGroupTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        stage: { type: 'string', description: 'Stage name (product/design/dev/qa/ship/growth)' },
+        stage: { type: 'string', enum: [...TASK_STAGES] },
         group_name: { type: 'string', description: 'Name for this task group' },
         tasks: {
           type: 'array',
@@ -224,7 +224,7 @@ const taskGroupTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        stage: { type: 'string', description: 'Stage name' },
+        stage: { type: 'string', enum: [...TASK_STAGES], description: 'Stage name' },
         group_id: { type: 'string', description: 'Group ID (optional, shows all if omitted)' },
         workingDirectory: { type: 'string' },
       },
@@ -253,7 +253,9 @@ const workflowTools: Tool[] = [
 // Knowledge Tools
 // ============================================================
 
-const KNOWLEDGE_CATEGORIES = ['requirement', 'design', 'backend', 'ios', 'android', 'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth'] as const;
+// Build category description from RECOMMENDED_CATEGORIES
+const CATEGORY_EXAMPLES = RECOMMENDED_CATEGORIES.slice(0, 8).join(', ');
+const CATEGORY_DESCRIPTION = `Knowledge category. Examples: ${CATEGORY_EXAMPLES}. You can also use custom categories.`;
 
 const knowledgeTools: Tool[] = [
   {
@@ -276,7 +278,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         doc: { type: 'string', description: 'Document name (without .md extension)' },
         workingDirectory: { type: 'string' },
       },
@@ -290,7 +292,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         doc: { type: 'string', description: 'Document name (without .md extension)' },
         content: { type: 'string', description: 'Content to write' },
         section: { type: 'string', description: 'Section header to update (optional)' },
@@ -307,7 +309,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         doc: { type: 'string', description: 'Document name' },
         workingDirectory: { type: 'string' },
       },
@@ -321,7 +323,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['in_progress', 'completed', 'paused'], description: 'Filter by status' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Filter by category' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: 'string' },
       },
     },
@@ -333,7 +335,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Knowledge category (pipeline stage)' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: 'string' },
       },
       required: ['category'],
@@ -346,7 +348,7 @@ const knowledgeTools: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string', description: 'Filter by topic' },
-        category: { type: 'string', enum: KNOWLEDGE_CATEGORIES, description: 'Filter by category' },
+        category: { type: 'string', description: CATEGORY_DESCRIPTION },
         workingDirectory: { type: 'string' },
       },
     },

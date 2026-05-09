@@ -4,12 +4,12 @@
  * Handles opc_state_* tool calls.
  */
 
-import type { StageState } from '../types.js';
+import type { StageState, WorkflowSpec } from '../types.js';
 import { getCurrentLockId } from '../lock.js';
 import { readAllWorkflows, matchWorkflow } from '../workflow.js';
 import {
-  findOrCreateTopic,
   getTopic,
+  findSimilarKnowledgeTopic,
 } from '../knowledge.js';
 import {
   bindSessionToRequirement,
@@ -17,6 +17,7 @@ import {
   clearCurrentTask,
   getCurrentTask,
   generateNextRequirementId,
+  findSimilarTask,
 } from '../session.js';
 import {
   readProjectState,
@@ -104,34 +105,6 @@ ${Object.entries(state.pipeline.stages)
 export function handleStateInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const projectName = args.project_name as string;
   const projectDescription = (args.project_description as string) || '';
-  const providedRequirementId = args.requirement_id as string | undefined;
-  const enTopicName = args.en_topic_name as string;
-
-  // en_topic_name is required
-  if (!enTopicName) {
-    return {
-      content: [{
-        type: 'text',
-        text: `## Missing Required Parameter
-
-**Error:** \`en_topic_name\` is required.
-
-Please provide a semantic English topic name for the knowledge library directory.
-
-**Examples:**
-- \`ios-localization\` for iOS多语言技术方案
-- \`app-login\` for 登录功能开发
-- \`app-launch\` for 应用启动优化
-- \`hud-status-update\` for HUD状态栏更新
-
-**Naming convention:**
-- Format: \`{platform}-{feature}\` or \`{feature}\`
-- Use lowercase and hyphens
-- Be concise and semantic`,
-      }],
-      isError: true,
-    };
-  }
 
   const lockId = getCurrentLockId(cwd);
 
@@ -165,57 +138,73 @@ Options:
     }
   }
 
-  // Step 1: Find or create knowledge topic with required en_topic_name
-  const topicResult = findOrCreateTopic(projectName, projectDescription, cwd, enTopicName);
-  const topic = topicResult.topic;
-  const topicInfo = topicResult.isNew
-    ? `🆕 **Created new knowledge topic:** ${topic}`
-    : `🔗 **Matched existing topic:** ${topic} (${topicResult.title})`;
+  // Try to find similar existing task
+  const similarTask = findSimilarTask(projectName, projectDescription, cwd, 0.5);
 
-  // Step 2: Generate requirement ID (for task tracking)
-  let requirementId = providedRequirementId;
-  let requirementMatchInfo = '';
-
-  if (!requirementId) {
-    requirementId = generateNextRequirementId(cwd);
-    requirementMatchInfo = `\n\n🆕 **Generated requirement ID:** ${requirementId}`;
-  } else if (requirementId === 'new') {
-    requirementId = generateNextRequirementId(cwd);
-    requirementMatchInfo = `\n\n🆕 **Generated requirement ID:** ${requirementId}`;
-  }
-
-  const taskDescription = `${projectName} ${projectDescription}`.trim();
-  const workflows = readAllWorkflows(cwd);
-  const workflowMatch = matchWorkflow(taskDescription, workflows);
-
-  let workflowInfo = '';
-  let matchedWorkflow = null;
-  let workflowSource: 'matched' | 'auto_assembled' = 'auto_assembled';
+  let requirementId: string;
+  let workflowSource: 'matched' | 'auto_assembled';
+  let matchedWorkflow: WorkflowSpec | null = null;
   let workflowConfidence: number | undefined;
+  let isReused = false;
 
-  if (workflowMatch && workflowMatch.score >= 0.3) {
-    matchedWorkflow = workflowMatch.workflow;
-    workflowSource = 'matched';
-    workflowConfidence = workflowMatch.score;
-    workflowInfo = `\n\n📋 **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowMatch.score * 100)}% confidence)`;
+  if (similarTask) {
+    // Reuse existing task
+    requirementId = similarTask.requirementId;
+    workflowSource = similarTask.source;
+    matchedWorkflow = similarTask.state.workflow?.name ? readAllWorkflows(cwd).find(w => w.name === similarTask.state.workflow!.name) || null : null;
+    workflowConfidence = similarTask.state.workflow?.confidence;
+    isReused = true;
   } else {
-    workflowInfo = '\n\n🔧 **Pipeline:** Auto-assembled based on task analysis';
+    // Create new task
+    requirementId = generateNextRequirementId(cwd);
+
+    // Match workflow
+    const taskDescription = `${projectName} ${projectDescription}`.trim();
+    const workflows = readAllWorkflows(cwd);
+    const workflowMatch = matchWorkflow(taskDescription, workflows);
+
+    workflowSource = 'auto_assembled';
+    if (workflowMatch && workflowMatch.score >= 0.3) {
+      matchedWorkflow = workflowMatch.workflow;
+      workflowSource = 'matched';
+      workflowConfidence = workflowMatch.score;
+    }
   }
 
   bindSessionToRequirement(lockId, requirementId, workflowSource, matchedWorkflow?.name, cwd);
 
-  const state = initializeProjectState(
-    projectName, projectDescription, lockId, requirementId, cwd,
-    matchedWorkflow, workflowSource, workflowConfidence
-  );
+  const state = isReused
+    ? similarTask!.state
+    : initializeProjectState(
+        projectName, projectDescription, lockId, requirementId, cwd,
+        matchedWorkflow, workflowSource, workflowConfidence
+      );
 
-  // Set knowledge_topic in state
-  state.project.knowledge_topic = topic;
+  // Update project name/description if reused (task evolved)
+  if (isReused) {
+    state.project.name = projectName;
+    state.project.description = projectDescription;
+  }
+
+  // Smart knowledge topic matching
+  let knowledgeTopicInfo = '';
+  if (!state.project.knowledge_topic) {
+    // Try to find similar knowledge topic
+    const similarTopic = findSimilarKnowledgeTopic(projectName, projectDescription, cwd, 0.5);
+    if (similarTopic) {
+      state.project.knowledge_topic = similarTopic.topic;
+      knowledgeTopicInfo = `\n\n📚 **Matched knowledge topic:** ${similarTopic.topic} (${Math.round(similarTopic.score * 100)}% similarity)`;
+    } else {
+      state.project.knowledge_topic = '';
+    }
+  }
 
   const firstStage = state.pipeline.current_stage;
   if (state.pipeline.stages[firstStage]) {
     state.pipeline.stages[firstStage].status = 'in_progress';
-    state.pipeline.stages[firstStage].started_at = new Date().toISOString();
+    if (!state.pipeline.stages[firstStage].started_at) {
+      state.pipeline.stages[firstStage].started_at = new Date().toISOString();
+    }
   }
   writeProjectState(state, cwd);
 
@@ -232,26 +221,41 @@ Options:
     })
     .join('\n');
 
+  const workflowInfo = matchedWorkflow
+    ? `\n\n📋 **Workflow:** ${matchedWorkflow.name} (matched, ${Math.round(workflowConfidence! * 100)}% confidence)`
+    : '\n\n🔧 **Pipeline:** Auto-assembled';
+
+  const reuseInfo = isReused
+    ? `\n\n🔗 **Reused existing task:** ${similarTask!.requirementId} (${Math.round(similarTask!.score * 100)}% similarity)`
+    : `\n\n🆕 **Created new task:** ${requirementId}`;
+
+  const knowledgeTopicDisplay = state.project.knowledge_topic
+    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}`
+    : '\n**Knowledge Topic:** (not set)';
+
+  const nextSteps = state.project.knowledge_topic
+    ? `1. **Update Progress:** Use \`opc_state_write\` as you advance through stages
+2. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents`
+    : `1. **Set Knowledge Topic:** Use \`opc_knowledge_list\` to check existing topics, then \`opc_state_write(knowledge_topic="...")\` to set
+2. **Update Progress:** Use \`opc_state_write\` as you advance through stages
+3. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents`;
+
   return {
     content: [{
       type: 'text',
-      text: `## OPC Task Initialized
+      text: `## OPC Task ${isReused ? 'Resumed' : 'Initialized'}
 
 **Lock ID:** ${lockId}
 **Project:** ${projectName}
-**Requirement ID:** ${requirementId}${requirementMatchInfo}
-**Knowledge Topic:** ${topic}${workflowInfo}
+**Requirement ID:** ${requirementId}${knowledgeTopicDisplay}${workflowInfo}${reuseInfo}${knowledgeTopicInfo}
 
 ### Pipeline Stages
 
 ${stageList}
 
-### Knowledge Library
-${topicInfo}
+### Next Steps
 
-The pipeline is ready. Stage "${firstStage}" is now in progress.
-Use \`opc_state_write\` to update progress as you advance through stages.
-Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge.${gitignoreMsg}
+${nextSteps}${gitignoreMsg}
 `,
     }],
   };
@@ -295,6 +299,11 @@ export function handleStateWrite(args: Record<string, unknown>, cwd: string | un
       content: [{ type: 'text', text: 'No active task. Use opc_state_init to start a new project.' }],
       isError: true,
     };
+  }
+
+  // Update knowledge_topic
+  if (args.knowledge_topic) {
+    state.project.knowledge_topic = args.knowledge_topic as string;
   }
 
   if (args.stage && args.stage_status) {

@@ -266,21 +266,28 @@ export interface ProjectMemory {
 // Knowledge Library
 // ============================================================
 
-export const KNOWLEDGE_CATEGORIES = [
-  'requirement',
-  'design',
-  'backend',
-  'ios',
-  'android',
-  'harmony',
-  'web',
-  'miniprogram',
-  'qa',
-  'ship',
-  'growth',
+// Knowledge category is now a string type for flexibility
+// Users can define custom categories beyond the recommended list
+export type KnowledgeCategory = string;
+
+// Recommended categories for reference (non-exhaustive)
+export const RECOMMENDED_CATEGORIES = [
+  'requirement', 'design', 'backend', 'ios', 'android',
+  'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth',
+  'bug-fix', 'issue', 'tech-doc', 'guide', 'api', 'architecture'
 ] as const;
 
-export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number];
+// ============================================================
+// Pipeline Stages
+// ============================================================
+
+// Task stages for pipeline tracking
+export const TASK_STAGES = ['product', 'design', 'dev', 'qa', 'ship', 'growth'] as const;
+export type TaskStage = typeof TASK_STAGES[number];
+
+// Stage status values
+export const STAGE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
+export type StageStatus = typeof STAGE_STATUSES[number];
 
 // Knowledge is organized by topic (e.g., "hud", "state-management")
 // Each topic can have multiple domain documents (e.g., backend.md, design.md)
