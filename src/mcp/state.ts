@@ -16,39 +16,21 @@ import { buildStagesFromWorkflow, buildStagesAuto, buildDefaultGates } from './w
 // ============================================================
 
 /**
- * Generate session filename: {YYYYMMDD}_{NUM}_{source}.json
- * NUM is a 3-digit sequence number for the day
+ * Generate session filename from requirement_id
+ * requirement_id is already in the format: YYYYMMDD_XXX_source
+ * Just add .json extension
  */
 export function generateSessionFilename(
-  source: 'matched' | 'auto_assembled',
-  cwd?: string
+  requirementId: string,
+  source: 'matched' | 'auto_assembled'
 ): string {
-  const sessionsDir = ensureOpcDir('state/sessions', cwd);
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
-
-  // Find existing sessions for today to determine next number
-  let nextNum = 1;
-  if (existsSync(sessionsDir)) {
-    const existingFiles = readdirSync(sessionsDir)
-      .filter(f => f.startsWith(dateStr) && f.endsWith('.json'))
-      .map(f => {
-        const match = f.match(/^\d{8}_(\d{3})_/);
-        return match ? parseInt(match[1], 10) : 0;
-      })
-      .filter(n => !isNaN(n));
-
-    if (existingFiles.length > 0) {
-      nextNum = Math.max(...existingFiles) + 1;
-    }
-  }
-
-  const numStr = String(nextNum).padStart(3, '0');
-  return `${dateStr}_${numStr}_${source}.json`;
+  // requirement_id is the filename without extension
+  return `${requirementId}.json`;
 }
 
 /**
- * Get the path for a new session file
+ * Get the path for a session file
+ * Uses requirement_id as the filename
  */
 export function getProjectStatePath(
   requirementId: string,
@@ -56,7 +38,7 @@ export function getProjectStatePath(
   cwd?: string
 ): string {
   const sessionsDir = ensureOpcDir('state/sessions', cwd);
-  const filename = generateSessionFilename(source, cwd);
+  const filename = generateSessionFilename(requirementId, source);
   return join(sessionsDir, filename);
 }
 

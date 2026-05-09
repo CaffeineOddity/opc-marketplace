@@ -155,10 +155,7 @@ Options:
     workflowConfidence = similarTask.state.workflow?.confidence;
     isReused = true;
   } else {
-    // Create new task
-    requirementId = generateNextRequirementId(cwd);
-
-    // Match workflow
+    // Match workflow FIRST to determine source
     const taskDescription = `${projectName} ${projectDescription}`.trim();
     const workflows = readAllWorkflows(cwd);
     const workflowMatch = matchWorkflow(taskDescription, workflows);
@@ -169,6 +166,9 @@ Options:
       workflowSource = 'matched';
       workflowConfidence = workflowMatch.score;
     }
+
+    // NOW generate requirement_id with the correct source
+    requirementId = generateNextRequirementId(workflowSource, cwd);
   }
 
   // Match knowledge topic BEFORE initializing state

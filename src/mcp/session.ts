@@ -18,32 +18,35 @@ import { getCurrentLockId } from './lock.js';
 
 /**
  * Generate the next available requirement ID
- * Scans existing session files to find the next number
+ * Uses the session filename (without .json) as the requirement_id
+ * Format: YYYYMMDD_XXX_source (e.g., 20260509_001_auto_assembled)
  */
-export function generateNextRequirementId(cwd?: string): string {
+export function generateNextRequirementId(
+  source: 'matched' | 'auto_assembled' = 'auto_assembled',
+  cwd?: string
+): string {
   const sessionsDir = ensureOpcDir('state/sessions', cwd);
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
 
-  if (!existsSync(sessionsDir)) {
-    return 'REQ-001';
-  }
+  // Find existing sessions for today to determine next number
+  let nextNum = 1;
+  if (existsSync(sessionsDir)) {
+    const existingFiles = readdirSync(sessionsDir)
+      .filter(f => f.startsWith(dateStr) && f.endsWith('.json'))
+      .map(f => {
+        const match = f.match(/^\d{8}_(\d{3})_/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => !isNaN(n));
 
-  const sessionFiles = readdirSync(sessionsDir)
-    .filter(f => f.endsWith('.json'));
-
-  const existingIds: number[] = [];
-  for (const file of sessionFiles) {
-    const path = join(sessionsDir, file);
-    const state = readJsonFile<ProjectState>(path);
-    if (state?.project?.requirement_id) {
-      const match = state.project.requirement_id.match(/^REQ-(\d+)$/);
-      if (match) {
-        existingIds.push(parseInt(match[1], 10));
-      }
+    if (existingFiles.length > 0) {
+      nextNum = Math.max(...existingFiles) + 1;
     }
   }
 
-  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-  return `REQ-${String(nextNum).padStart(3, '0')}`;
+  const numStr = String(nextNum).padStart(3, '0');
+  return `${dateStr}_${numStr}_${source}`;
 }
 
 // ============================================================

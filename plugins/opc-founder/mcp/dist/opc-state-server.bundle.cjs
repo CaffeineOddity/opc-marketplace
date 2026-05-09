@@ -15157,26 +15157,12 @@ var import_path7 = require("path");
 // dist/state.js
 var import_fs7 = require("fs");
 var import_path6 = require("path");
-function generateSessionFilename(source, cwd) {
-  const sessionsDir = ensureOpcDir("state/sessions", cwd);
-  const today = /* @__PURE__ */ new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
-  let nextNum = 1;
-  if ((0, import_fs7.existsSync)(sessionsDir)) {
-    const existingFiles = (0, import_fs7.readdirSync)(sessionsDir).filter((f) => f.startsWith(dateStr) && f.endsWith(".json")).map((f) => {
-      const match = f.match(/^\d{8}_(\d{3})_/);
-      return match ? parseInt(match[1], 10) : 0;
-    }).filter((n) => !isNaN(n));
-    if (existingFiles.length > 0) {
-      nextNum = Math.max(...existingFiles) + 1;
-    }
-  }
-  const numStr = String(nextNum).padStart(3, "0");
-  return `${dateStr}_${numStr}_${source}.json`;
+function generateSessionFilename(requirementId, source) {
+  return `${requirementId}.json`;
 }
 function getProjectStatePath(requirementId, source, cwd) {
   const sessionsDir = ensureOpcDir("state/sessions", cwd);
-  const filename = generateSessionFilename(source, cwd);
+  const filename = generateSessionFilename(requirementId, source);
   return (0, import_path6.join)(sessionsDir, filename);
 }
 function findSessionByRequirementId(requirementId, cwd) {
@@ -15394,25 +15380,22 @@ function getTaskGroups(state, stage, groupId) {
 }
 
 // dist/session.js
-function generateNextRequirementId(cwd) {
+function generateNextRequirementId(source = "auto_assembled", cwd) {
   const sessionsDir = ensureOpcDir("state/sessions", cwd);
-  if (!(0, import_fs8.existsSync)(sessionsDir)) {
-    return "REQ-001";
-  }
-  const sessionFiles = (0, import_fs8.readdirSync)(sessionsDir).filter((f) => f.endsWith(".json"));
-  const existingIds = [];
-  for (const file of sessionFiles) {
-    const path = (0, import_path7.join)(sessionsDir, file);
-    const state = readJsonFile(path);
-    if (state?.project?.requirement_id) {
-      const match = state.project.requirement_id.match(/^REQ-(\d+)$/);
-      if (match) {
-        existingIds.push(parseInt(match[1], 10));
-      }
+  const today = /* @__PURE__ */ new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
+  let nextNum = 1;
+  if ((0, import_fs8.existsSync)(sessionsDir)) {
+    const existingFiles = (0, import_fs8.readdirSync)(sessionsDir).filter((f) => f.startsWith(dateStr) && f.endsWith(".json")).map((f) => {
+      const match = f.match(/^\d{8}_(\d{3})_/);
+      return match ? parseInt(match[1], 10) : 0;
+    }).filter((n) => !isNaN(n));
+    if (existingFiles.length > 0) {
+      nextNum = Math.max(...existingFiles) + 1;
     }
   }
-  const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-  return `REQ-${String(nextNum).padStart(3, "0")}`;
+  const numStr = String(nextNum).padStart(3, "0");
+  return `${dateStr}_${numStr}_${source}`;
 }
 function getSessionIndexPath(cwd) {
   const stateDir = ensureOpcDir("state", cwd);
@@ -15607,7 +15590,6 @@ Options:
     workflowConfidence = similarTask.state.workflow?.confidence;
     isReused = true;
   } else {
-    requirementId = generateNextRequirementId(cwd);
     const taskDescription = `${projectName} ${projectDescription}`.trim();
     const workflows = readAllWorkflows(cwd);
     const workflowMatch = matchWorkflow(taskDescription, workflows);
@@ -15617,6 +15599,7 @@ Options:
       workflowSource = "matched";
       workflowConfidence = workflowMatch.score;
     }
+    requirementId = generateNextRequirementId(workflowSource, cwd);
   }
   let matchedKnowledgeTopic;
   let matchedKnowledgeCategory;
@@ -15838,33 +15821,31 @@ var import_fs9 = require("fs");
 function handleSessionsList(cwd) {
   const lockId = getCurrentLockId(cwd);
   const currentSession = getCurrentSession(lockId, cwd);
-  const stateDir = ensureOpcDir("state", cwd);
-  const allTaskDirs = (0, import_fs9.existsSync)(stateDir) ? (0, import_fs9.readdirSync)(stateDir).filter((f) => f.match(/^REQ-\d+_(matched|auto_assembled)$/)) : [];
-  if (allTaskDirs.length === 0) {
+  const sessionsDir = ensureOpcDir("state/sessions", cwd);
+  const allSessionFiles = (0, import_fs9.existsSync)(sessionsDir) ? (0, import_fs9.readdirSync)(sessionsDir).filter((f) => f.endsWith(".json")) : [];
+  if (allSessionFiles.length === 0) {
     return {
       content: [{ type: "text", text: "No tasks found. Use opc_state_init to start a new project." }]
     };
   }
-  const taskList = allTaskDirs.map((dirName) => {
-    const match = dirName.match(/^(REQ-\d+)_(matched|auto_assembled)$/);
-    if (!match)
-      return null;
-    const reqId = match[1];
-    const source = match[2];
-    const state = readProjectState(reqId, source, cwd);
+  const taskList = allSessionFiles.map((filename) => {
+    const requirementId = filename.replace(/\.json$/, "");
+    const sourceMatch = requirementId.match(/_(matched|auto_assembled)$/);
+    const source = sourceMatch ? sourceMatch[1] : "auto_assembled";
+    const state = readProjectState(requirementId, source, cwd);
     if (!state)
       return null;
-    const isCurrent = currentSession && currentSession.requirement_id === reqId && currentSession.source === source;
+    const isCurrent = currentSession && currentSession.requirement_id === requirementId;
     const status = state.pipeline.stages[state.pipeline.current_stage]?.status || "pending";
     const icon = status === "in_progress" ? "\u{1F504}" : status === "completed" ? "\u2705" : status === "blocked" ? "\u{1F6AB}" : "\u23F3";
     const currentMarker = isCurrent ? " \u2190 **current**" : "";
     const workflowTag = state.workflow?.name || source;
-    return `${icon} **${reqId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
+    return `${icon} **${requirementId}** [${workflowTag}]: ${state.project.name} (${status})${currentMarker}`;
   }).filter(Boolean).join("\n");
   return {
     content: [{
       type: "text",
-      text: `## All Tasks (${allTaskDirs.length})
+      text: `## All Tasks (${allSessionFiles.length})
 
 ${taskList}
 `

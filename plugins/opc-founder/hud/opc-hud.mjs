@@ -197,7 +197,6 @@ function findProjectState(cwd) {
     const requirementId = session.requirement_id;
     const source = session.source || 'auto_assembled';
 
-    // Read state file: REQ-XXX_source/project-state.json
     const stateFile = join(stateDir, `${requirementId}_${source}`, 'project-state.json');
     if (!existsSync(stateFile)) return null;
 

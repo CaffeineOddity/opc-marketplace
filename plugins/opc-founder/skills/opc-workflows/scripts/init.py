@@ -69,7 +69,6 @@ def run_workflows_init(project_root: Path, marketplace_path: Path, force: bool =
 
     # Get existing workflows in target
     existing_workflows = list(workflows_target.glob("*.json")) if workflows_target.exists() else []
-    existing_names = {w.name for w in existing_workflows}
     built_in_names = {w.name for w in built_in_workflows}
 
     # Identify custom workflows (not in built-in)

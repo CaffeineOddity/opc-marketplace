@@ -6,9 +6,10 @@
 import type { SessionIndex, ProjectState } from './types.js';
 /**
  * Generate the next available requirement ID
- * Scans existing session files to find the next number
+ * Uses the session filename (without .json) as the requirement_id
+ * Format: YYYYMMDD_XXX_source (e.g., 20260509_001_auto_assembled)
  */
-export declare function generateNextRequirementId(cwd?: string): string;
+export declare function generateNextRequirementId(source?: 'matched' | 'auto_assembled', cwd?: string): string;
 export declare function readSessionIndex(cwd?: string): SessionIndex;
 export declare function bindSessionToRequirement(lockId: string, requirementId: string, source: 'matched' | 'auto_assembled', workflowName?: string, cwd?: string): void;
 export declare function getCurrentSession(lockId: string, cwd?: string): SessionIndex['sessions'][string] | null;

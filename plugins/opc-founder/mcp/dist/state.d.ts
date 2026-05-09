@@ -5,12 +5,14 @@
  */
 import type { ProjectState, HandoffRecord, TaskGroup, WorkflowSpec } from './types.js';
 /**
- * Generate session filename: {YYYYMMDD}_{NUM}_{source}.json
- * NUM is a 3-digit sequence number for the day
+ * Generate session filename from requirement_id
+ * requirement_id is already in the format: YYYYMMDD_XXX_source
+ * Just add .json extension
  */
-export declare function generateSessionFilename(source: 'matched' | 'auto_assembled', cwd?: string): string;
+export declare function generateSessionFilename(requirementId: string, source: 'matched' | 'auto_assembled'): string;
 /**
- * Get the path for a new session file
+ * Get the path for a session file
+ * Uses requirement_id as the filename
  */
 export declare function getProjectStatePath(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): string;
 /**
