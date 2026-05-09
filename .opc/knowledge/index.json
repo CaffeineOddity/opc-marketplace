@@ -5,23 +5,23 @@
       "description": "",
       "status": "in_progress",
       "created_at": "2026-05-09T08:32:58.306Z",
-      "updated_at": "2026-05-09T09:06:06.517Z",
+      "updated_at": "2026-05-09T09:06:06.580Z",
       "domains": {
-        "tech-doc": [
-          "architecture",
-          "overview",
-          "modules",
-          "data-flow",
-          "extension-guide"
-        ],
-        "guide": [
-          "guide",
-          "quick-start",
-          "best-practices",
-          "faq"
-        ],
         "api": [
           "reference"
+        ],
+        "guide": [
+          "best-practices",
+          "faq",
+          "guide",
+          "quick-start"
+        ],
+        "tech-doc": [
+          "architecture",
+          "data-flow",
+          "extension-guide",
+          "modules",
+          "overview"
         ]
       }
     }
