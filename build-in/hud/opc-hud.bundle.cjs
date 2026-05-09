@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// ../../build/hud/index.js
+// ../../build-in/hud/index.js
 var import_node_path = require("node:path");
 var import_node_fs = require("node:fs");
 var import_node_child_process = require("node:child_process");

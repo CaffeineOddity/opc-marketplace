@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "../../build/hud",
+    "outDir": "../../build-in/hud",
     "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,

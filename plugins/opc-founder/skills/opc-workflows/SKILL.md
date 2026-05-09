@@ -51,7 +51,7 @@ The `init` command copies built-in workflows from the opc-founder plugin to your
 
 ### What it does:
 
-1. **Copies built-in workflows** from `{plugin}/workflows/built-in/` to `{project}/.opc/workflows/`
+1. **Copies built-in workflows** from `{marketplace}/build-in/workflows/` to `{project}/.opc/workflows/`
 2. **Preserves existing workflows** - won't overwrite custom workflows
 3. **Updates marker file** - records initialization status
 
@@ -120,7 +120,7 @@ python3 {marketplace_root}/plugins/opc-founder/skills/opc-workflows/scripts/init
 The script:
 1. Finds marketplace path from `~/.claude/plugins/marketplaces/opc-marketplace/` or current project
 2. Gets git toplevel for project root
-3. Copies built-in workflows from `{marketplace}/plugins/opc-founder/workflows/built-in/`
+3. Copies built-in workflows from `{marketplace}/build-in/workflows/`
 4. Preserves custom workflows (not in built-in list)
 5. Updates `.opc/.workflows-init` marker file
 

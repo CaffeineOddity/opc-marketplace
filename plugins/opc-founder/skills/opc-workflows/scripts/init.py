@@ -31,7 +31,7 @@ def get_opc_founder_path(marketplace_path: Path) -> Path:
 
 def get_workflows_path(marketplace_path: Path) -> Path:
     """Get workflows path (at marketplace root, sibling to src)."""
-    return marketplace_path / "workflows"
+    return marketplace_path / "build-in" / "workflows"
 
 
 def run_workflows_init(project_root: Path, marketplace_path: Path, force: bool = False, dry_run: bool = False) -> dict:
@@ -48,7 +48,7 @@ def run_workflows_init(project_root: Path, marketplace_path: Path, force: bool =
         dict with results
     """
     workflows_path = get_workflows_path(marketplace_path)
-    workflows_source = workflows_path / "built-in"
+    workflows_source = workflows_path
     workflows_target = project_root / ".opc" / "workflows"
     marker_file = project_root / ".opc" / ".workflows-init"
 

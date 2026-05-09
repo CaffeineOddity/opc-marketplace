@@ -121,7 +121,7 @@ Where `{marketplace_root}` is the opc-marketplace source directory.
 This script performs:
 
 1. **Configure .gitignore**: Add `.opc/state/` entry (if not exists)
-2. **Copy built-in workflows**: `plugins/opc-founder/workflows/built-in/*.json` → `{git-toplevel}/.opc/workflows/`
+2. **Copy built-in workflows**: `build-in/workflows/*.json` → `{git-toplevel}/.opc/workflows/`
 3. **Create marker file**: `{git-toplevel}/.opc/.project-init` to prevent re-run
 
 **Note:** HUD statusline is installed separately via `install.py` or `/opc-plugin install hud`.

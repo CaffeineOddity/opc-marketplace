@@ -19,8 +19,8 @@ def install_hud(marketplace_path: Path) -> tuple[bool, str]:
     """
     from .settings import update_statusline
 
-    # HUD bundle is located in build/hud (built from TypeScript)
-    hud_path = marketplace_path / "build" / "hud" / "opc-hud.bundle.cjs"
+    # HUD bundle is located in build-in/hud (built from TypeScript)
+    hud_path = marketplace_path / "build-in" / "hud" / "opc-hud.bundle.cjs"
 
     if not hud_path.exists():
         return (False, "HUD source not found. Please run 'npm run build' in src/hud first.")
