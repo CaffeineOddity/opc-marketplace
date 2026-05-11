@@ -1,27 +1,290 @@
 {
-  "topics": {
-    "opc-state": {
-      "title": "OPC State 状态管理系统",
+  "features": {
+    "opc-task-orchestration": {
+      "title": "一键任务调度系统",
       "description": "",
       "status": "in_progress",
-      "created_at": "2026-05-09T08:32:58.306Z",
-      "updated_at": "2026-05-09T09:06:06.580Z",
-      "domains": {
-        "api": [
-          "reference"
+      "created_at": "2026-05-11T16:41:09.920Z",
+      "updated_at": "2026-05-11T16:41:10.404Z",
+      "categories": {
+        "requirement": [
+          "main"
         ],
-        "guide": [
-          "best-practices",
-          "faq",
-          "guide",
-          "quick-start"
+        "architecture": [
+          "main"
         ],
-        "tech-doc": [
-          "architecture",
-          "data-flow",
-          "extension-guide",
-          "modules",
-          "overview"
+        "design": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "api_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ],
+        "qa_test": [
+          "main"
+        ]
+      }
+    },
+    "plugin-management": {
+      "title": "插件管理系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:10.774Z",
+      "updated_at": "2026-05-11T16:41:11.118Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "api_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ]
+      }
+    },
+    "workflow-specs": {
+      "title": "工作流规范系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:11.754Z",
+      "updated_at": "2026-05-11T16:41:11.993Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ]
+      }
+    },
+    "state-persistence": {
+      "title": "状态持久化系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:12.604Z",
+      "updated_at": "2026-05-11T16:41:12.890Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "api_guide": [
+          "main"
+        ],
+        "data_flows": [
+          "main"
+        ]
+      }
+    },
+    "knowledge-library": {
+      "title": "知识库管理系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:13.540Z",
+      "updated_at": "2026-05-11T16:41:13.830Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "api_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ]
+      }
+    },
+    "product-research": {
+      "title": "产品需求调研系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:13.923Z",
+      "updated_at": "2026-05-11T16:41:14.219Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "design": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ]
+      }
+    },
+    "design-system": {
+      "title": "设计系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:28.944Z",
+      "updated_at": "2026-05-11T16:41:29.301Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "design": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ]
+      }
+    },
+    "dev-engineering": {
+      "title": "开发工程系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:31.214Z",
+      "updated_at": "2026-05-11T16:41:31.575Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "api_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ],
+        "security": [
+          "main"
+        ]
+      }
+    },
+    "quality-assurance": {
+      "title": "质量保障系统",
+      "description": "",
+      "status": "in_progress",
+      "created_at": "2026-05-11T16:41:33.522Z",
+      "updated_at": "2026-05-11T16:41:33.818Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ],
+        "qa_test": [
+          "main"
+        ]
+      }
+    },
+    "devops-deployment": {
+      "title": "部署运维系统",
+      "description": "ship-kit 插件知识库，包含部署自动化、CI/CD 流水线、基础设施即代码、成本优化和事故响应能力",
+      "status": "completed",
+      "created_at": "2026-05-11T16:41:35.702Z",
+      "updated_at": "2026-05-12T10:00:00.000Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "operations": [
+          "main"
+        ],
+        "observability": [
+          "main"
+        ]
+      }
+    },
+    "growth-marketing": {
+      "title": "增长营销系统",
+      "description": "growth-kit 插件知识库，包含营销策略、内容创作、视觉内容、SEO 优化、数据分析和多平台发布能力",
+      "status": "completed",
+      "created_at": "2026-05-11T16:41:37.836Z",
+      "updated_at": "2026-05-12T10:00:00.000Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
+        ],
+        "growth": [
+          "main"
+        ]
+      }
+    },
+    "docs-generation": {
+      "title": "文档生成系统",
+      "description": "docs-kit 插件知识库，包含文档生成、翻译服务、内容处理和图像处理能力",
+      "status": "completed",
+      "created_at": "2026-05-11T16:41:39.237Z",
+      "updated_at": "2026-05-12T10:00:00.000Z",
+      "categories": {
+        "requirement": [
+          "main"
+        ],
+        "architecture": [
+          "main"
+        ],
+        "tech_guide": [
+          "main"
+        ],
+        "core_flows": [
+          "main"
         ]
       }
     }
