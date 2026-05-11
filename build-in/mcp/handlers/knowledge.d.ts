@@ -2,7 +2,7 @@
  * Knowledge Handlers
  *
  * Handles opc_knowledge_* tool calls.
- * Knowledge is organized by topic (e.g., "hud", "state-management").
+ * Knowledge is organized by feature (e.g., "hud", "state-management").
  */
 import type { ToolResult } from './index.js';
 export declare function handleKnowledgeInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult;

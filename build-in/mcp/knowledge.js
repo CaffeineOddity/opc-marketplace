@@ -1,11 +1,11 @@
 /**
  * OPC Knowledge Library
  *
- * Knowledge management organized by topic (e.g., "hud", "state-management").
- * Each topic can have multiple domain documents (backend.md, design.md, etc.)
+ * Knowledge management organized by feature (e.g., "hud", "state-management").
+ * Each feature can have multiple category documents (architecture/main.md, design/ui.md, etc.)
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { ensureOpcDir } from './paths.js';
 import { readJsonFile, atomicWriteJson } from './io.js';
 import { RECOMMENDED_CATEGORIES } from './types.js';
@@ -18,12 +18,55 @@ function getKnowledgePath(cwd) {
 function getKnowledgeIndexPath(cwd) {
     return join(getKnowledgePath(cwd), 'index.json');
 }
-function getTopicPath(topic, cwd) {
-    return join(getKnowledgePath(cwd), topic);
+/**
+ * Get the path to knowledge templates JSON.
+ */
+function getKnowledgeTemplatesPath() {
+    if (typeof __dirname !== 'undefined') {
+        return join(__dirname, 'statics', 'templates.json');
+    }
+    const entry = process.argv[1];
+    const runtimeDir = (entry && typeof entry === 'string') ? dirname(entry) : process.cwd();
+    return join(runtimeDir, 'statics', 'templates.json');
 }
-function getKnowledgeDocPath(topic, category, doc, cwd) {
-    const topicPath = getTopicPath(topic, cwd);
-    return join(topicPath, category, `${doc}.md`);
+/**
+ * Get the path to knowledge metadata JSON.
+ */
+function getKnowledgeMetadataPath() {
+    if (typeof __dirname !== 'undefined') {
+        return join(__dirname, 'statics', 'knowledge-metadata.json');
+    }
+    const entry = process.argv[1];
+    const runtimeDir = (entry && typeof entry === 'string') ? dirname(entry) : process.cwd();
+    return join(runtimeDir, 'statics', 'knowledge-metadata.json');
+}
+function validateKnowledgePathPart(value, field) {
+    if (!value || typeof value !== 'string') {
+        throw new Error(`Invalid ${field}: must be a non-empty string`);
+    }
+    if (value.includes('..')) {
+        throw new Error(`Invalid ${field}: path traversal not allowed`);
+    }
+    if (value.includes('/') || value.includes('\\')) {
+        throw new Error(`Invalid ${field}: path separators not allowed`);
+    }
+    if (value.includes('\0')) {
+        throw new Error(`Invalid ${field}: null byte not allowed`);
+    }
+}
+function getFeaturePath(featureName, cwd) {
+    validateKnowledgePathPart(featureName, 'feature_name');
+    return join(getKnowledgePath(cwd), featureName);
+}
+function getCategoryPath(featureName, category, cwd) {
+    validateKnowledgePathPart(String(category), 'category');
+    return join(getFeaturePath(featureName, cwd), String(category));
+}
+function getKnowledgeDocPath(featureName, category, doc, cwd) {
+    validateKnowledgePathPart(String(category), 'category');
+    validateKnowledgePathPart(doc, 'doc');
+    const featurePath = getFeaturePath(featureName, cwd);
+    return join(featurePath, String(category), `${doc}.md`);
 }
 // ============================================================
 // Knowledge Index
@@ -32,17 +75,34 @@ export function readKnowledgeIndex(cwd) {
     const path = getKnowledgeIndexPath(cwd);
     const index = readJsonFile(path);
     if (!index) {
-        return { topics: {} };
+        return { features: {} };
     }
-    // Migration: Convert old 'requirements' key to 'topics'
-    if ('requirements' in index && !('topics' in index)) {
-        const legacyIndex = index;
-        const migratedIndex = { topics: legacyIndex.requirements };
-        // Write migrated index
+    const raw = index;
+    // Migration: Convert old 'requirements' / 'topics' to 'features'
+    if ('features' in raw) {
+        return index;
+    }
+    const topicsOrRequirements = (raw.topics ?? raw.requirements);
+    if (!topicsOrRequirements || typeof topicsOrRequirements !== 'object') {
+        const migratedIndex = { features: {} };
         writeKnowledgeIndex(migratedIndex, cwd);
         return migratedIndex;
     }
-    return index;
+    const legacy = topicsOrRequirements;
+    const migratedFeatures = {};
+    for (const [featureName, data] of Object.entries(legacy)) {
+        migratedFeatures[featureName] = {
+            title: data.title,
+            description: data.description,
+            status: data.status,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            categories: data.categories || data.domains || {},
+        };
+    }
+    const migratedIndex = { features: migratedFeatures };
+    writeKnowledgeIndex(migratedIndex, cwd);
+    return migratedIndex;
 }
 export function writeKnowledgeIndex(index, cwd) {
     const path = getKnowledgeIndexPath(cwd);
@@ -62,8 +122,8 @@ export function writeKnowledgeIndex(index, cwd) {
  *
  * IMPORTANT: Avoids collision with category names (ios, android, web, etc.)
  */
-export function generateTopicSlug(title) {
-    // Category names to avoid as topic slugs
+export function generateFeatureSlug(title) {
+    // Category names to avoid as feature slugs
     const categoryNames = new Set(RECOMMENDED_CATEGORIES);
     // Try to extract meaningful English words first
     const englishWords = title.match(/[a-zA-Z]+/g);
@@ -79,8 +139,8 @@ export function generateTopicSlug(title) {
             if (!categoryNames.has(slug)) {
                 return slug;
             }
-            // If collision, prefix with 'topic-'
-            return `topic-${slug}`;
+            // If collision, prefix with 'feature-'
+            return `feature-${slug}`;
         }
         if (words.length === 1) {
             const word = words[0];
@@ -88,26 +148,26 @@ export function generateTopicSlug(title) {
             if (!categoryNames.has(word)) {
                 return word;
             }
-            // If collision, prefix with 'topic-'
-            return `topic-${word}`;
+            // If collision, prefix with 'feature-'
+            return `feature-${word}`;
         }
     }
     // For Chinese or other languages, generate a slug based on timestamp
-    return `topic-${Date.now().toString(36)}`;
+    return `feature-${Date.now().toString(36)}`;
 }
 /**
- * Find similar existing topic by title/description similarity.
- * Used for automatic knowledge topic matching.
+ * Find similar existing feature by title/description similarity.
+ * Used for automatic knowledge feature matching.
  */
-export function findSimilarKnowledgeTopic(taskTitle, taskDescription, cwd, threshold = 0.5) {
+export function findSimilarKnowledgeFeature(taskTitle, taskDescription, cwd, threshold = 0.5) {
     const index = readKnowledgeIndex(cwd);
-    const topics = Object.entries(index.topics);
-    if (topics.length === 0)
+    const features = Object.entries(index.features);
+    if (features.length === 0)
         return null;
     const query = `${taskTitle} ${taskDescription}`.toLowerCase();
     const queryWords = query.split(/\s+/).filter(w => w.length > 1);
     let bestMatch = null;
-    for (const [slug, data] of topics) {
+    for (const [slug, data] of features) {
         const titleWords = data.title.toLowerCase().split(/\s+/);
         const descWords = (data.description || '').toLowerCase().split(/\s+/);
         const allWords = [...titleWords, ...descWords].filter(w => w.length > 1);
@@ -122,11 +182,11 @@ export function findSimilarKnowledgeTopic(taskTitle, taskDescription, cwd, thres
         }
         const score = queryWords.length > 0 ? matchCount / queryWords.length : 0;
         if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
-            // Infer primary category from domains (first non-empty category)
-            const categories = Object.keys(data.domains);
-            const primaryCategory = categories.find(c => data.domains[c]?.length > 0);
+            // Infer primary category from categories (first non-empty category)
+            const categories = Object.keys(data.categories);
+            const primaryCategory = categories.find(c => data.categories[c]?.length > 0);
             bestMatch = {
-                topic: slug,
+                feature_name: slug,
                 title: data.title,
                 score,
                 category: primaryCategory
@@ -136,54 +196,146 @@ export function findSimilarKnowledgeTopic(taskTitle, taskDescription, cwd, thres
     return bestMatch;
 }
 /**
- * Create a new knowledge topic.
- * Returns the created topic info.
+ * Create a new knowledge feature.
+ * Returns the created feature info.
  */
-export function createTopic(topicSlug, title, description, cwd) {
+export function createFeature(featureName, title, description, cwd) {
     const index = readKnowledgeIndex(cwd);
     const now = new Date().toISOString();
-    index.topics[topicSlug] = {
+    index.features[featureName] = {
         title,
         description,
         status: 'in_progress',
         created_at: now,
         updated_at: now,
-        domains: {},
+        categories: {},
     };
     writeKnowledgeIndex(index, cwd);
-    // Create topic directory
-    const topicPath = getTopicPath(topicSlug, cwd);
-    if (!existsSync(topicPath)) {
-        mkdirSync(topicPath, { recursive: true });
+    // Create feature directory
+    const featurePath = getFeaturePath(featureName, cwd);
+    if (!existsSync(featurePath)) {
+        mkdirSync(featurePath, { recursive: true });
     }
-    return { topic: topicSlug, title };
+    return { feature_name: featureName, title };
 }
 /**
- * Check if a topic exists.
+ * Scaffold a knowledge feature with a standard document set.
+ * Only creates missing docs (never overwrites existing files).
  */
-export function topicExists(topicSlug, cwd) {
-    const index = readKnowledgeIndex(cwd);
-    return !!index.topics[topicSlug];
+export function scaffoldKnowledgeFeature(featureName, title, cwd, categories) {
+    const templates = loadKnowledgeTemplates(cwd);
+    const defaultCategories = Array.from(new Set(templates.map(t => t.category)));
+    const targetCategories = (categories && categories.length > 0) ? categories : defaultCategories;
+    const created = [];
+    for (const category of targetCategories) {
+        const categoryTemplates = templates.filter(t => t.category === category);
+        const toCreate = categoryTemplates.length > 0
+            ? categoryTemplates
+            : [{
+                    category,
+                    doc: 'main',
+                    meta: { name: `${category} 文档`, description: `该功能在 ${category} 分类下的说明文档。`, tags: [category] },
+                    content: `## 内容\n\n- `,
+                }];
+        for (const t of toCreate) {
+            if (readKnowledgeDoc(featureName, t.category, t.doc, cwd))
+                continue;
+            writeKnowledgeDoc(featureName, t.category, t.doc, t.content, 'overwrite', undefined, cwd, t.meta);
+            created.push({ category: t.category, doc: t.doc });
+        }
+    }
+    if (created.length > 0) {
+        const index = readKnowledgeIndex(cwd);
+        const featureData = index.features[featureName];
+        if (featureData) {
+            featureData.title = featureData.title || title;
+            writeKnowledgeIndex(index, cwd);
+        }
+    }
+    return { created };
 }
 /**
- * Get topic info by slug
+ * Load knowledge templates from build-in/mcp/templates.json.
+ * Falls back to a minimal built-in template set if the JSON is missing or invalid.
  */
-export function getTopic(topic, cwd) {
+function loadKnowledgeTemplates(cwd) {
+    const templatesPath = getKnowledgeTemplatesPath();
+    const raw = readJsonFile(templatesPath);
+    if (!raw || typeof raw !== 'object') {
+        return [{
+                category: 'requirement',
+                doc: 'main',
+                meta: { name: '需求说明', description: '需求与验收标准。', tags: ['requirement'] },
+                content: `# WHAT\n\n- \n\n# WHY\n\n- \n\n## 验收标准\n\n- `,
+            }];
+    }
+    const templatesRaw = raw.templates;
+    if (!Array.isArray(templatesRaw)) {
+        return [{
+                category: 'requirement',
+                doc: 'main',
+                meta: { name: '需求说明', description: '需求与验收标准。', tags: ['requirement'] },
+                content: `# WHAT\n\n- \n\n# WHY\n\n- \n\n## 验收标准\n\n- `,
+            }];
+    }
+    const parsed = [];
+    for (const item of templatesRaw) {
+        if (!item || typeof item !== 'object')
+            continue;
+        const obj = item;
+        const category = obj.category;
+        const doc = obj.doc;
+        const name = obj.name;
+        const description = obj.description;
+        const content = obj.content;
+        const tags = obj.tags;
+        if (typeof category !== 'string' || typeof doc !== 'string')
+            continue;
+        if (typeof name !== 'string' || typeof description !== 'string')
+            continue;
+        if (typeof content !== 'string')
+            continue;
+        const meta = {
+            name,
+            description,
+            tags: Array.isArray(tags) ? tags.filter(t => typeof t === 'string') : undefined,
+        };
+        parsed.push({ category, doc, meta, content });
+    }
+    if (parsed.length > 0)
+        return parsed;
+    return [{
+            category: 'requirement',
+            doc: 'main',
+            meta: { name: '需求说明', description: '需求与验收标准。', tags: ['requirement'] },
+            content: `# WHAT\n\n- \n\n# WHY\n\n- \n\n## 验收标准\n\n- `,
+        }];
+}
+/**
+ * Check if a feature exists.
+ */
+export function featureExists(featureName, cwd) {
     const index = readKnowledgeIndex(cwd);
-    return index.topics[topic] || null;
+    return !!index.features[featureName];
+}
+/**
+ * Get feature info by name
+ */
+export function getFeature(featureName, cwd) {
+    const index = readKnowledgeIndex(cwd);
+    return index.features[featureName] || null;
 }
 // ============================================================
 // Knowledge Read/Write
 // ============================================================
-export function readKnowledgeDoc(topic, category, doc, cwd) {
-    const path = getKnowledgeDocPath(topic, category, doc, cwd);
+export function readKnowledgeDoc(featureName, category, doc, cwd) {
+    const path = getKnowledgeDocPath(featureName, category, doc, cwd);
     if (!existsSync(path))
         return null;
     return readFileSync(path, 'utf-8');
 }
-export function readAllKnowledgeDocs(topic, category, cwd) {
-    const topicPath = getTopicPath(topic, cwd);
-    const categoryPath = join(topicPath, category);
+export function readAllKnowledgeDocs(featureName, category, cwd) {
+    const categoryPath = getCategoryPath(featureName, category, cwd);
     if (!existsSync(categoryPath))
         return null;
     const results = [];
@@ -195,105 +347,52 @@ export function readAllKnowledgeDocs(topic, category, cwd) {
     }
     return results.length > 0 ? results.join('\n\n---\n\n') : null;
 }
-// ============================================================
-// Document Type Metadata Defaults
-// ============================================================
+let cachedKnowledgeMetadata = null;
 /**
- * Default metadata for common document types.
- * Provides meaningful name and description when caller doesn't specify.
+ * Load knowledge metadata from statics/knowledge-metadata.json.
  */
-const DOC_TYPE_DEFAULTS = {
-    // Architecture documents
-    architecture: {
-        name: '技术架构文档',
-        description: '描述系统的整体架构设计，包括组件关系、技术选型、分层结构和核心模块。',
-    },
-    tech: {
-        name: '技术方案文档',
-        description: '描述技术实现方案，包括技术栈选择、实现细节和关键决策。',
-    },
-    api: {
-        name: 'API接口文档',
-        description: '描述API端点、请求/响应格式、认证方式和错误处理。',
-    },
-    // Requirement documents
-    main: {
-        name: '需求规格文档',
-        description: '描述功能需求、用户故事、验收标准和业务目标。',
-    },
-    'user-stories': {
-        name: '用户故事文档',
-        description: '描述用户故事、验收标准和优先级排序。',
-    },
-    // Design documents
-    ui: {
-        name: 'UI设计文档',
-        description: '描述用户界面设计，包括布局、组件、交互和视觉规范。',
-    },
-    interaction: {
-        name: '交互设计文档',
-        description: '描述用户交互流程、状态转换和动画效果。',
-    },
-    // Test documents
-    'test-plan': {
-        name: '测试计划文档',
-        description: '描述测试策略、测试范围、测试环境和资源安排。',
-    },
-    cases: {
-        name: '测试用例文档',
-        description: '描述测试用例、预期结果和覆盖率分析。',
-    },
-    // Deployment documents
-    deployment: {
-        name: '部署文档',
-        description: '描述部署流程、环境配置和发布检查清单。',
-    },
-    infrastructure: {
-        name: '基础设施文档',
-        description: '描述基础设施架构、资源配置和运维指南。',
-    },
-    // Growth documents
-    metrics: {
-        name: '指标体系文档',
-        description: '描述业务指标、监控维度和数据采集方案。',
-    },
-    analytics: {
-        name: '数据分析文档',
-        description: '描述分析方法、数据模型和洞察结论。',
-    },
-};
+function loadKnowledgeMetadata() {
+    if (cachedKnowledgeMetadata)
+        return cachedKnowledgeMetadata;
+    const path = getKnowledgeMetadataPath();
+    const raw = readJsonFile(path);
+    const fallback = {
+        category_names: {},
+        doc_type_defaults: {},
+    };
+    if (!raw || typeof raw !== 'object') {
+        cachedKnowledgeMetadata = fallback;
+        return cachedKnowledgeMetadata;
+    }
+    const obj = raw;
+    const categoryNames = obj.category_names;
+    const docTypeDefaults = obj.doc_type_defaults;
+    const parsed = {
+        category_names: (categoryNames && typeof categoryNames === 'object') ? categoryNames : {},
+        doc_type_defaults: (docTypeDefaults && typeof docTypeDefaults === 'object') ? docTypeDefaults : {},
+    };
+    cachedKnowledgeMetadata = parsed;
+    return cachedKnowledgeMetadata;
+}
 /**
  * Get default metadata for a document type.
- * Falls back to generic defaults if type not found.
  */
 function getDocTypeDefaults(doc, category) {
-    // Check explicit defaults first
-    if (DOC_TYPE_DEFAULTS[doc]) {
-        return DOC_TYPE_DEFAULTS[doc];
-    }
-    // Generate category-aware defaults
-    const categoryNames = {
-        requirement: '需求',
-        design: '设计',
-        backend: '后端',
-        ios: 'iOS',
-        android: 'Android',
-        harmony: '鸿蒙',
-        web: 'Web',
-        miniprogram: '小程序',
-        qa: '测试',
-        ship: '部署',
-        growth: '增长',
-    };
+    const metadata = loadKnowledgeMetadata();
+    const docDefaults = metadata.doc_type_defaults[doc];
+    if (docDefaults)
+        return docDefaults;
+    const categoryLabel = metadata.category_names[category] || '';
+    const prefix = categoryLabel ? `${categoryLabel}` : '';
     return {
-        name: `${categoryNames[category] || ''}${doc}文档`,
-        description: `描述${categoryNames[category] || ''}相关的${doc}内容。`,
+        name: `${prefix}${doc}文档`,
+        description: `描述${prefix}相关的${doc}内容。`,
     };
 }
-export function writeKnowledgeDoc(topic, category, doc, content, mode = 'append', section, cwd, 
+export function writeKnowledgeDoc(featureName, category, doc, content, mode = 'append', section, cwd, 
 /** Optional metadata for frontmatter generation */
 meta) {
-    const path = getKnowledgeDocPath(topic, category, doc, cwd);
+    const path = getKnowledgeDocPath(featureName, category, doc, cwd);
     const dir = join(path, '..');
     const now = new Date().toISOString();
     if (!existsSync(dir)) {
@@ -321,9 +420,9 @@ meta) {
         }
         // overwrite mode: use new content directly
     }
-    // Get topic info for default metadata
+    // Get feature info for default metadata
     const index = readKnowledgeIndex(cwd);
-    const topicData = index.topics[topic];
+    const featureData = index.features[featureName];
     // Get document type defaults
     const docDefaults = getDocTypeDefaults(doc, category);
     // Build frontmatter metadata
@@ -332,7 +431,7 @@ meta) {
         name: meta?.name || existingMeta.name || docDefaults.name,
         description: meta?.description || existingMeta.description || docDefaults.description,
         category: meta?.category || category,
-        topic: meta?.topic || topic,
+        feature_name: meta?.feature_name || existingMeta.feature_name || featureName,
         created_at: existingMeta.created_at || now,
         updated_at: now,
         tags: meta?.tags || existingMeta.tags,
@@ -342,13 +441,13 @@ meta) {
     finalContent = `${frontmatter}\n${finalContent}`;
     writeFileSync(path, finalContent, 'utf-8');
     // Update index
-    if (topicData) {
-        topicData.updated_at = now;
-        if (!topicData.domains[category]) {
-            topicData.domains[category] = [];
+    if (featureData) {
+        featureData.updated_at = now;
+        if (!featureData.categories[category]) {
+            featureData.categories[category] = [];
         }
-        if (!topicData.domains[category].includes(doc)) {
-            topicData.domains[category].push(doc);
+        if (!featureData.categories[category].includes(doc)) {
+            featureData.categories[category].push(doc);
         }
         writeKnowledgeIndex(index, cwd);
     }
@@ -356,17 +455,16 @@ meta) {
 // ============================================================
 // Knowledge Exists
 // ============================================================
-export function knowledgeExists(topic, category, doc, cwd) {
+export function knowledgeExists(featureName, category, doc, cwd) {
     if (!category) {
         const index = readKnowledgeIndex(cwd);
-        return !!index.topics[topic];
+        return !!index.features[featureName];
     }
     if (!doc) {
-        const topicPath = getTopicPath(topic, cwd);
-        const categoryPath = join(topicPath, category);
+        const categoryPath = getCategoryPath(featureName, category, cwd);
         return existsSync(categoryPath);
     }
-    const path = getKnowledgeDocPath(topic, category, doc, cwd);
+    const path = getKnowledgeDocPath(featureName, category, doc, cwd);
     return existsSync(path);
 }
 // ============================================================
@@ -396,8 +494,11 @@ export function parseFrontmatter(content) {
         if (value.startsWith('[') && value.endsWith(']')) {
             value = value.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
         }
-        // Map to camelCase for consistency
-        const normalizedKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        const normalizedKey = key === 'topic' ? 'feature_name'
+            : key === 'featureName' ? 'feature_name'
+                : key === 'createdAt' ? 'created_at'
+                    : key === 'updatedAt' ? 'updated_at'
+                        : key;
         meta[normalizedKey] = value;
     }
     return { meta, content: bodyContent };
@@ -410,7 +511,7 @@ export function generateFrontmatter(meta) {
     lines.push(`name: ${meta.name}`);
     lines.push(`description: ${meta.description}`);
     lines.push(`category: ${meta.category}`);
-    lines.push(`topic: ${meta.topic}`);
+    lines.push(`feature_name: ${meta.feature_name}`);
     if (meta.created_at) {
         lines.push(`created_at: ${meta.created_at}`);
     }
@@ -426,8 +527,8 @@ export function generateFrontmatter(meta) {
 /**
  * Read knowledge document with parsed frontmatter metadata.
  */
-export function readKnowledgeDocWithMeta(topic, category, doc, cwd) {
-    const rawContent = readKnowledgeDoc(topic, category, doc, cwd);
+export function readKnowledgeDocWithMeta(featureName, category, doc, cwd) {
+    const rawContent = readKnowledgeDoc(featureName, category, doc, cwd);
     if (!rawContent)
         return null;
     const { meta, content } = parseFrontmatter(rawContent);
@@ -437,7 +538,7 @@ export function readKnowledgeDocWithMeta(topic, category, doc, cwd) {
             name: meta.name || doc,
             description: meta.description || '',
             category: meta.category || category,
-            topic: meta.topic || topic,
+            feature_name: meta.feature_name || featureName,
             created_at: meta.created_at,
             updated_at: meta.updated_at,
             tags: meta.tags,
@@ -449,22 +550,22 @@ export function readKnowledgeDocWithMeta(topic, category, doc, cwd) {
  * List all knowledge documents with brief metadata.
  * Enables progressive loading without reading full content.
  */
-export function listKnowledgeDocsBrief(topic, category, cwd) {
+export function listKnowledgeDocsBrief(featureName, category, cwd) {
     const index = readKnowledgeIndex(cwd);
     const results = [];
-    const topicsToScan = topic ? [topic] : Object.keys(index.topics);
-    for (const t of topicsToScan) {
-        const topicData = index.topics[t];
-        if (!topicData)
+    const featuresToScan = featureName ? [featureName] : Object.keys(index.features);
+    for (const f of featuresToScan) {
+        const featureData = index.features[f];
+        if (!featureData)
             continue;
         const categoriesToScan = category
             ? [category]
-            : Object.keys(topicData.domains);
+            : Object.keys(featureData.categories);
         for (const c of categoriesToScan) {
-            const docs = topicData.domains[c] || [];
+            const docs = featureData.categories[c] || [];
             for (const doc of docs) {
                 // Try to read frontmatter, fall back to index data
-                const docWithMeta = readKnowledgeDocWithMeta(t, c, doc, cwd);
+                const docWithMeta = readKnowledgeDocWithMeta(f, c, doc, cwd);
                 if (docWithMeta) {
                     results.push(docWithMeta.meta);
                 }
@@ -472,9 +573,9 @@ export function listKnowledgeDocsBrief(topic, category, cwd) {
                     // Fallback: create minimal metadata from index
                     results.push({
                         name: doc,
-                        description: topicData.description || '',
+                        description: featureData.description || '',
                         category: c,
-                        topic: t,
+                        feature_name: f,
                     });
                 }
             }
@@ -485,9 +586,8 @@ export function listKnowledgeDocsBrief(topic, category, cwd) {
 // ============================================================
 // Knowledge List
 // ============================================================
-export function listKnowledgeDocs(topic, category, cwd) {
-    const topicPath = getTopicPath(topic, cwd);
-    const categoryPath = join(topicPath, category);
+export function listKnowledgeDocs(featureName, category, cwd) {
+    const categoryPath = getCategoryPath(featureName, category, cwd);
     if (!existsSync(categoryPath))
         return [];
     const docs = [];
@@ -517,23 +617,23 @@ export function listKnowledgeDocs(topic, category, cwd) {
 export function rebuildKnowledgeIndex(cwd) {
     const knowledgePath = getKnowledgePath(cwd);
     const oldIndex = readKnowledgeIndex(cwd);
-    const oldTopics = Object.keys(oldIndex.topics);
-    const newIndex = { topics: {} };
+    const oldFeatures = Object.keys(oldIndex.features);
+    const newIndex = { features: {} };
     const stats = {
-        topicsFound: 0,
+        featuresFound: 0,
         categoriesFound: 0,
         docsFound: 0,
-        topicsAdded: [],
-        topicsRemoved: [],
+        featuresAdded: [],
+        featuresRemoved: [],
     };
     // Check if knowledge directory exists
     if (!existsSync(knowledgePath)) {
         // No knowledge directory, return empty index
         writeKnowledgeIndex(newIndex, cwd);
-        stats.topicsRemoved = oldTopics;
+        stats.featuresRemoved = oldFeatures;
         return { index: newIndex, stats };
     }
-    // Scan all directories in knowledge path (each is a topic)
+    // Scan all directories in knowledge path (each is a feature)
     const entries = readdirSync(knowledgePath, { withFileTypes: true });
     for (const entry of entries) {
         if (!entry.isDirectory())
@@ -541,18 +641,18 @@ export function rebuildKnowledgeIndex(cwd) {
         // Skip special directories (like .git, etc.)
         if (entry.name.startsWith('.'))
             continue;
-        const topicSlug = entry.name;
-        const topicPath = join(knowledgePath, topicSlug);
-        // Scan categories within topic
-        const domains = {};
-        let topicUpdatedAt = '';
+        const featureName = entry.name;
+        const featurePath = join(knowledgePath, featureName);
+        // Scan categories within feature
+        const categories = {};
+        let featureUpdatedAt = '';
         let latestDocTime = 0;
-        const categoryEntries = readdirSync(topicPath, { withFileTypes: true });
+        const categoryEntries = readdirSync(featurePath, { withFileTypes: true });
         for (const catEntry of categoryEntries) {
             if (!catEntry.isDirectory())
                 continue;
             const categorySlug = catEntry.name;
-            const categoryPath = join(topicPath, categorySlug);
+            const categoryPath = join(featurePath, categorySlug);
             // Scan documents within category
             const docs = [];
             const docEntries = readdirSync(categoryPath, { withFileTypes: true });
@@ -575,51 +675,50 @@ export function rebuildKnowledgeIndex(cwd) {
                 }
             }
             if (docs.length > 0) {
-                domains[categorySlug] = docs.sort();
+                categories[categorySlug] = docs.sort();
                 stats.categoriesFound++;
             }
         }
-        // Only add topic if it has documents
-        if (Object.keys(domains).length > 0) {
-            stats.topicsFound++;
+        // Only add feature if it has documents
+        if (Object.keys(categories).length > 0) {
+            stats.featuresFound++;
             // Preserve existing metadata if available
-            const existingTopic = oldIndex.topics[topicSlug];
+            const existingFeature = oldIndex.features[featureName];
             const now = new Date().toISOString();
             // Try to extract title from frontmatter of first document found
-            let title = existingTopic?.title || topicSlug;
-            let description = existingTopic?.description || '';
+            let title = existingFeature?.title || featureName;
+            let description = existingFeature?.description || '';
             // Find first document to extract title from frontmatter
-            if (!existingTopic?.title) {
-                for (const [category, docs] of Object.entries(domains)) {
+            if (!existingFeature?.title) {
+                for (const [category, docs] of Object.entries(categories)) {
                     if (docs.length > 0) {
-                        const docWithMeta = readKnowledgeDocWithMeta(topicSlug, category, docs[0], cwd);
-                        if (docWithMeta?.meta.topic) {
-                            // Use topic from frontmatter if it matches
-                            title = topicSlug;
+                        const docWithMeta = readKnowledgeDocWithMeta(featureName, category, docs[0], cwd);
+                        if (docWithMeta?.meta.feature_name === featureName) {
+                            title = featureName;
                             break;
                         }
                     }
                 }
             }
-            newIndex.topics[topicSlug] = {
+            newIndex.features[featureName] = {
                 title,
                 description,
-                status: existingTopic?.status || 'in_progress',
-                created_at: existingTopic?.created_at || now,
+                status: existingFeature?.status || 'in_progress',
+                created_at: existingFeature?.created_at || now,
                 updated_at: latestDocTime > 0 ? new Date(latestDocTime).toISOString() : now,
-                domains,
+                categories,
             };
-            // Track if this is a new topic
-            if (!oldTopics.includes(topicSlug)) {
-                stats.topicsAdded.push(topicSlug);
+            // Track if this is a new feature
+            if (!oldFeatures.includes(featureName)) {
+                stats.featuresAdded.push(featureName);
             }
         }
     }
-    // Track removed topics
-    const newTopics = Object.keys(newIndex.topics);
-    for (const oldTopic of oldTopics) {
-        if (!newTopics.includes(oldTopic)) {
-            stats.topicsRemoved.push(oldTopic);
+    // Track removed features
+    const newFeatures = Object.keys(newIndex.features);
+    for (const oldFeature of oldFeatures) {
+        if (!newFeatures.includes(oldFeature)) {
+            stats.featuresRemoved.push(oldFeature);
         }
     }
     // Write the rebuilt index

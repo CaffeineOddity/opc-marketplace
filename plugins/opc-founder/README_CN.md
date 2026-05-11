@@ -22,9 +22,9 @@
 
 | 工具 | 描述 |
 |------|------|
-| `opc_state_init` | 初始化项目状态，自动匹配知识库主题 |
+| `opc_state_init` | 初始化项目状态，自动匹配知识库功能（feature） |
 | `opc_state_read` | 读取项目进度和阶段状态 |
-| `opc_state_write` | 更新阶段状态、进度、产出物、知识主题 |
+| `opc_state_write` | 更新阶段状态、进度、产出物、knowledge_feature_name |
 | `opc_state_clear` | 清除当前任务状态 |
 | `opc_sessions_list` | 列出所有 OPC 任务会话 |
 | `opc_handoff` | 记录代理交接上下文 |
@@ -37,11 +37,11 @@
 
 | 工具 | 描述 |
 |------|------|
-| `opc_knowledge_init` | 为主题初始化知识库（需要 en_topic_name） |
+| `opc_knowledge_init` | 为功能初始化知识库（需要 feature_name） |
 | `opc_knowledge_read` | 从分类/文档读取知识 |
 | `opc_knowledge_write` | 写入或更新知识文档 |
 | `opc_knowledge_exists` | 检查知识文档是否存在 |
-| `opc_knowledge_list` | 列出知识库中的主题 |
+| `opc_knowledge_list` | 列出知识库中的功能（feature） |
 | `opc_knowledge_list_brief` | 列出所有文档的简要元数据（渐进加载） |
 | `opc_knowledge_docs` | 列出分类中的可用文档 |
 | `opc_knowledge_rebuild_index` | 从文件系统重建 index.json（用于损坏或不同步时） |
@@ -83,7 +83,7 @@ OPC 为多阶段项目提供持久化状态管理：
 ├── state/
 │   └── sessions/{session-id}/project-state.json
 ├── knowledge/
-│   └── {topic}/{category}/xxx.md
+│   └── {feature_name}/{category}/xxx.md
 └── workflows/
 ```
 

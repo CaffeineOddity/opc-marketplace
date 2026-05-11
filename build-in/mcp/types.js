@@ -5,9 +5,24 @@
  */
 // Recommended categories for reference (non-exhaustive)
 export const RECOMMENDED_CATEGORIES = [
-    'requirement', 'design', 'backend', 'ios', 'android',
-    'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth',
-    'bug-fix', 'issue', 'tech-doc', 'guide', 'api', 'architecture'
+    'requirement',
+    'architecture',
+    'design',
+    'tech_guide',
+    'api_guide',
+    'core_flows',
+    'data_flows',
+    'qa_test',
+    'issues',
+    'growth',
+    'adr',
+    'security',
+    'operations',
+    'observability',
+    'release',
+    'migration',
+    'glossary',
+    'research',
 ];
 // ============================================================
 // Pipeline Stages

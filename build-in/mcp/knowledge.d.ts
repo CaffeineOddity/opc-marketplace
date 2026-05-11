@@ -1,8 +1,8 @@
 /**
  * OPC Knowledge Library
  *
- * Knowledge management organized by topic (e.g., "hud", "state-management").
- * Each topic can have multiple domain documents (backend.md, design.md, etc.)
+ * Knowledge management organized by feature (e.g., "hud", "state-management").
+ * Each feature can have multiple category documents (architecture/main.md, design/ui.md, etc.)
  */
 import type { KnowledgeCategory, KnowledgeIndex, KnowledgeDocMeta, KnowledgeDocWithMeta } from './types.js';
 export declare function readKnowledgeIndex(cwd?: string): KnowledgeIndex;
@@ -14,39 +14,49 @@ export declare function writeKnowledgeIndex(index: KnowledgeIndex, cwd?: string)
  *
  * IMPORTANT: Avoids collision with category names (ios, android, web, etc.)
  */
-export declare function generateTopicSlug(title: string): string;
+export declare function generateFeatureSlug(title: string): string;
 /**
- * Find similar existing topic by title/description similarity.
- * Used for automatic knowledge topic matching.
+ * Find similar existing feature by title/description similarity.
+ * Used for automatic knowledge feature matching.
  */
-export declare function findSimilarKnowledgeTopic(taskTitle: string, taskDescription: string, cwd?: string, threshold?: number): {
-    topic: string;
+export declare function findSimilarKnowledgeFeature(taskTitle: string, taskDescription: string, cwd?: string, threshold?: number): {
+    feature_name: string;
     title: string;
     score: number;
     category?: string;
 } | null;
 /**
- * Create a new knowledge topic.
- * Returns the created topic info.
+ * Create a new knowledge feature.
+ * Returns the created feature info.
  */
-export declare function createTopic(topicSlug: string, title: string, description: string, cwd?: string): {
-    topic: string;
+export declare function createFeature(featureName: string, title: string, description: string, cwd?: string): {
+    feature_name: string;
     title: string;
 };
 /**
- * Check if a topic exists.
+ * Scaffold a knowledge feature with a standard document set.
+ * Only creates missing docs (never overwrites existing files).
  */
-export declare function topicExists(topicSlug: string, cwd?: string): boolean;
+export declare function scaffoldKnowledgeFeature(featureName: string, title: string, cwd?: string, categories?: KnowledgeCategory[]): {
+    created: Array<{
+        category: KnowledgeCategory;
+        doc: string;
+    }>;
+};
 /**
- * Get topic info by slug
+ * Check if a feature exists.
  */
-export declare function getTopic(topic: string, cwd?: string): KnowledgeIndex['topics'][string] | null;
-export declare function readKnowledgeDoc(topic: string, category: KnowledgeCategory, doc: string, cwd?: string): string | null;
-export declare function readAllKnowledgeDocs(topic: string, category: KnowledgeCategory, cwd?: string): string | null;
-export declare function writeKnowledgeDoc(topic: string, category: KnowledgeCategory, doc: string, content: string, mode?: 'append' | 'update' | 'overwrite', section?: string, cwd?: string, 
+export declare function featureExists(featureName: string, cwd?: string): boolean;
+/**
+ * Get feature info by name
+ */
+export declare function getFeature(featureName: string, cwd?: string): KnowledgeIndex['features'][string] | null;
+export declare function readKnowledgeDoc(featureName: string, category: KnowledgeCategory, doc: string, cwd?: string): string | null;
+export declare function readAllKnowledgeDocs(featureName: string, category: KnowledgeCategory, cwd?: string): string | null;
+export declare function writeKnowledgeDoc(featureName: string, category: KnowledgeCategory, doc: string, content: string, mode?: 'append' | 'update' | 'overwrite', section?: string, cwd?: string, 
 /** Optional metadata for frontmatter generation */
 meta?: Partial<KnowledgeDocMeta>): void;
-export declare function knowledgeExists(topic: string, category?: KnowledgeCategory, doc?: string, cwd?: string): boolean;
+export declare function knowledgeExists(featureName: string, category?: KnowledgeCategory, doc?: string, cwd?: string): boolean;
 /**
  * Parse YAML frontmatter from document content.
  * Returns metadata and content without frontmatter.
@@ -62,13 +72,13 @@ export declare function generateFrontmatter(meta: KnowledgeDocMeta): string;
 /**
  * Read knowledge document with parsed frontmatter metadata.
  */
-export declare function readKnowledgeDocWithMeta(topic: string, category: KnowledgeCategory, doc: string, cwd?: string): KnowledgeDocWithMeta | null;
+export declare function readKnowledgeDocWithMeta(featureName: string, category: KnowledgeCategory, doc: string, cwd?: string): KnowledgeDocWithMeta | null;
 /**
  * List all knowledge documents with brief metadata.
  * Enables progressive loading without reading full content.
  */
-export declare function listKnowledgeDocsBrief(topic?: string, category?: KnowledgeCategory, cwd?: string): KnowledgeDocMeta[];
-export declare function listKnowledgeDocs(topic: string, category: KnowledgeCategory, cwd?: string): string[];
+export declare function listKnowledgeDocsBrief(featureName?: string, category?: KnowledgeCategory, cwd?: string): KnowledgeDocMeta[];
+export declare function listKnowledgeDocs(featureName: string, category: KnowledgeCategory, cwd?: string): string[];
 /**
  * Rebuild the knowledge index from the filesystem.
  * Scans all topic directories and their categories to reconstruct index.json.
@@ -85,10 +95,10 @@ export declare function listKnowledgeDocs(topic: string, category: KnowledgeCate
 export declare function rebuildKnowledgeIndex(cwd?: string): {
     index: KnowledgeIndex;
     stats: {
-        topicsFound: number;
+        featuresFound: number;
         categoriesFound: number;
         docsFound: number;
-        topicsAdded: string[];
-        topicsRemoved: string[];
+        featuresAdded: string[];
+        featuresRemoved: string[];
     };
 };

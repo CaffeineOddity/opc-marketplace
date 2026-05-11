@@ -47,7 +47,7 @@ function generateFrontmatter(meta) {
   lines.push(`name: ${meta.name}`);
   lines.push(`description: ${meta.description}`);
   lines.push(`category: ${meta.category}`);
-  lines.push(`topic: ${meta.topic}`);
+  lines.push(`feature_name: ${meta.feature_name}`);
 
   if (meta.created_at) {
     lines.push(`created_at: ${meta.created_at}`);
@@ -73,7 +73,7 @@ function migrateKnowledgeDocs() {
 
   // Read index.json for metadata
   const indexPath = join(knowledgePath, 'index.json');
-  let index = { topics: {} };
+  let index = { features: {} };
 
   if (existsSync(indexPath)) {
     try {
@@ -85,15 +85,18 @@ function migrateKnowledgeDocs() {
 
   let migratedCount = 0;
 
-  // Iterate through topics
-  for (const [topicSlug, topicData] of Object.entries(index.topics || {})) {
-    const topicPath = join(knowledgePath, topicSlug);
+  const features = index.features || index.topics || index.requirements || {};
 
-    if (!existsSync(topicPath)) continue;
+  // Iterate through features
+  for (const [featureName, featureData] of Object.entries(features)) {
+    const featurePath = join(knowledgePath, featureName);
+
+    if (!existsSync(featurePath)) continue;
 
     // Iterate through categories
-    for (const [category, docs] of Object.entries(topicData.domains || {})) {
-      const categoryPath = join(topicPath, category);
+    const categories = featureData.categories || featureData.domains || {};
+    for (const [category, docs] of Object.entries(categories)) {
+      const categoryPath = join(featurePath, category);
 
       if (!existsSync(categoryPath)) continue;
 
@@ -107,8 +110,8 @@ function migrateKnowledgeDocs() {
         const { meta, content } = parseFrontmatter(rawContent);
 
         // Skip if already has frontmatter
-        if (meta.name && meta.description && meta.category && meta.topic) {
-          console.log(`✓ ${topicSlug}/${category}/${doc}.md - already has frontmatter`);
+        if (meta.name && meta.description && meta.category && (meta.featureName || meta.feature_name || meta.topic)) {
+          console.log(`✓ ${featureName}/${category}/${doc}.md - already has frontmatter`);
           continue;
         }
 
@@ -116,10 +119,10 @@ function migrateKnowledgeDocs() {
         const now = new Date().toISOString();
         const frontmatterMeta = {
           name: meta.name || doc,
-          description: meta.description || topicData.description || '',
+          description: meta.description || featureData.description || '',
           category: meta.category || category,
-          topic: meta.topic || topicSlug,
-          created_at: meta.created_at || topicData.created_at || now,
+          feature_name: meta.feature_name || meta.featureName || meta.topic || featureName,
+          created_at: meta.created_at || featureData.created_at || now,
           updated_at: now,
           tags: meta.tags,
         };
@@ -129,7 +132,7 @@ function migrateKnowledgeDocs() {
         const newContent = `${frontmatter}\n${content}`;
 
         writeFileSync(docPath, newContent, 'utf-8');
-        console.log(`✓ ${topicSlug}/${category}/${doc}.md - migrated`);
+        console.log(`✓ ${featureName}/${category}/${doc}.md - migrated`);
         migratedCount++;
       }
     }

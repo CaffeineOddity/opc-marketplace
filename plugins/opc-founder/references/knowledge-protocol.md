@@ -18,8 +18,8 @@ Each knowledge document includes YAML frontmatter for self-description:
 ---
 name: 文档名称（人类可读，如"iOS多语言系统架构设计"）
 description: 文档功能描述（用于列表展示和渐进加载，说明文档的作用和内容）
-category: requirement | design | backend | ios | android | harmony | web | miniprogram | qa | ship | growth
-topic: 主题标识（如 "ios-localization", "user-auth"）
+category: requirement | architecture | tech_guide | api_guide | core_flows | data_flows | qa_test | issues | design | growth | ...
+feature_name: 功能标识（目录名，如 "ios-localization", "user-auth"）
 created_at: 创建时间
 updated_at: 更新时间
 tags: [可选标签]
@@ -34,7 +34,7 @@ tags: [可选标签]
 |-------|------------|---------|
 | `name` | Human-readable document name, describe what the document is | `iOS多语言系统架构设计` (NOT just `architecture`) |
 | `description` | What the document contains and its purpose | `描述iOS项目中多语言系统的架构设计，包括LanguageManager、BundleProvider等核心组件的实现细节和使用方式。` |
-| `topic` | Semantic topic identifier, avoid category names | `ios-localization` (NOT `ios`) |
+| `feature_name` | Semantic feature identifier, avoid category names | `ios-localization` (NOT `ios`) |
 | `tags` | Optional keywords for filtering | `[ios, localization, architecture, i18n]` |
 
 ### Why Meaningful Metadata Matters
@@ -43,7 +43,7 @@ tags: [可选标签]
 |-----------------------|-------------------|
 | `name: architecture` | `name: iOS多语言系统架构设计` |
 | `description: 生成iOS多语言方案` (task description) | `description: 描述iOS项目中多语言系统的架构设计...` (document purpose) |
-| `topic: ios` (collision with category) | `topic: ios-localization` (semantic identifier) |
+| `feature_name: ios` (collision with category) | `feature_name: ios-localization` (semantic identifier) |
 | Hard to find in list views | Easy to identify and select |
 | No context before reading | Clear understanding from metadata |
 
@@ -59,12 +59,12 @@ tags: [可选标签]
 ## Path Format
 
 ```
-.opc/knowledge/{topic}/{category}/xxx.md
+.opc/knowledge/{feature_name}/{category}/xxx.md
 ```
 
 | Component | Description | Example |
 |-----------|-------------|---------|
-| `{topic}` | Topic identifier | hud, state-management |
+| `{feature_name}` | Feature identifier | hud, state-management |
 | `{category}` | Knowledge category | requirement, design, backend... |
 | `xxx.md` | Markdown document with frontmatter | main.md, tech.md |
 
@@ -186,19 +186,18 @@ tags: [可选标签]
 
 **IMPORTANT:** Whether using a workflow or manually assembling a pipeline, ALWAYS follow this protocol.
 
-### Step 1: Extract Requirement ID
+### Step 1: Decide feature_name
 
 Before starting any pipeline:
 ```
-- If user mentions "REQ-XXX" → use that ID
-- If user describes a new feature → generate ID like "REQ-001"
-- Use opc_knowledge_list() to check existing requirements
+- Decide a semantic directory name (e.g., "ios-localization", "user-auth")
+- Use opc_knowledge_list() to check existing features
 ```
 
 ### Step 2: Initialize Knowledge Library
 
 ```typescript
-opc_knowledge_init(requirementId, title)
+opc_knowledge_init({ title, feature_name })
 ```
 
 ### Step 3: Knowledge Flow Per Stage
@@ -218,8 +217,8 @@ const categoryMap = {
 // Read all prior categories
 const categoriesToRead = getPriorCategories(currentStage)
 for (const category of categoriesToRead) {
-  if (opc_knowledge_exists(requirementId, category)) {
-    knowledge += opc_knowledge_read(requirementId, category)
+  if (opc_knowledge_exists({ feature_name, category })) {
+    knowledge += opc_knowledge_read({ feature_name, category })
   }
 }
 
@@ -232,7 +231,7 @@ for (const category of categoriesToRead) {
 const knowledgeUpdate = extractKnowledgeUpdate(agentOutput)
 
 // Write to current category
-opc_knowledge_write(requirementId, currentCategory, doc, knowledgeUpdate)
+opc_knowledge_write({ feature_name, category: currentCategory, doc, content: knowledgeUpdate })
 ```
 
 ### Step 4: Category Resolution Logic
@@ -265,53 +264,53 @@ function stageToCategory(stage: string): string {
 
 ```
 # Stage 1: Product
-opc_knowledge_init("REQ-001", "User Login")
+opc_knowledge_init({ title: "User Login", feature_name: "user-auth" })
 → product-agent executes
-→ opc_knowledge_write("REQ-001", "requirement", "main", "## User Stories\n...")
+→ opc_knowledge_write({ feature_name: "user-auth", category: "requirement", doc: "main", content: "## User Stories\n..." })
 
 # Stage 2: Design
-opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
+opc_knowledge_read({ feature_name: "user-auth", category: "requirement" })  # Learn requirement
 → design-agent executes with requirement context
-→ opc_knowledge_write("REQ-001", "design", "ui/main", "## Login Page\n...")
+→ opc_knowledge_write({ feature_name: "user-auth", category: "design", doc: "ui", content: "## Login Page\n..." })
 
-# Stage 3: Dev (Web)
-opc_knowledge_read("REQ-001", "requirement")  # Learn requirement
-opc_knowledge_read("REQ-001", "design")       # Learn design
+# Stage 3: Dev
+opc_knowledge_read({ feature_name: "user-auth", category: "requirement" })  # Learn requirement
+opc_knowledge_read({ feature_name: "user-auth", category: "design" })       # Learn design
 → frontend-agent executes with full context
-→ opc_knowledge_write("REQ-001", "web", "tech", "## Components\n...")
+→ opc_knowledge_write({ feature_name: "user-auth", category: "tech_guide", doc: "main", content: "## Components\n..." })
 
 # Stage 4: QA
-opc_knowledge_read("REQ-001", "web/tech")  # Learn implementation
+opc_knowledge_read({ feature_name: "user-auth", category: "tech_guide" })  # Learn implementation
 → qa-agent executes
-→ opc_knowledge_write("REQ-001", "qa", "test-plan", "## Test Cases\n...")
+→ opc_knowledge_write({ feature_name: "user-auth", category: "qa_test", doc: "main", content: "## Test Cases\n..." })
 ```
 
 ### Bug Fix (No Workflow)
 
 ```
-User: /opc fix the login bug in REQ-001
+User: /opc fix the login bug in user-auth
 
-1. Extract requirement ID: "REQ-001"
-2. Check knowledge exists: opc_knowledge_exists("REQ-001") → true
+1. Decide feature_name: "user-auth"
+2. Check knowledge exists: opc_knowledge_exists({ feature_name: "user-auth" }) → true
 3. Determine stage: "dev" (bug fix)
 4. Read prior knowledge:
-   - opc_knowledge_read("REQ-001", "requirement")
-   - opc_knowledge_read("REQ-001", "web/tech")
+   - opc_knowledge_read({ feature_name: "user-auth", category: "requirement" })
+   - opc_knowledge_read({ feature_name: "user-auth", category: "tech_guide" })
 5. Dispatch to frontend-agent with knowledge context
 6. After completion:
-   - opc_knowledge_write("REQ-001", "web", "tech", "## Bug Fix\n...")
+   - opc_knowledge_write({ feature_name: "user-auth", category: "issues", doc: "index", content: "## Bug Fix\n..." })
 ```
 
 ### Requirement Adjustment
 
 ```
-User: /opc add third-party login to REQ-001
+User: /opc add third-party login to user-auth
 
-1. Extract requirement ID: "REQ-001"
+1. Decide feature_name: "user-auth"
 2. Read all existing knowledge:
-   - opc_knowledge_read("REQ-001", "requirement")
-   - opc_knowledge_read("REQ-001", "design")
-   - opc_knowledge_read("REQ-001", "web/tech")
+   - opc_knowledge_read({ feature_name: "user-auth", category: "requirement" })
+   - opc_knowledge_read({ feature_name: "user-auth", category: "design" })
+   - opc_knowledge_read({ feature_name: "user-auth", category: "tech_guide" })
 3. Determine starting stage: "design" (requirement already clear)
 4. Dispatch to design-agent with full context
 5. Continue pipeline with knowledge updates
@@ -372,7 +371,7 @@ Reference documents store external resources and third-party documentation:
 
 ## Best Practices
 
-1. **Always initialize** before starting a new requirement
+1. **Always initialize** before starting a new feature
 2. **Always read** prior category knowledge before dispatching agents
 3. **Always write** knowledge updates after stage completion
 4. **Use append mode** by default to preserve history

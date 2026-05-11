@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "category_names": {
+    "requirement": "需求",
+    "architecture": "架构",
+    "design": "设计",
+    "tech_guide": "技术指南",
+    "api_guide": "API指南",
+    "core_flows": "核心流程",
+    "data_flows": "数据流",
+    "qa_test": "测试",
+    "issues": "问题",
+    "growth": "增长",
+    "adr": "决策记录",
+    "security": "安全",
+    "operations": "运维",
+    "observability": "可观测性",
+    "release": "发布",
+    "migration": "迁移",
+    "glossary": "术语",
+    "research": "调研"
+  },
+  "doc_type_defaults": {
+    "main": {
+      "name": "主文档",
+      "description": "该分类下的主文档（概览、要点、结论与链接）。"
+    },
+    "index": {
+      "name": "索引文档",
+      "description": "该分类下的索引与导航（条目列表、链接与状态）。"
+    },
+    "ui": {
+      "name": "UI 设计文档",
+      "description": "界面布局、组件结构、视觉规范与交互说明。"
+    }
+  }
+}

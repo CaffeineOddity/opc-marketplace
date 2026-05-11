@@ -387,8 +387,8 @@ OPC provides a self-evolving knowledge library. **See `references/knowledge-prot
 
 ### Key Rules
 
-1. **Extract requirement ID** from task (e.g., "REQ-001")
-2. **Initialize** with `opc_knowledge_init(requirementId, title)`
+1. **Decide feature_name** for the task (directory name, e.g., "ios-localization")
+2. **Initialize** with `opc_knowledge_init({ title, feature_name })`
 3. **Read prior domains** before each stage
 4. **Write knowledge** after each stage completes
 5. **Inject knowledge** into agent context when dispatching

@@ -75,7 +75,7 @@ export interface ProjectState {
         name: string;
         description: string;
         requirement_id?: string;
-        knowledge_topic?: string;
+        knowledge_feature_name?: string;
         knowledge_category?: string;
         created_at: string;
         updated_at: string;
@@ -176,19 +176,19 @@ export interface HandoffRecord {
     lock_id: string;
 }
 export type KnowledgeCategory = string;
-export declare const RECOMMENDED_CATEGORIES: readonly ["requirement", "design", "backend", "ios", "android", "harmony", "web", "miniprogram", "qa", "ship", "growth", "bug-fix", "issue", "tech-doc", "guide", "api", "architecture"];
+export declare const RECOMMENDED_CATEGORIES: readonly ["requirement", "architecture", "design", "tech_guide", "api_guide", "core_flows", "data_flows", "qa_test", "issues", "growth", "adr", "security", "operations", "observability", "release", "migration", "glossary", "research"];
 export declare const TASK_STAGES: readonly ["product", "design", "dev", "qa", "ship", "growth"];
 export type TaskStage = typeof TASK_STAGES[number];
 export declare const STAGE_STATUSES: readonly ["pending", "in_progress", "completed", "blocked"];
 export type StageStatus = typeof STAGE_STATUSES[number];
 export interface KnowledgeIndex {
-    topics: Record<string, {
+    features: Record<string, {
         title: string;
         description?: string;
         status: 'in_progress' | 'completed' | 'paused';
         created_at: string;
         updated_at: string;
-        domains: Record<string, string[]>;
+        categories: Record<string, string[]>;
     }>;
 }
 /**
@@ -202,8 +202,8 @@ export interface KnowledgeDocMeta {
     description: string;
     /** Knowledge category */
     category: KnowledgeCategory;
-    /** Topic identifier (e.g., "hud", "state-management") */
-    topic: string;
+    /** Feature identifier / directory name (e.g., "hud", "state-management") */
+    feature_name: string;
     /** Creation timestamp */
     created_at?: string;
     /** Last update timestamp */

@@ -109,7 +109,7 @@ export interface ProjectState {
     name: string;
     description: string;
     requirement_id?: string;
-    knowledge_topic?: string;  // Links to knowledge topic (e.g., "hud", "state-management")
+    knowledge_feature_name?: string;  // Links to knowledge feature directory (e.g., "hud", "state-management")
     knowledge_category?: string;  // Primary knowledge category (e.g., "ios", "web", "backend")
     created_at: string;
     updated_at: string;
@@ -238,9 +238,24 @@ export type KnowledgeCategory = string;
 
 // Recommended categories for reference (non-exhaustive)
 export const RECOMMENDED_CATEGORIES = [
-  'requirement', 'design', 'backend', 'ios', 'android',
-  'harmony', 'web', 'miniprogram', 'qa', 'ship', 'growth',
-  'bug-fix', 'issue', 'tech-doc', 'guide', 'api', 'architecture'
+  'requirement',
+  'architecture',
+  'design',
+  'tech_guide',
+  'api_guide',
+  'core_flows',
+  'data_flows',
+  'qa_test',
+  'issues',
+  'growth',
+  'adr',
+  'security',
+  'operations',
+  'observability',
+  'release',
+  'migration',
+  'glossary',
+  'research',
 ] as const;
 
 // ============================================================
@@ -255,16 +270,16 @@ export type TaskStage = typeof TASK_STAGES[number];
 export const STAGE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
 export type StageStatus = typeof STAGE_STATUSES[number];
 
-// Knowledge is organized by topic (e.g., "hud", "state-management")
-// Each topic can have multiple domain documents (e.g., backend.md, design.md)
+// Knowledge is organized by feature (e.g., "hud", "state-management")
+// Each feature can have multiple category documents (e.g., architecture/main.md, design/ui.md)
 export interface KnowledgeIndex {
-  topics: Record<string, {
+  features: Record<string, {
     title: string;
     description?: string;
     status: 'in_progress' | 'completed' | 'paused';
     created_at: string;
     updated_at: string;
-    domains: Record<string, string[]>;  // domain -> [doc names]
+    categories: Record<string, string[]>;  // category -> [doc names]
   }>;
 }
 
@@ -283,8 +298,8 @@ export interface KnowledgeDocMeta {
   description: string;
   /** Knowledge category */
   category: KnowledgeCategory;
-  /** Topic identifier (e.g., "hud", "state-management") */
-  topic: string;
+  /** Feature identifier / directory name (e.g., "hud", "state-management") */
+  feature_name: string;
   /** Creation timestamp */
   created_at?: string;
   /** Last update timestamp */

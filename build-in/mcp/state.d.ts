@@ -26,7 +26,7 @@ export declare function getSessionPathByFilename(filename: string, cwd?: string)
 export declare function findSessionByRequirementId(requirementId: string, cwd?: string): string | null;
 export declare function readProjectState(requirementId: string, source: 'matched' | 'auto_assembled', cwd?: string): ProjectState | null;
 export declare function writeProjectState(state: ProjectState, cwd?: string): void;
-export declare function initializeProjectState(name: string, description: string, lockId: string, requirementId?: string, cwd?: string, workflow?: WorkflowSpec | null, workflowSource?: 'matched' | 'auto_assembled', workflowConfidence?: number, knowledgeTopic?: string, knowledgeCategory?: string): ProjectState;
+export declare function initializeProjectState(name: string, description: string, lockId: string, requirementId?: string, cwd?: string, workflow?: WorkflowSpec | null, workflowSource?: 'matched' | 'auto_assembled', workflowConfidence?: number, knowledgeFeatureName?: string, knowledgeCategory?: string): ProjectState;
 export declare function getHandoffPath(lockId: string, cwd?: string): string;
 export declare function recordHandoff(fromAgent: string, toAgent: string, artifacts: string[], constraints: string[], context: string, lockId: string, cwd?: string): HandoffRecord;
 export declare function getHandoffs(lockId: string, cwd?: string): HandoffRecord[];

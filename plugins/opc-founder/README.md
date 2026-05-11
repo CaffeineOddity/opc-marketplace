@@ -22,9 +22,9 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 
 | Tool | Description |
 |------|-------------|
-| `opc_state_init` | Initialize a new project with pipeline tracking and auto knowledge topic matching |
+| `opc_state_init` | Initialize a new project with pipeline tracking and auto knowledge feature matching |
 | `opc_state_read` | Read current project state and progress |
-| `opc_state_write` | Update stage status, progress, artifacts, knowledge_topic |
+| `opc_state_write` | Update stage status, progress, artifacts, knowledge_feature_name |
 | `opc_state_clear` | Clear current task state |
 | `opc_sessions_list` | List all OPC task sessions |
 | `opc_handoff` | Record agent handoff with context |
@@ -37,7 +37,7 @@ One-person company orchestrator plugin — the CEO agent that coordinates all ot
 
 | Tool | Description |
 |------|-------------|
-| `opc_knowledge_init` | Initialize knowledge library for a topic (requires en_topic_name) |
+| `opc_knowledge_init` | Initialize knowledge library for a feature (requires feature_name) |
 | `opc_knowledge_read` | Read knowledge from a category/doc |
 | `opc_knowledge_write` | Write or update knowledge document |
 | `opc_knowledge_exists` | Check if knowledge document exists |
@@ -83,7 +83,7 @@ OPC provides persistent state management for multi-stage projects:
 ├── state/
 │   └── sessions/{session-id}/project-state.json
 ├── knowledge/
-│   └── {topic}/{category}/xxx.md
+│   └── {feature_name}/{category}/xxx.md
 └── workflows/
 ```
 
@@ -160,46 +160,44 @@ OPC provides a self-evolving knowledge library that accumulates project knowledg
 
 ```
 .opc/knowledge/
-├── ios-localization/           # Topic: iOS多语言功能
-│   ├── requirement/
-│   │   └── main.md             # Requirement knowledge
-│   ├── design/
-│   │   └── ui.md               # UI design
-│   ├── ios/
-│   │   └── tech.md             # iOS tech decisions
-│   └── backend/
-│       └── api.md              # API documentation
-├── user-auth/                  # Topic: 用户认证
+├── ios-localization/           # Feature: iOS多语言功能
 │   ├── requirement/
 │   │   └── main.md
-│   ├── design/
-│   │   └── ui.md
-│   ├── web/
-│   │   └── tech.md
-│   └── backend/
-│       └── api.md
+│   ├── architecture/
+│   │   └── main.md
+│   ├── api_guide/
+│   │   └── main.md
+│   └── qa_test/
+│       └── main.md
+├── user-auth/                  # Feature: 用户认证
+│   ├── requirement/
+│   │   └── main.md
+│   ├── core_flows/
+│   │   └── main.md
+│   └── issues/
+│       └── index.md
 └── index.json                  # Global index
 ```
 
-### Topic-Based Organization
+### Feature-Based Organization
 
-Knowledge library uses **semantic topics** instead of requirement IDs:
+Knowledge library uses **semantic features** instead of requirement IDs:
 
-| Topic | Description |
-|-------|-------------|
+| Feature | Description |
+|---------|-------------|
 | `ios-localization` | iOS多语言功能 |
 | `user-auth` | 用户认证功能 |
 | `payment-integration` | 支付集成 |
 
 **Benefits:**
-- Self-describing topics that match task semantics
+- Self-describing features that match task semantics
 - Automatic similarity matching for knowledge reuse
 - No manual ID management
 
 ### Usage Flow
 
 ```
-1. Task Start → opc_state_init auto-matches/sets knowledge_topic
+1. Task Start → opc_state_init auto-matches/sets knowledge_feature_name
 2. Before Stage → Read existing knowledge
 3. After Stage → Write/update knowledge
 ```
@@ -207,43 +205,43 @@ Knowledge library uses **semantic topics** instead of requirement IDs:
 ### MCP Tool Usage
 
 ```typescript
-// Initialize knowledge library for a topic
-opc_knowledge_init("iOS多语言功能", "ios-localization")
+// Initialize knowledge library for a feature
+opc_knowledge_init({ title: "iOS多语言功能", feature_name: "ios-localization" })
 
 // Read requirement before design phase
-opc_knowledge_read("ios-localization", "requirement")
+opc_knowledge_read({ feature_name: "ios-localization", category: "requirement" })
 
 // Write design after design phase (with name and description)
-opc_knowledge_write(
-  topic: "ios-localization",
+opc_knowledge_write({
+  feature_name: "ios-localization",
   category: "design",
   doc: "ui",
   content: "## Login Page Layout\n...",
   name: "UI设计文档",
-  description: "登录页面和主界面的UI设计规范"
-)
+  description: "登录页面和主界面的UI设计规范",
+})
 
 // Read ios tech before development
-opc_knowledge_read("ios-localization", "ios", "tech")
+opc_knowledge_read({ feature_name: "ios-localization", category: "tech_guide", doc: "main" })
 
-// Write ios tech after development
-opc_knowledge_write(
-  topic: "ios-localization",
-  category: "ios",
-  doc: "tech",
+// Write tech guide after development
+opc_knowledge_write({
+  feature_name: "ios-localization",
+  category: "tech_guide",
+  doc: "main",
   content: "## 2025-05-03\n- LanguageManager component",
-  name: "技术方案文档",
-  description: "iOS多语言技术实现方案"
-)
+  name: "技术指南",
+  description: "iOS多语言技术实现方案",
+})
 
 // Check if knowledge exists
-opc_knowledge_exists("ios-localization", "ios", "tech")
+opc_knowledge_exists({ feature_name: "ios-localization", category: "tech_guide", doc: "main" })
 
-// List all topics
+// List all features
 opc_knowledge_list()
 
 // List docs in a category
-opc_knowledge_docs("ios-localization", "ios")
+opc_knowledge_docs({ feature_name: "ios-localization", category: "tech_guide" })
 
 // List all documents with brief metadata (progressive loading)
 opc_knowledge_list_brief()
@@ -261,8 +259,8 @@ If `index.json` becomes corrupted or out of sync with the actual files:
 opc_knowledge_rebuild_index()
 
 // Returns:
-// - Statistics: topics found, categories found, documents found
-// - Changes: topics added/removed
+// - Statistics: features found, categories found, documents found
+// - Changes: features added/removed
 // - Current index state
 ```
 
@@ -276,7 +274,7 @@ opc_knowledge_rebuild_index()
 
 The knowledge library evolves automatically:
 
-1. **New Task** → opc_state_init auto-matches or creates knowledge_topic
+1. **New Task** → opc_state_init auto-matches or creates knowledge_feature_name
 2. **Stage Start** → Read category knowledge (if exists)
 3. **Stage Complete** → Write/update category knowledge
 4. **Future Tasks** → Auto-match similar topics and reuse knowledge

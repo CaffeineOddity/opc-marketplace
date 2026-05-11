@@ -20,13 +20,13 @@ const stateTools = [
     },
     {
         name: 'opc_state_write',
-        description: 'Update OPC project state. Used by founder-agent to track pipeline progress and set knowledge topic.',
+        description: 'Update OPC project state. Used by founder-agent to track pipeline progress and set knowledge feature name.',
         inputSchema: {
             type: 'object',
             properties: {
                 project_name: { type: 'string', description: 'Project name (for new projects)' },
                 project_description: { type: 'string', description: 'Project description' },
-                knowledge_topic: { type: 'string', description: 'Knowledge topic to associate with this task (e.g., "ios-localization")' },
+                knowledge_feature_name: { type: 'string', description: 'Knowledge feature directory name to associate with this task (e.g., "ios-localization")' },
                 stage: { type: 'string', enum: [...TASK_STAGES] },
                 stage_status: { type: 'string', enum: [...STAGE_STATUSES] },
                 agent: { type: 'string', description: 'Agent name to record' },
@@ -182,24 +182,26 @@ const CATEGORY_DESCRIPTION = `Knowledge category. Examples: ${CATEGORY_EXAMPLES}
 const knowledgeTools = [
     {
         name: 'opc_knowledge_init',
-        description: 'Initialize knowledge library for a topic. Creates directory structure and index entry.',
+        description: 'Initialize knowledge library for a feature. Creates directory structure and index entry.',
         inputSchema: {
             type: 'object',
             properties: {
-                title: { type: 'string', description: 'Topic title (can be Chinese or English)' },
-                en_topic_name: { type: 'string', description: 'English topic name for directory naming (e.g., "localization", "app-login", "image-upload-r2")' },
+                title: { type: 'string', description: 'Feature title (can be Chinese or English)' },
+                feature_name: { type: 'string', description: 'Feature directory name (e.g., "localization", "app-login", "image-upload-r2")' },
+                scaffold: { type: 'boolean', description: 'Whether to scaffold standard docs during init (default: true)' },
+                categories: { type: 'array', items: { type: 'string' }, description: 'Optional category list for scaffolding (defaults to recommended categories)' },
                 workingDirectory: { type: 'string' },
             },
-            required: ['title', 'en_topic_name'],
+            required: ['title', 'feature_name'],
         },
     },
     {
         name: 'opc_knowledge_read',
-        description: 'Read knowledge from knowledge library. Can read specific doc or all docs in a category. Uses topic from current task if not specified.',
+        description: 'Read knowledge from knowledge library. Can read specific doc or all docs in a category. Uses feature_name from current task if not specified.',
         inputSchema: {
             type: 'object',
             properties: {
-                topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
+                feature_name: { type: 'string', description: 'Knowledge feature directory name (uses current task feature_name if not specified)' },
                 category: { type: 'string', description: CATEGORY_DESCRIPTION },
                 doc: { type: 'string', description: 'Document name (without .md extension)' },
                 workingDirectory: { type: 'string' },
@@ -209,11 +211,11 @@ const knowledgeTools = [
     },
     {
         name: 'opc_knowledge_write',
-        description: 'Write or update knowledge document. Uses topic from current task if not specified. Supports append, update section, or overwrite. IMPORTANT: Provide name and description for clear document identification.',
+        description: 'Write or update knowledge document. Uses feature_name from current task if not specified. Supports append, update section, or overwrite.',
         inputSchema: {
             type: 'object',
             properties: {
-                topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
+                feature_name: { type: 'string', description: 'Knowledge feature directory name (uses current task feature_name if not specified)' },
                 category: { type: 'string', description: CATEGORY_DESCRIPTION },
                 doc: { type: 'string', description: 'Document name (without .md extension)' },
                 content: { type: 'string', description: 'Content to write' },
@@ -224,16 +226,16 @@ const knowledgeTools = [
                 mode: { type: 'string', enum: ['append', 'update', 'overwrite'], description: 'Write mode (default: append)' },
                 workingDirectory: { type: 'string' },
             },
-            required: ['category', 'doc', 'content', 'name', 'description', 'tags'],
+            required: ['category', 'doc', 'content'],
         },
     },
     {
         name: 'opc_knowledge_exists',
-        description: 'Check if knowledge document exists. Uses topic from current task if not specified.',
+        description: 'Check if knowledge document exists. Uses feature_name from current task if not specified.',
         inputSchema: {
             type: 'object',
             properties: {
-                topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
+                feature_name: { type: 'string', description: 'Knowledge feature directory name (uses current task feature_name if not specified)' },
                 category: { type: 'string', description: CATEGORY_DESCRIPTION },
                 doc: { type: 'string', description: 'Document name' },
                 workingDirectory: { type: 'string' },
@@ -243,7 +245,7 @@ const knowledgeTools = [
     },
     {
         name: 'opc_knowledge_list',
-        description: 'List topics in knowledge library.',
+        description: 'List features in knowledge library.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -255,11 +257,11 @@ const knowledgeTools = [
     },
     {
         name: 'opc_knowledge_docs',
-        description: 'List available documents in a category. Uses topic from current task if not specified.',
+        description: 'List available documents in a category. Uses feature_name from current task if not specified.',
         inputSchema: {
             type: 'object',
             properties: {
-                topic: { type: 'string', description: 'Knowledge topic (uses current task topic if not specified)' },
+                feature_name: { type: 'string', description: 'Knowledge feature directory name (uses current task feature_name if not specified)' },
                 category: { type: 'string', description: CATEGORY_DESCRIPTION },
                 workingDirectory: { type: 'string' },
             },
@@ -268,11 +270,11 @@ const knowledgeTools = [
     },
     {
         name: 'opc_knowledge_list_brief',
-        description: 'List all knowledge documents with brief metadata (name, description, topic, category). Enables progressive loading without reading full document content.',
+        description: 'List all knowledge documents with brief metadata (name, description, feature_name, category). Enables progressive loading without reading full document content.',
         inputSchema: {
             type: 'object',
             properties: {
-                topic: { type: 'string', description: 'Filter by topic' },
+                feature_name: { type: 'string', description: 'Filter by feature directory name' },
                 category: { type: 'string', description: CATEGORY_DESCRIPTION },
                 workingDirectory: { type: 'string' },
             },
@@ -280,7 +282,7 @@ const knowledgeTools = [
     },
     {
         name: 'opc_knowledge_rebuild_index',
-        description: 'Rebuild the knowledge library index.json from the filesystem. Use when index is corrupted, missing, or out of sync with actual files. Scans all topic directories and reconstructs the index with current filesystem state.',
+        description: 'Rebuild the knowledge library index.json from the filesystem. Use when index is corrupted, missing, or out of sync with actual files. Scans all feature directories and reconstructs the index with current filesystem state.',
         inputSchema: {
             type: 'object',
             properties: {

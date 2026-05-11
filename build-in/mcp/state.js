@@ -88,7 +88,7 @@ export function writeProjectState(state, cwd) {
 // ============================================================
 // Project State Initialization
 // ============================================================
-export function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence, knowledgeTopic, knowledgeCategory) {
+export function initializeProjectState(name, description, lockId, requirementId, cwd, workflow, workflowSource, workflowConfidence, knowledgeFeatureName, knowledgeCategory) {
     const now = new Date().toISOString();
     let stages;
     let gates;
@@ -127,7 +127,7 @@ export function initializeProjectState(name, description, lockId, requirementId,
             name,
             description,
             requirement_id: requirementId,
-            knowledge_topic: knowledgeTopic || '',
+            knowledge_feature_name: knowledgeFeatureName || '',
             knowledge_category: knowledgeCategory || '',
             created_at: now,
             updated_at: now,

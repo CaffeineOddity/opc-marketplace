@@ -122,7 +122,7 @@ export function initializeProjectState(
   workflow?: WorkflowSpec | null,
   workflowSource?: 'matched' | 'auto_assembled',
   workflowConfidence?: number,
-  knowledgeTopic?: string,
+  knowledgeFeatureName?: string,
   knowledgeCategory?: string
 ): ProjectState {
   const now = new Date().toISOString();
@@ -166,7 +166,7 @@ export function initializeProjectState(
       name,
       description,
       requirement_id: requirementId,
-      knowledge_topic: knowledgeTopic || '',
+      knowledge_feature_name: knowledgeFeatureName || '',
       knowledge_category: knowledgeCategory || '',
       created_at: now,
       updated_at: now,

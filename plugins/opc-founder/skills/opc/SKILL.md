@@ -52,19 +52,19 @@ You are the **OPC Founder** entry point. The user has invoked `/opc` with a task
    - project_description: Full user input
 3. The tool will automatically:
    - Match similar existing knowledge topics (>50% similarity)
-   - Auto-set knowledge_topic and knowledge_category if matched
-   - Or prepare for new topic creation
+   - Auto-set knowledge_feature_name and knowledge_category if matched
+   - Or prepare for new feature creation
 ```
 
-### Intelligent Topic Matching
+### Intelligent Feature Matching
 
 When `opc_state_init` is called, it automatically searches for similar existing knowledge topics:
 
 | Similarity | Behavior |
 |------------|----------|
-| > 50% match found | Auto-reuse existing topic, set knowledge_topic in state |
+| > 50% match found | Auto-reuse existing feature, set knowledge_feature_name in state |
 | 30-50% matches | Show candidates, ask user to confirm |
-| No matches | Prepare for new topic (call opc_knowledge_init if needed) |
+| No matches | Prepare for new feature (call opc_knowledge_init if needed) |
 
 **Example:**
 ```
@@ -72,12 +72,12 @@ User: /opc 实现iOS多语言功能
   ↓
 opc_state_init(project_name="iOS多语言功能")
   ↓
-# System finds existing topic "ios-localization" with 75% similarity
-# Auto-sets knowledge_topic="ios-localization" in project state
-# All subsequent stages will use this topic
+# System finds existing feature "ios-localization" with 75% similarity
+# Auto-sets knowledge_feature_name="ios-localization" in project state
+# All subsequent stages will use this feature
 ```
 
-### Topic-Based Knowledge Organization
+### Feature-Based Knowledge Organization
 
 Knowledge library uses **semantic topics** instead of requirement IDs:
 
@@ -103,7 +103,7 @@ If user says `/opc status`:
    ⏳ pending
 3. Show artifacts produced
 4. Show current agents working
-5. Show associated knowledge_topic (if set)
+5. Show associated knowledge_feature_name (if set)
 6. Call opc_knowledge_list to show knowledge topics
 7. REMIND user: Knowledge library is the source of truth for cross-stage context
 ```
@@ -247,10 +247,10 @@ Read the user's input and classify:
 │                                                                  │
 │  BEFORE STAGE:                                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ 1. Get knowledge_topic from opc_state_read()            │    │
+│  │ 1. Get knowledge_feature_name from opc_state_read()     │    │
 │  │ 2. Parse stage's knowledge config from workflow         │    │
 │  │ 3. For each category in read_before:                    │    │
-│  │    - Call opc_knowledge_read(topic, category)           │    │
+│  │    - Call opc_knowledge_read(feature_name, category)    │    │
 │  │ 4. Combine all knowledge into context                   │    │
 │  │ 5. Inject knowledge context into agent dispatch         │    │
 │  └─────────────────────────────────────────────────────────┘    │
@@ -260,7 +260,7 @@ Read the user's input and classify:
 │  AFTER STAGE:                                                    │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ 6. Extract knowledge update from agent output           │    │
-│  │ 7. Call opc_knowledge_write(topic, category, doc,       │    │
+│  │ 7. Call opc_knowledge_write(feature_name, category, doc,│    │
 │  │    content)                                             │    │
 │  │ 8. Knowledge is now available for next stage            │    │
 │  └─────────────────────────────────────────────────────────┘    │
@@ -268,16 +268,16 @@ Read the user's input and classify:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Getting Knowledge Topic (ALWAYS do this first)
+#### Getting Knowledge Feature (ALWAYS do this first)
 
 ```javascript
-// Read current state to get knowledge_topic
+// Read current state to get knowledge_feature_name
 const state = opc_state_read()
-const topic = state.project.knowledge_topic
+const featureName = state.project.knowledge_feature_name
 
 // Use for ALL knowledge operations
-opc_knowledge_read(topic, "requirement")
-opc_knowledge_write(topic, "design", "ui", content)
+opc_knowledge_read({ feature_name: featureName, category: "requirement" })
+opc_knowledge_write({ feature_name: featureName, category: "design", doc: "ui", content })
 ```
 
 #### Stage-to-Category Mapping
@@ -285,12 +285,12 @@ opc_knowledge_write(topic, "design", "ui", content)
 | Stage | Category | Doc | What to Read | What to Write |
 |-------|----------|-----|--------------|---------------|
 | product | requirement | main | - | Requirements, user stories |
-| design | design | ui, interaction | requirement | UI specs, interaction flows |
-| dev (web) | web | tech | requirement, design | Tech decisions, architecture |
-| dev (backend) | backend | api, architecture | requirement, design | API contracts, schemas |
-| qa | qa | test-plan | requirement, backend | Test plans, edge cases |
-| ship | ship | deployment | backend, web | Deployment configs |
-| growth | growth | metrics | requirement | Success metrics |
+| design | design | main | requirement | UI specs, interaction flows |
+| dev | architecture | main | requirement, design | System architecture |
+| dev | api_guide | main | requirement, design | API contracts, errors |
+| dev | tech_guide | main | requirement, design | Tech stack and implementation notes |
+| qa | qa_test | main | requirement, architecture, api_guide | Test plans, edge cases |
+| growth | growth | main | requirement | Success metrics |
 
 #### Agent Dispatch with Knowledge Context
 
@@ -327,7 +327,7 @@ ${knowledgeContext}
 **Every task execution must update state:**
 
 ```
-1. After Step 0: State is already initialized with knowledge_topic
+1. After Step 0: State is already initialized with knowledge_feature_name
 2. Before dispatch: Call opc_state_write with stage and agent
 3. After completion: Call opc_state_write with artifacts
 4. For multi-stage: Call opc_handoff between stages
@@ -464,15 +464,15 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 ### Core Principles
 - Start with understanding, not dispatching
 - **Knowledge library is MANDATORY** — it's the foundation for coherent multi-stage workflows
-- **Always initialize with `opc_state_init`** — this creates state and auto-matches/sets knowledge_topic
-- **Get knowledge_topic from state** — `opc_state_read().project.knowledge_topic` — never guess or assume
+- **Always initialize with `opc_state_init`** — this creates state and auto-matches/sets knowledge_feature_name
+- **Get knowledge_feature_name from state** — `opc_state_read().project.knowledge_feature_name` — never guess or assume
 
 ### Knowledge Flow (CRITICAL)
 1. **Before each stage**: Read knowledge from previous stages
-   - `opc_knowledge_read(topic, category)` per workflow config
+   - `opc_knowledge_read({ feature_name, category })` per workflow config
    - This ensures continuity and context awareness
 2. **After each stage**: Write knowledge for future stages
-   - `opc_knowledge_write(topic, category, doc, content)` per workflow config
+   - `opc_knowledge_write({ feature_name, category, doc, content })` per workflow config
    - This enables knowledge accumulation and handoff
 
 ### State Management
@@ -490,5 +490,5 @@ seo-keyword-strategist → seo-content-planner → seo-content-writer → market
 |----------|----------|
 | Skip `opc_state_init` and dispatch agent directly | Always call `opc_state_init` first |
 | Ignore knowledge library, treat each stage as isolated | Read knowledge before, write after each stage |
-| Hardcode `topic` in subsequent calls | Get it from `opc_state_read().project.knowledge_topic` |
+| Hardcode `feature_name` in subsequent calls | Get it from `opc_state_read().project.knowledge_feature_name` |
 | Start stage without checking previous knowledge | Always check if relevant knowledge exists first |

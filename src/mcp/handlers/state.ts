@@ -8,8 +8,7 @@ import type { StageState, WorkflowSpec } from '../types.js';
 import { getCurrentLockId } from '../lock.js';
 import { readAllWorkflows, matchWorkflow } from '../workflow.js';
 import {
-  getTopic,
-  findSimilarKnowledgeTopic,
+  findSimilarKnowledgeFeature,
 } from '../knowledge.js';
 import {
   bindSessionToRequirement,
@@ -54,8 +53,8 @@ export function handleStateRead(cwd: string | undefined): ToolResult {
     ? `\n**Requirement ID:** ${state.project.requirement_id}`
     : '';
 
-  const topicInfo = state.project.knowledge_topic
-    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
+  const topicInfo = state.project.knowledge_feature_name
+    ? `\n**Knowledge Feature:** ${state.project.knowledge_feature_name}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
     : '';
 
   const workflowInfo = state.workflow
@@ -122,7 +121,7 @@ export function handleStateInit(args: Record<string, unknown>, cwd: string | und
 
 **Current Task:** ${existingTask.project.name}
 **Requirement ID:** ${existingTask.project.requirement_id || 'Not set'}
-**Knowledge Topic:** ${existingTask.project.knowledge_topic || 'Not set'}
+**Knowledge Feature:** ${existingTask.project.knowledge_feature_name || 'Not set'}
 **Stage:** ${existingTask.pipeline.current_stage}
 **Status:** 🔄 in_progress
 
@@ -171,20 +170,20 @@ Options:
     requirementId = generateNextRequirementId(workflowSource, cwd);
   }
 
-  // Match knowledge topic BEFORE initializing state
-  let matchedKnowledgeTopic: string | undefined;
+  // Match knowledge feature BEFORE initializing state
+  let matchedKnowledgeFeatureName: string | undefined;
   let matchedKnowledgeCategory: string | undefined;
   let knowledgeTopicInfo = '';
-  if (!isReused || !similarTask!.state.project.knowledge_topic) {
-    const similarTopic = findSimilarKnowledgeTopic(projectName, projectDescription, cwd, 0.5);
-    if (similarTopic) {
-      matchedKnowledgeTopic = similarTopic.topic;
-      matchedKnowledgeCategory = similarTopic.category;
-      knowledgeTopicInfo = `\n\n📚 **Matched knowledge topic:** ${similarTopic.topic}${similarTopic.category ? ` (${similarTopic.category})` : ''} (${Math.round(similarTopic.score * 100)}% similarity)`;
+  if (!isReused || !similarTask!.state.project.knowledge_feature_name) {
+    const similarFeature = findSimilarKnowledgeFeature(projectName, projectDescription, cwd, 0.5);
+    if (similarFeature) {
+      matchedKnowledgeFeatureName = similarFeature.feature_name;
+      matchedKnowledgeCategory = similarFeature.category;
+      knowledgeTopicInfo = `\n\n📚 **Matched knowledge feature:** ${similarFeature.feature_name}${similarFeature.category ? ` (${similarFeature.category})` : ''} (${Math.round(similarFeature.score * 100)}% similarity)`;
     }
   } else {
-    // Reused task already has knowledge topic
-    matchedKnowledgeTopic = similarTask!.state.project.knowledge_topic;
+    // Reused task already has knowledge feature
+    matchedKnowledgeFeatureName = similarTask!.state.project.knowledge_feature_name;
     matchedKnowledgeCategory = similarTask!.state.project.knowledge_category;
   }
 
@@ -195,7 +194,7 @@ Options:
     : initializeProjectState(
         projectName, projectDescription, lockId, requirementId, cwd,
         matchedWorkflow, workflowSource, workflowConfidence,
-        matchedKnowledgeTopic, matchedKnowledgeCategory
+        matchedKnowledgeFeatureName, matchedKnowledgeCategory
       );
 
   // Update project name/description if reused (task evolved)
@@ -234,14 +233,14 @@ Options:
     ? `\n\n🔗 **Reused existing task:** ${similarTask!.requirementId} (${Math.round(similarTask!.score * 100)}% similarity)`
     : `\n\n🆕 **Created new task:** ${requirementId}`;
 
-  const knowledgeTopicDisplay = state.project.knowledge_topic
-    ? `\n**Knowledge Topic:** ${state.project.knowledge_topic}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
-    : '\n**Knowledge Topic:** (not set)';
+  const knowledgeTopicDisplay = state.project.knowledge_feature_name
+    ? `\n**Knowledge Feature:** ${state.project.knowledge_feature_name}${state.project.knowledge_category ? ` (${state.project.knowledge_category})` : ''}`
+    : '\n**Knowledge Feature:** (not set)';
 
-  const nextSteps = state.project.knowledge_topic
+  const nextSteps = state.project.knowledge_feature_name
     ? `1. **Update Progress:** Use \`opc_state_write\` as you advance through stages
 2. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents`
-    : `1. **Set Knowledge Topic:** Use \`opc_knowledge_list\` to check existing topics, then \`opc_state_write(knowledge_topic="...")\` to set
+    : `1. **Set Knowledge Feature:** Use \`opc_knowledge_list\` to check existing features, then \`opc_state_write(knowledge_feature_name="...")\` to set
 2. **Update Progress:** Use \`opc_state_write\` as you advance through stages
 3. **Manage Knowledge:** Use \`opc_knowledge_read\` and \`opc_knowledge_write\` to manage knowledge documents`;
 
@@ -306,9 +305,9 @@ export function handleStateWrite(args: Record<string, unknown>, cwd: string | un
     };
   }
 
-  // Update knowledge_topic
-  if (args.knowledge_topic) {
-    state.project.knowledge_topic = args.knowledge_topic as string;
+  // Update knowledge_feature_name
+  if (args.knowledge_feature_name) {
+    state.project.knowledge_feature_name = args.knowledge_feature_name as string;
   }
 
   if (args.stage && args.stage_status) {

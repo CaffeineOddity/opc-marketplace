@@ -2,16 +2,16 @@
  * Knowledge Handlers
  *
  * Handles opc_knowledge_* tool calls.
- * Knowledge is organized by topic (e.g., "hud", "state-management").
+ * Knowledge is organized by feature (e.g., "hud", "state-management").
  */
 
 import type { KnowledgeCategory } from '../types.js';
 import { RECOMMENDED_CATEGORIES } from '../types.js';
 import {
   readKnowledgeIndex,
-  createTopic,
-  topicExists,
-  getTopic,
+  createFeature,
+  featureExists,
+  getFeature,
   readKnowledgeDoc,
   readAllKnowledgeDocs,
   writeKnowledgeDoc,
@@ -20,23 +20,22 @@ import {
   listKnowledgeDocsBrief,
   readKnowledgeDocWithMeta,
   rebuildKnowledgeIndex,
+  scaffoldKnowledgeFeature,
 } from '../knowledge.js';
 import { getCurrentTask } from '../session.js';
 import type { ToolResult } from './index.js';
 
 /**
- * Get the topic from args or current task
+ * Get the feature_name from args or current task
  */
-function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): string | null {
-  // If topic is provided directly, use it
-  if (args.topic) {
-    return args.topic as string;
-  }
+function resolveFeatureName(args: Record<string, unknown>, cwd: string | undefined): string | null {
+  const featureName = args.feature_name as string | undefined;
+  if (featureName) return featureName;
 
   // Get from current task
   const state = getCurrentTask(cwd);
-  if (state?.project.knowledge_topic) {
-    return state.project.knowledge_topic;
+  if (state?.project.knowledge_feature_name) {
+    return state.project.knowledge_feature_name;
   }
 
   return null;
@@ -44,41 +43,58 @@ function resolveTopic(args: Record<string, unknown>, cwd: string | undefined): s
 
 export function handleKnowledgeInit(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
   const title = args.title as string;
-  const enTopicName = args.en_topic_name as string;
+  const featureName = args.feature_name as string | undefined;
+  const scaffold = (args.scaffold as boolean | undefined) ?? true;
+  const categories = args.categories as KnowledgeCategory[] | undefined;
 
-  // Create topic (or return existing if already exists)
-  if (topicExists(enTopicName, cwd)) {
-    const topicData = getTopic(enTopicName, cwd);
+  if (!featureName) {
     return {
       content: [{
         type: 'text',
-        text: `## Knowledge Topic Already Exists
+        text: 'Missing required parameter: feature_name.',
+      }],
+      isError: true,
+    };
+  }
 
-**Topic:** ${enTopicName}
-**Title:** ${topicData?.title || title}
-**Path:** .opc/knowledge/${enTopicName}/
+  // Create feature (or return existing if already exists)
+  if (featureExists(featureName, cwd)) {
+    const featureData = getFeature(featureName, cwd);
+    return {
+      content: [{
+        type: 'text',
+        text: `## Knowledge Feature Already Exists
 
-Use \`opc_knowledge_write\` to add documents to this topic.`,
+**Feature:** ${featureName}
+**Title:** ${featureData?.title || title}
+**Path:** .opc/knowledge/${featureName}/
+
+Use \`opc_knowledge_write\` to add documents to this feature.`,
       }],
     };
   }
 
-  const result = createTopic(enTopicName, title, '', cwd);
-  const topic = result.topic;
+  const result = createFeature(featureName, title, '', cwd);
+  const createdFeature = result.feature_name;
 
   // Build category list from RECOMMENDED_CATEGORIES
   const categoryList = RECOMMENDED_CATEGORIES.map(c => `- \`${c}\``).join('\n');
+
+  const scaffoldResult = scaffold ? scaffoldKnowledgeFeature(createdFeature, title, cwd, categories) : { created: [] };
+  const scaffoldSummary = scaffoldResult.created.length > 0
+    ? `\n\n### Scaffolded Docs\n\n${scaffoldResult.created.map(d => `- \`${d.category}/${d.doc}.md\``).join('\n')}`
+    : '';
 
   return {
     content: [{
       type: 'text',
       text: `## Knowledge Library Initialized
 
-**Topic:** ${topic}
+**Feature:** ${createdFeature}
 **Title:** ${title}
-**Path:** .opc/knowledge/${topic}/
+**Path:** .opc/knowledge/${createdFeature}/
 
-Knowledge documents will be created on-demand when writing to each category.
+Knowledge documents can be created on-demand, or scaffolded during init.
 
 ### Available Categories
 
@@ -88,58 +104,57 @@ ${categoryList}
 
 ### Naming Convention
 
-**Topic name** should be semantic and concise:
+**Feature name** should be semantic and concise:
 - Format: \`{platform}-{feature}\` or \`{feature}\`
 - Examples: \`ios-localization\`, \`app-login\`, \`app-launch\`, \`hud-status-update\`
 
-**Document name** should describe the *purpose*, not the topic:
+**Document name** should describe the *purpose*, not the feature:
 - Use: \`architecture\`, \`guide\`, \`api\`, \`test-plan\`
-- Avoid: \`localization-architecture\`, \`login-guide\` (redundant with topic path)
+- Avoid: \`localization-architecture\`, \`login-guide\` (redundant with feature path)
 
 **Example path structure:**
 \`\`\`
 .opc/knowledge/ios-localization/
 ├── requirement/
 │   └── main.md
-├── ios/
-│   ├── architecture.md
-│   └── guide.md
-└── qa/
-    └── test-plan.md
+├── architecture/
+│   └── main.md
+└── qa_test/
+    └── main.md
 \`\`\``,
     }],
   };
 }
 
 export function handleKnowledgeRead(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const topic = resolveTopic(args, cwd);
+  const featureName = resolveFeatureName(args, cwd);
   const category = args.category as KnowledgeCategory;
   const doc = args.doc as string | undefined;
 
-  if (!topic) {
+  if (!featureName) {
     return {
-      content: [{ type: 'text', text: 'No topic specified. Provide topic or start a task first.' }],
+      content: [{ type: 'text', text: 'No feature_name specified. Provide feature_name or start a task first.' }],
       isError: true,
     };
   }
 
   if (doc) {
-    const content = readKnowledgeDoc(topic, category, doc, cwd);
+    const content = readKnowledgeDoc(featureName, category, doc, cwd);
 
     if (!content) {
       return {
-        content: [{ type: 'text', text: `Knowledge document not found: ${topic}/${category}/${doc}.md` }],
+        content: [{ type: 'text', text: `Knowledge document not found: ${featureName}/${category}/${doc}.md` }],
       };
     }
 
     return { content: [{ type: 'text', text: content }] };
   }
 
-  const content = readAllKnowledgeDocs(topic, category, cwd);
+  const content = readAllKnowledgeDocs(featureName, category, cwd);
 
   if (!content) {
     return {
-      content: [{ type: 'text', text: `No knowledge documents found for ${topic}/${category}` }],
+      content: [{ type: 'text', text: `No knowledge documents found for ${featureName}/${category}` }],
     };
   }
 
@@ -147,7 +162,7 @@ export function handleKnowledgeRead(args: Record<string, unknown>, cwd: string |
 }
 
 export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const topic = resolveTopic(args, cwd);
+  const featureName = resolveFeatureName(args, cwd);
   const category = args.category as KnowledgeCategory;
   const doc = args.doc as string;
   const content = args.content as string;
@@ -160,11 +175,11 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
   // Legacy meta object support (for backward compatibility)
   const meta = args.meta as Record<string, unknown> | undefined;
 
-  if (!topic) {
+  if (!featureName) {
     return {
       content: [{
         type: 'text',
-        text: 'No topic specified. Provide topic or start a task first.',
+        text: 'No feature_name specified. Provide feature_name or start a task first.',
       }],
       isError: true,
     };
@@ -181,25 +196,24 @@ export function handleKnowledgeWrite(args: Record<string, unknown>, cwd: string 
 Please provide a knowledge category for the document.
 
 **Examples:**
-- \`ios\` for iOS platform documents
-- \`android\` for Android platform documents
-- \`bug-fix\` for bug fix documentation
-- \`issue\` for issue analysis
-- \`tech-doc\` for technical documentation
-- \`guide\` for usage guides
+- \`requirement\` for functional/non-functional requirements
+- \`architecture\` for system architecture
+- \`tech_guide\` for implementation/tech stack guide
+- \`api_guide\` for API definitions
+- \`core_flows\` for business flow diagrams
+- \`qa_test\` for test and acceptance
 
 **Naming convention:**
 - Use lowercase and hyphens
-- Platform: ios, android, web, backend, harmony, miniprogram
-- Type: bug-fix, issue, tech-doc, guide, api, architecture`,
+- Use underscores only when you prefer (e.g., \`core_flows\`, \`qa_test\`)`,
       }],
       isError: true,
     };
   }
 
-  // Ensure topic exists
-  if (!topicExists(topic, cwd)) {
-    createTopic(topic, topic, '', cwd);
+  // Ensure feature exists
+  if (!featureExists(featureName, cwd)) {
+    createFeature(featureName, featureName, '', cwd);
   }
 
   // Prepare metadata: direct parameters take precedence over meta object
@@ -209,10 +223,10 @@ Please provide a knowledge category for the document.
     tags: tags || (meta?.tags as string[] | undefined),
   };
 
-  writeKnowledgeDoc(topic, category, doc, content, mode, section, cwd, docMeta);
+  writeKnowledgeDoc(featureName, category, doc, content, mode, section, cwd, docMeta);
 
   // Get the actual metadata that was written
-  const docWithMeta = readKnowledgeDocWithMeta(topic, category, doc, cwd);
+  const docWithMeta = readKnowledgeDocWithMeta(featureName, category, doc, cwd);
   const actualName = docWithMeta?.meta.name || doc;
   const actualDesc = docWithMeta?.meta.description || '';
 
@@ -230,7 +244,7 @@ Please provide a knowledge category for the document.
       type: 'text',
       text: `## Knowledge Written
 
-**Topic:** ${topic}
+**Feature:** ${featureName}
 **Document:** ${category}/${doc}.md
 **Name:** ${actualName}
 **Description:** ${actualDesc}
@@ -240,27 +254,27 @@ Content has been ${mode === 'overwrite' ? 'written' : mode === 'update' ? 'updat
 ${suggestions.length > 0 ? '\n' + suggestions.join('\n') : ''}
 
 💡 **Naming Convention:**
-- **Document name** should describe the *purpose*, not the topic (e.g., \`architecture\`, \`guide\`, \`api\`, \`test-plan\`)
-- Since the path already includes topic and category, avoid redundant prefixes
-- Example: For topic \`ios-localization\` with category \`ios\`, use \`architecture.md\` not \`localization-architecture.md\`
+- **Document name** should describe the *purpose*, not the feature (e.g., \`main\`, \`ui\`, \`index\`)
+- Since the path already includes feature and category, avoid redundant prefixes
+- Example: For feature \`ios-localization\`, use \`tech_guide/main.md\` not \`localization-tech.md\`
 
-📁 **Path:** \`.opc/knowledge/${topic}/${category}/${doc}.md\``,
+📁 **Path:** \`.opc/knowledge/${featureName}/${category}/${doc}.md\``,
     }],
   };
 }
 
 export function handleKnowledgeExists(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const topic = resolveTopic(args, cwd);
+  const featureName = resolveFeatureName(args, cwd);
   const category = args.category as KnowledgeCategory | undefined;
   const doc = args.doc as string | undefined;
 
-  if (!topic) {
+  if (!featureName) {
     return {
       content: [{ type: 'text', text: 'false' }],
     };
   }
 
-  const exists = knowledgeExists(topic, category, doc, cwd);
+  const exists = knowledgeExists(featureName, category, doc, cwd);
 
   return {
     content: [{ type: 'text', text: exists ? 'true' : 'false' }],
@@ -272,24 +286,24 @@ export function handleKnowledgeList(args: Record<string, unknown>, cwd: string |
   const categoryFilter = args.category as KnowledgeCategory | undefined;
 
   const index = readKnowledgeIndex(cwd);
-  let topics = Object.entries(index.topics);
+  let features = Object.entries(index.features);
 
   if (status) {
-    topics = topics.filter(([, t]) => t.status === status);
+    features = features.filter(([, f]) => f.status === status);
   }
 
   if (categoryFilter) {
-    topics = topics.filter(([, t]) => t.domains[categoryFilter]?.length > 0);
+    features = features.filter(([, f]) => f.categories[categoryFilter]?.length > 0);
   }
 
-  if (topics.length === 0) {
-    return { content: [{ type: 'text', text: 'No topics found in knowledge library.' }] };
+  if (features.length === 0) {
+    return { content: [{ type: 'text', text: 'No features found in knowledge library.' }] };
   }
 
-  const table = topics
-    .map(([slug, t]) => {
-      const categories = Object.keys(t.domains).join(', ') || '-';
-      return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${t.updated_at.split('T')[0]} |`;
+  const table = features
+    .map(([slug, f]) => {
+      const categories = Object.keys(f.categories).join(', ') || '-';
+      return `| ${slug} | ${f.title} | ${f.status} | ${categories} | ${f.updated_at.split('T')[0]} |`;
     })
     .join('\n');
 
@@ -298,29 +312,29 @@ export function handleKnowledgeList(args: Record<string, unknown>, cwd: string |
       type: 'text',
       text: `## Knowledge Library
 
-| Topic | Title | Status | Categories | Updated |
-|-------|-------|--------|------------|---------|
+| Feature | Title | Status | Categories | Updated |
+|---------|-------|--------|------------|---------|
 ${table}`,
     }],
   };
 }
 
 export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const topic = resolveTopic(args, cwd);
+  const featureName = resolveFeatureName(args, cwd);
   const category = args.category as KnowledgeCategory;
 
-  if (!topic) {
+  if (!featureName) {
     return {
-      content: [{ type: 'text', text: 'No topic specified. Provide topic or start a task first.' }],
+      content: [{ type: 'text', text: 'No feature_name specified. Provide feature_name or start a task first.' }],
       isError: true,
     };
   }
 
-  const docs = listKnowledgeDocs(topic, category, cwd);
+  const docs = listKnowledgeDocs(featureName, category, cwd);
 
   if (docs.length === 0) {
     return {
-      content: [{ type: 'text', text: `No documents found for ${topic}/${category}` }],
+      content: [{ type: 'text', text: `No documents found for ${featureName}/${category}` }],
     };
   }
 
@@ -329,7 +343,7 @@ export function handleKnowledgeDocs(args: Record<string, unknown>, cwd: string |
   return {
     content: [{
       type: 'text',
-      text: `## ${topic}/${category} Documents
+      text: `## ${featureName}/${category} Documents
 
 ${docList}`,
     }],
@@ -337,10 +351,10 @@ ${docList}`,
 }
 
 export function handleKnowledgeListBrief(args: Record<string, unknown>, cwd: string | undefined): ToolResult {
-  const topic = args.topic as string | undefined;
+  const featureName = args.feature_name as string | undefined;
   const category = args.category as KnowledgeCategory | undefined;
 
-  const docs = listKnowledgeDocsBrief(topic, category, cwd);
+  const docs = listKnowledgeDocsBrief(featureName, category, cwd);
 
   if (docs.length === 0) {
     return {
@@ -349,7 +363,7 @@ export function handleKnowledgeListBrief(args: Record<string, unknown>, cwd: str
   }
 
   const table = docs
-    .map(d => `| ${d.topic} | ${d.category} | ${d.name} | ${d.description || '-'} |`)
+    .map(d => `| ${d.feature_name} | ${d.category} | ${d.name} | ${d.description || '-'} |`)
     .join('\n');
 
   return {
@@ -357,8 +371,8 @@ export function handleKnowledgeListBrief(args: Record<string, unknown>, cwd: str
       type: 'text',
       text: `## Knowledge Documents (Brief)
 
-| Topic | Category | Name | Description |
-|-------|----------|------|-------------|
+| Feature | Category | Name | Description |
+|---------|----------|------|-------------|
 ${table}
 
 💡 Use \`opc_knowledge_read\` to read full content of specific documents.`,
@@ -371,21 +385,21 @@ export function handleKnowledgeRebuild(args: Record<string, unknown>, cwd: strin
 
   const changes: string[] = [];
 
-  if (stats.topicsAdded.length > 0) {
-    changes.push(`**Added topics:** ${stats.topicsAdded.join(', ')}`);
+  if (stats.featuresAdded.length > 0) {
+    changes.push(`**Added features:** ${stats.featuresAdded.join(', ')}`);
   }
-  if (stats.topicsRemoved.length > 0) {
-    changes.push(`**Removed topics:** ${stats.topicsRemoved.join(', ')}`);
+  if (stats.featuresRemoved.length > 0) {
+    changes.push(`**Removed features:** ${stats.featuresRemoved.join(', ')}`);
   }
   if (changes.length === 0) {
     changes.push('**No structural changes** - index was in sync with filesystem');
   }
 
-  const topicList = Object.entries(index.topics)
-    .map(([slug, t]) => {
-      const categories = Object.keys(t.domains).join(', ') || '-';
-      const docCount = Object.values(t.domains).flat().length;
-      return `| ${slug} | ${t.title} | ${t.status} | ${categories} | ${docCount} |`;
+  const featureList = Object.entries(index.features)
+    .map(([slug, f]) => {
+      const categories = Object.keys(f.categories).join(', ') || '-';
+      const docCount = Object.values(f.categories).flat().length;
+      return `| ${slug} | ${f.title} | ${f.status} | ${categories} | ${docCount} |`;
     })
     .join('\n');
 
@@ -395,7 +409,7 @@ export function handleKnowledgeRebuild(args: Record<string, unknown>, cwd: strin
       text: `## Knowledge Index Rebuilt
 
 ### Statistics
-- **Topics found:** ${stats.topicsFound}
+- **Features found:** ${stats.featuresFound}
 - **Categories found:** ${stats.categoriesFound}
 - **Documents found:** ${stats.docsFound}
 
@@ -404,9 +418,9 @@ ${changes.join('\n')}
 
 ### Current Index
 
-| Topic | Title | Status | Categories | Docs |
-|-------|-------|--------|------------|------|
-${topicList}
+| Feature | Title | Status | Categories | Docs |
+|---------|-------|--------|------------|------|
+${featureList}
 
 📁 **Path:** \`.opc/knowledge/index.json\`
 

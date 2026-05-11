@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "category": "requirement",
+      "doc": "main",
+      "name": "需求说明",
+      "description": "WHAT/WHY、功能性与非功能性需求、验收标准。",
+      "tags": ["requirement"],
+      "content": "# WHAT（要做什么）\n\n- \n\n# WHY（为什么要做）\n\n- \n\n## 功能性需求\n\n- \n\n## 非功能性需求\n\n- 性能：\n- 安全性：\n- 可靠性：\n- 可用性：\n\n## 不做什么（Non-goals）\n\n- \n\n## 验收标准（Done Definition）\n\n- "
+    },
+    {
+      "category": "design",
+      "doc": "main",
+      "name": "需求设计",
+      "description": "交互、信息架构、边界与异常场景设计。",
+      "tags": ["design"],
+      "content": "## 交互与界面（如适用）\n\n- \n\n## 边界条件\n\n- \n\n## 异常与降级\n\n- \n\n## 可访问性 / 可用性（如适用）\n\n- "
+    },
+    {
+      "category": "architecture",
+      "doc": "main",
+      "name": "系统架构",
+      "description": "系统整体结构、关键组件与依赖关系（含架构图）。",
+      "tags": ["architecture"],
+      "content": "## 架构图\n\n```mermaid\nflowchart LR\n  Client[Client] --> API[API]\n  API --> DB[(DB)]\n```\n\n## 关键模块与职责\n\n- \n\n## 技术选型与约束\n\n- "
+    },
+    {
+      "category": "tech_guide",
+      "doc": "main",
+      "name": "技术指南",
+      "description": "开发语言/框架确认、实现要点、关键决策与注意事项。",
+      "tags": ["tech_guide"],
+      "content": "## 技术栈\n\n- 语言：\n- 框架：\n- 依赖：\n\n## 实现要点\n\n- \n\n## 关键决策\n\n- "
+    },
+    {
+      "category": "api_guide",
+      "doc": "main",
+      "name": "API 指南",
+      "description": "API 定义、请求/响应、认证、错误码与示例。",
+      "tags": ["api_guide"],
+      "content": "## 概览\n\n- \n\n## 认证与授权\n\n- \n\n## API 列表\n\n### <接口名>\n\n- Method：\n- Path：\n- Request：\n- Response：\n- Errors：\n"
+    },
+    {
+      "category": "core_flows",
+      "doc": "main",
+      "name": "核心流程",
+      "description": "业务核心流程图与关键分支。",
+      "tags": ["core_flows"],
+      "content": "## 流程图\n\n```mermaid\nflowchart TD\n  Start([Start]) --> Step1[Step 1]\n  Step1 --> End([End])\n```\n\n## 关键分支与异常\n\n- "
+    },
+    {
+      "category": "data_flows",
+      "doc": "main",
+      "name": "数据流与数据模型",
+      "description": "数据库顶层设计、数据生命周期、权限与数据管理方式。",
+      "tags": ["data_flows"],
+      "content": "## 顶层数据模型\n\n- \n\n## 数据生命周期\n\n- 采集：\n- 存储：\n- 访问：\n- 归档/删除：\n\n## 权限与数据隔离\n\n- "
+    },
+    {
+      "category": "qa_test",
+      "doc": "main",
+      "name": "测试与验收",
+      "description": "每项需求的验证维度、测试策略与覆盖范围。",
+      "tags": ["qa_test"],
+      "content": "## 验收维度\n\n- 功能：\n- 性能：\n- 安全：\n- 兼容性：\n\n## 测试用例（概要）\n\n- \n"
+    },
+    {
+      "category": "issues",
+      "doc": "index",
+      "name": "问题列表",
+      "description": "已知问题与待修复项集合，含复现/影响/优先级。",
+      "tags": ["issues"],
+      "content": "| ID | 描述 | 影响 | 复现步骤 | 期望 | 现状 | 优先级 | 状态 |\n|---|---|---|---|---|---|---|---|\n|   |     |     |     |     |     |     |     |\n"
+    },
+    {
+      "category": "growth",
+      "doc": "main",
+      "name": "增长与指标",
+      "description": "增长目标、关键指标、实验与埋点规划。",
+      "tags": ["growth"],
+      "content": "## 目标与假设\n\n- \n\n## 指标（Metrics）\n\n- 北极星指标：\n- 分解指标：\n\n## 实验与迭代\n\n- "
+    }
+  ]
+}
