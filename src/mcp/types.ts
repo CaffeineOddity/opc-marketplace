@@ -28,21 +28,21 @@ export interface StageConfig {
   description?: string;
   // Knowledge flow config
   knowledge?: {
-    domain?: string;
+    category?: string;
     doc?: string;
     read_before?: string[] | boolean;
     write_after?: boolean;
     content_template?: string;
     // For multi-platform stages (like dev)
     frontend?: {
-      domain: string;
+      category: string;
       platform: string;
       doc: string;
       read_before: string[];
       write_after: boolean;
     };
     backend?: {
-      domain: string;
+      category: string;
       doc: string;
       read_before: string[];
       write_after: boolean;

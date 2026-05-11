@@ -110,7 +110,7 @@ export function buildStagesAuto(taskDescription) {
             skills: ['spec-driven-development'],
             description: '需求分析和规格定义',
             knowledge: {
-                domain: 'requirement',
+                category: 'requirement',
                 doc: 'main',
                 read_before: false,
                 write_after: true,
@@ -132,7 +132,7 @@ export function buildStagesAuto(taskDescription) {
                 skills: ['ui-design'],
                 description: 'UI/UX 设计',
                 knowledge: {
-                    domain: 'design',
+                    category: 'design',
                     doc: 'ui',
                     read_before: ['requirement'],
                     write_after: true,
@@ -161,14 +161,14 @@ export function buildStagesAuto(taskDescription) {
                 description: 'TDD 开发',
                 knowledge: {
                     frontend: {
-                        domain: 'platforms',
+                        category: 'platforms',
                         platform: 'web',
                         doc: 'tech',
                         read_before: ['requirement', 'design'],
                         write_after: true,
                     },
                     backend: {
-                        domain: 'backend',
+                        category: 'backend',
                         doc: 'api',
                         read_before: ['requirement'],
                         write_after: true,
@@ -192,7 +192,7 @@ export function buildStagesAuto(taskDescription) {
                 skills: ['test-plan'],
                 description: '测试验证',
                 knowledge: {
-                    domain: 'backend',
+                    category: 'backend',
                     doc: 'test',
                     read_before: ['platforms/web/tech', 'backend/api'],
                     write_after: true,
@@ -215,7 +215,7 @@ export function buildStagesAuto(taskDescription) {
                 skills: ['deploy'],
                 description: '部署',
                 knowledge: {
-                    domain: 'shared',
+                    category: 'shared',
                     doc: 'infrastructure',
                     read_before: ['backend/api'],
                     write_after: true,

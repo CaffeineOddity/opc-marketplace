@@ -409,7 +409,7 @@ ${knowledge || "No prior knowledge."}
 
 ## Output
 1. Deliverables
-2. Knowledge update for this domain
+2. Knowledge update for this category
 `)
 ```
 

@@ -309,7 +309,7 @@ ${knowledgeContext}
 
 ## Output
 1. Your deliverables
-2. Knowledge update for this domain (will be used by next stages)
+2. Knowledge update for this category (will be used by next stages)
 `)
 ```
 

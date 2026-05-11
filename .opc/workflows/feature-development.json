@@ -15,7 +15,7 @@
       "skills": ["spec-driven-development"],
       "description": "定义需求规格和验收标准",
       "knowledge": {
-        "domain": "requirement",
+        "category": "requirement",
         "doc": "main",
         "read_before": false,
         "write_after": true,
@@ -31,7 +31,7 @@
       "skip_conditions": ["UI简单", "后端任务", "Spec已包含设计"],
       "description": "UI/UX 设计（可选）",
       "knowledge": {
-        "domain": "design",
+        "category": "design",
         "doc": "ui",
         "read_before": ["requirement"],
         "write_after": true,
@@ -49,7 +49,7 @@
       "description": "TDD 开发：RED → GREEN → REFACTOR（前后端并行）",
       "knowledge": {
         "frontend": {
-          "domain": "platforms",
+          "category": "platforms",
           "platform": "web",
           "doc": "tech",
           "read_before": ["requirement", "design"],
@@ -57,7 +57,7 @@
           "content_template": "## {date} Component Update\n\n{components}\n\n## Architecture\n\n{architecture}"
         },
         "backend": {
-          "domain": "backend",
+          "category": "backend",
           "doc": "api",
           "read_before": ["requirement"],
           "write_after": true,
@@ -73,7 +73,7 @@
       "skills": ["test-plan", "e2e-test"],
       "description": "测试验证",
       "knowledge": {
-        "domain": "backend",
+        "category": "backend",
         "doc": "test",
         "read_before": ["platforms/web/tech", "backend/api"],
         "write_after": true,
@@ -89,7 +89,7 @@
       "skip_conditions": ["本地开发", "测试环境"],
       "description": "部署（可选）",
       "knowledge": {
-        "domain": "shared",
+        "category": "shared",
         "doc": "infrastructure",
         "read_before": ["backend/api"],
         "write_after": true,

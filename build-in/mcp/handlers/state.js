@@ -48,7 +48,7 @@ export function handleStateRead(cwd) {
                 ? `- **Read before:** ${Array.isArray(currentStage.config.knowledge.read_before) ? currentStage.config.knowledge.read_before.join(', ') : 'none'}\n`
                 : '') +
             (currentStage.config.knowledge.write_after
-                ? `- **Write after:** ${currentStage.config.knowledge.domain}/${currentStage.config.knowledge.doc}\n`
+                ? `- **Write after:** ${currentStage.config.knowledge.category}/${currentStage.config.knowledge.doc}\n`
                 : '')
         : '';
     return {

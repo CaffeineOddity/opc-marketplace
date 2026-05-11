@@ -325,7 +325,7 @@ Agent({agent_name}, `
 ## Task: {task description}
 
 ## Knowledge Context
-${knowledge ? knowledge : "No prior knowledge for this domain."}
+${knowledge ? knowledge : "No prior knowledge for this category."}
 
 ## Instructions
 1. Review the knowledge context above
@@ -335,7 +335,7 @@ ${knowledge ? knowledge : "No prior knowledge for this domain."}
 ## Output Format
 After completing, provide:
 1. Your deliverables (code, specs, etc.)
-2. Knowledge update for this domain (what should be saved for future reference)
+2. Knowledge update for this category (what should be saved for future reference)
 `)
 ```
 

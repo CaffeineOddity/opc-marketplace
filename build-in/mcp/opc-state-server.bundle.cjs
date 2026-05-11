@@ -14532,7 +14532,7 @@ function buildStagesAuto(taskDescription) {
       skills: ["spec-driven-development"],
       description: "\u9700\u6C42\u5206\u6790\u548C\u89C4\u683C\u5B9A\u4E49",
       knowledge: {
-        domain: "requirement",
+        category: "requirement",
         doc: "main",
         read_before: false,
         write_after: true
@@ -14553,7 +14553,7 @@ function buildStagesAuto(taskDescription) {
         skills: ["ui-design"],
         description: "UI/UX \u8BBE\u8BA1",
         knowledge: {
-          domain: "design",
+          category: "design",
           doc: "ui",
           read_before: ["requirement"],
           write_after: true
@@ -14579,14 +14579,14 @@ function buildStagesAuto(taskDescription) {
         description: "TDD \u5F00\u53D1",
         knowledge: {
           frontend: {
-            domain: "platforms",
+            category: "platforms",
             platform: "web",
             doc: "tech",
             read_before: ["requirement", "design"],
             write_after: true
           },
           backend: {
-            domain: "backend",
+            category: "backend",
             doc: "api",
             read_before: ["requirement"],
             write_after: true
@@ -14609,7 +14609,7 @@ function buildStagesAuto(taskDescription) {
         skills: ["test-plan"],
         description: "\u6D4B\u8BD5\u9A8C\u8BC1",
         knowledge: {
-          domain: "backend",
+          category: "backend",
           doc: "test",
           read_before: ["platforms/web/tech", "backend/api"],
           write_after: true
@@ -14631,7 +14631,7 @@ function buildStagesAuto(taskDescription) {
         skills: ["deploy"],
         description: "\u90E8\u7F72",
         knowledge: {
-          domain: "shared",
+          category: "shared",
           doc: "infrastructure",
           read_before: ["backend/api"],
           write_after: true
@@ -15613,7 +15613,7 @@ ${state.rules.tdd ? "- \u2705 TDD enabled\n" : ""}${state.rules.sdd ? "- \u2705 
 
 ### Current Stage Knowledge
 ` + (currentStage.config.knowledge.read_before ? `- **Read before:** ${Array.isArray(currentStage.config.knowledge.read_before) ? currentStage.config.knowledge.read_before.join(", ") : "none"}
-` : "") + (currentStage.config.knowledge.write_after ? `- **Write after:** ${currentStage.config.knowledge.domain}/${currentStage.config.knowledge.doc}
+` : "") + (currentStage.config.knowledge.write_after ? `- **Write after:** ${currentStage.config.knowledge.category}/${currentStage.config.knowledge.doc}
 ` : "") : "";
   return {
     content: [{
