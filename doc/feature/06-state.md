@@ -114,7 +114,7 @@
 |------|--------|
 | pipeline | `pending` → `in_progress` → `completed` / `failed` / `aborted` |
 | phase | `pending` → `in_progress` → `completed` / `blocked` |
-| node | `pending` → `in_progress` → `completed` / `failed` / `skipped` |
+| node | `pending` → `in_progress` → `completed` / `failed` |
 
 ## 生命周期
 

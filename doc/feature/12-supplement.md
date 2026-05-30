@@ -29,7 +29,7 @@ node 执行失败时的处理策略：
 | 依赖节点失败 | 阻塞下游 | 串行节点等待前置节点修复 |
 | 用户中断 | 保存进度（state.json） | 下次启动可恢复 |
 
-失败节点状态流转：`in_progress → failed → (retry) in_progress / (skip) skipped / (abort) aborted`
+失败节点状态流转：`in_progress → failed → (retry) in_progress / (abort) aborted`
 
 ## 3. 管线暂停与恢复
 

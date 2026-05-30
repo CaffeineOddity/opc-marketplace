@@ -51,10 +51,9 @@ order:
 ```markdown
 ---
 phase: 04-implementation
-selection:
+phase_review:
   require_user_approval: true
-  max_selected: 5
-  min_selected: 1
+  max_reflection_rounds: 3
 ---
 
 ## 选择规则
