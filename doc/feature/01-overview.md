@@ -20,12 +20,12 @@ opc-marketplace/
 │   │   │   │   ├── state.ts
 │   │   │   │   ├── knowledge.ts
 │   │   │   │   ├── session.ts
-│   │   │   │   ├── stage.ts
+│   │   │   │   ├── phase.ts
 │   │   │   │   ├── node.ts
 │   │   │   │   └── guidance.ts
 │   │   │   ├── engine/
-│   │   │   │   ├── gate-evaluator.ts
-│   │   │   │   ├── stage-validator.ts
+│   │   │   │   ├── state-manager.ts
+│   │   │   │   ├── phase-validator.ts
 │   │   │   │   ├── task-analyzer.ts
 │   │   │   │   ├── node-resolver.ts
 │   │   │   │   └── knowledge-flow.ts
@@ -34,11 +34,9 @@ opc-marketplace/
 │   │   │   ├── lock.ts
 │   │   │   └── paths.ts
 │   │   ├── hooks/
-│   │   │   ├── entry-gate-check.json
-│   │   │   ├── exit-gate-check.json
 │   │   │   ├── knowledge-load.json
 │   │   │   ├── knowledge-save.json
-│   │   │   └── stage-transition.json
+│   │   │   └── phase-transition.json
 │   │   └── references/
 │   │       └── platform-protocol.md
 │   │
@@ -47,24 +45,21 @@ opc-marketplace/
 │       ├── agents/
 │       │   ├── orchestrator.md
 │       │   ├── task-classifier.md
-│       │   └── stage-guide.md
+│       │   └── phase-guide.md
 │       ├── skills/
 │       │   ├── opc-status/SKILL.md
-│       │   ├── opc-stage/SKILL.md
+│       │   ├── opc-phase/SKILL.md
 │       │   └── opc-nodes/SKILL.md
 │       ├── hooks/
 │       │   └── capability-discovery.json
 │       └── references/
 │           ├── orchestration-guide.md
-│           └── stage-protocol.md
+│           └── phase-protocol.md
 │
-├── stages/
+├── phases/
 │   ├── 00-ideation/
-│   │   ├── stage.md
-│   │   ├── entry-gates.md
-│   │   ├── exit-gates.md
+│   │   ├── phase.md
 │   │   ├── nodes.md
-│   │   └── deliverables.md
 │   ├── 01-validation/
 │   ├── 02-planning/
 │   ├── 03-design/
@@ -214,20 +209,28 @@ my-project/                              # 用户工程目录（claude 执行目
 │
 ├── .opc/                                # 运行时状态（gitignore）
 │   ├── state/
+│   │   ├── pipelines/                  # 管线状态（每个 task 一个 json）
 │   │   ├── locks/
 │   │   └── sessions/
 │   └── .project-init
 │
+├── opc-nodes/                           # 项目自定义节点（git 跟踪，覆盖内置）
+│   └── ...
+│
 ├── opc-knowledge/                       # 项目知识库（git 跟踪）
 │   ├── index.json
-│   └── features/
-│       ├── user-auth/
-│       │   ├── requirement/main.md
-│       │   ├── planning/architecture.md
-│       │   ├── implementation/tech.md
-│       │   └── testing/test-plan.md
-│       └── payment/
-│           └── ...
+│   ├── user-auth/
+│   │   ├── requirement/main.md
+│   │   ├── planning/
+│   │   │   ├── api-design.md
+│   │   │   └── architecture.md
+│   │   ├── implementation/
+│   │   │   ├── tech.md
+│   │   │   └── backend-api.md
+│   │   └── testing/
+│   │       └── test-plan.md
+│   └── payment/
+│       └── ...
 │
 ├── opc-memory/                          # 项目持久记忆（git 跟踪）
 │   ├── architecture.md
@@ -244,7 +247,7 @@ my-project/                              # 用户工程目录（claude 执行目
 │       └── ...
 │
 ├── opc-logs/                            # 运行日志（gitignore）
-│   ├── stages/
+│   ├── phases/
 │   ├── agent-runs/
 │   ├── failures/
 │   └── telemetry/
@@ -266,7 +269,7 @@ my-project/                              # 用户工程目录（claude 执行目
 │  每个 kit 通过 plugin.json 声明式暴露能力            │
 ├──────────────────────────────────────────────────┤
 │  platform/opc-orchestrator (编排层)                 │
-│  意图识别 → 任务分析 → 阶段推荐 → 节点解析 → 调度    │
+│  意图识别 -> 任务分析 -> 阶段推荐 -> 节点解析 -> 调度    │
 ├──────────────────────────────────────────────────┤
 │  platform/opc-core (基础设施层)                      │
 │  MCP 工具 + Gate 引擎 + 节点解析器 + 知识流引擎       │
@@ -276,15 +279,137 @@ my-project/                              # 用户工程目录（claude 执行目
 
 ---
 
-## 四、设计原则
+## 四、时序图
 
-1. **意图触发，置信度兜底** —— 用户直接说话，不设 `/opc` 前缀；低置信度时主动确认
+```mermaid
+sequenceDiagram
+    actor U as 用户
+    participant O as Orchestrator
+    participant TA as TaskAnalyzer
+    participant SM as StateManager
+    participant P as Phase
+    participant CD as CapabilityDiscovery
+    participant NR as NodeResolver
+    participant KF as KnowledgeFlow
+    participant A as Agent
+
+    U->>O: "实现用户认证系统"
+    O->>TA: 分析意图
+    TA-->>O: tags, complexity, suggested_phases, feature
+    O->>SM: 创建 state.json
+
+    loop 每个 Phase
+        SM->>P: 进入 phase (in_progress)
+        P->>CD: 扫描 node（按 phase 字段归类）
+        CD-->>P: 候选 node 列表
+        P->>NR: 候选 nodes + task 信息
+        NR->>NR: tag 交集过滤
+        NR->>NR: description 语义匹配
+        NR->>NR: scenario 加权
+        NR-->>U: 排序后的候选列表
+        U-->>NR: 确认选择
+        NR->>NR: 匹配 output -> input 推导依赖
+        NR-->>SM: 写入 nodes (blocked_by)
+        
+        loop 每个 Node（按依赖顺序）
+            P->>KF: 加载 input.knowledge
+            KF->>A: 注入知识上下文
+            A->>A: 执行 node 指令
+            A-->>KF: 产出 knowledge
+            KF-->>SM: knowledge-save (draft)
+            A-->>SM: node status -> completed
+        end
+        
+        SM-->>P: phase -> completed
+    end
+
+    SM-->>U: pipeline completed
+```
+
+## 五、流程图
+
+```mermaid
+ flowchart TD
+      A[用户输入自然语言] --> B{意图识别<br/>置信度判断}
+      B -->|低置信度| C[主动确认]
+      C --> B
+      B -->|高置信度| D[task-analyzer<br/>分析任务]
+      D --> E[state-manager<br/>创建 state.json]
+      E --> F[确定 phase 列表<br/>仅写入 suggested_phases]
+      F --> G[进入第一个 phase]
+
+      G --> H[capability-discovery<br/>扫描内置 + 项目 node]
+      H --> I[tag 交集过滤]
+      I --> J[语义匹配排序]
+      J --> K[scenario 加权]
+      K --> L[生成初始 node 方案]
+
+      L --> M{自动通过?}
+      M -->|高置信度无需确认| R[node-resolver<br/>推导依赖 + 生成执行计划]
+      M -->|需审核| N[展示执行计划预览]
+
+      N --> O[反思调整<br/>1-n 轮]
+      O -->|增删 node| P[调整 node 列表]
+      P --> Q[重新预览]
+      Q --> O
+      O -->|确认| R
+
+      R --> S[按 blocked_by 顺序执行 node]
+      S --> T{knowledge-load}
+      T --> U[Agent 执行]
+      U --> V{执行结果}
+      V -->|成功| W[knowledge-save]
+      W --> X[state-manager<br/>node -> completed]
+      X --> Y{当前 phase<br/>全部 node 完成?}
+      Y -->|否| S
+      Y -->|是| Z[phase -> completed]
+      Z --> AA{还有下一 phase?}
+      AA -->|是| G
+      AA -->|否| AB[pipeline -> completed]
+
+      V -->|失败| AC[写入 error<br/>pipeline 暂停]
+      AC --> AD{用户决策}
+      AD -->|重试| S
+      AD -->|跳过| X
+      AD -->|中止| AE[pipeline -> aborted]
+```
+
+### 节点来源
+
+节点有两个来源，capability-discovery 统一扫描：
+
+| 来源 | 位置 | 维护者 | 说明 |
+|------|------|--------|------|
+| 内置节点 | `kits/*/nodes/` | 插件开发者 | 随 kit 分发，定义通用工作流 |
+| 项目节点 | `opc-nodes/` | 项目用户 | 针对具体项目定制，可覆盖内置节点 |
+
+项目节点优先级高于内置节点（同名覆盖），用户可按项目需求增加或调整节点。
+
+### 节点选择：1-n 轮反思
+
+节点选择不是一次性确认，而是迭代收敛的过程：
+
+```
+初始方案 → 预览执行计划 → 反思调整 → 重新预览 → ... → 确认
+```
+
+| 轮次 | 行为 |
+|------|------|
+| 第 1 轮 | 系统生成初始 node 方案（含依赖图和执行计划预览） |
+| 第 2-n 轮 | 用户可增删 node、调整顺序，系统重新生成预览 |
+| 最终 | 用户确认，resolver 锁定执行计划 |
+
+高置信度场景（如 `fix-bug` scenario 命中 + 语义相似度 > 0.9）可跳过审核直接执行，减少人工介入。
+
+## 六、设计原则
+
+1. **意图触发，置信度兜底** —— 用户直接说话；低置信度时主动确认
 2. **代码引擎 > Prompt 引擎** —— Gate、依赖解析、知识流用 TypeScript 实现；意图分析和语义匹配用 LLM
 3. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 4. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
 5. **知识属于项目** —— 切换目录 = 切换知识上下文
 6. **Hook 驱动自动化** —— gate、knowledge load/save 全自动，但 knowledge-save 只保存 draft 状态
 7. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
-8. **阶段是强约束** —— entry/exit gates 不满足则阻止，但允许受控回退
+8. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
 9. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛
 10. **失败可恢复** —— 管线状态持久化，支持暂停/恢复、重试/跳过

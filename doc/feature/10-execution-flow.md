@@ -15,7 +15,7 @@
 │  task-classifier agent (haiku) 分析:                          │
 │    tags: [backend, auth, database]                            │
 │    complexity: medium                                         │
-│    suggested_stages: [02-planning, 04-implementation,         │
+│    suggested_phases: [02-planning, 04-implementation,         │
 │                       05-testing]                             │
 │    knowledge_feature: "user-auth"                             │
 │    scenario_hints: [add-feature]                              │
@@ -36,10 +36,9 @@
 │  用户确认 → resolver: Group 1 (并行) [api-design, db-schema]  │
 │                                                              │
 │  执行 Group 1:                                               │
-│    entry-gate-check → knowledge-load → Agent →               │
-│    knowledge-save (→ opc-knowledge) → exit-gate-check         │
+│    knowledge-load → Agent → knowledge-save (→ opc-knowledge)  │
 │                                                              │
-│  stage-transition → "planning 完成，进入实现?"                │
+│  phase-transition → "planning 完成，进入实现?"                │
 └──────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -63,6 +62,8 @@
          │
          ▼
 ┌─ /opc-status ───────────────────────────────────────────────┐
-│  pipeline 进度、节点状态、阻塞项、知识库概况                    │
+│  读取 state.json 展示 pipeline 进度、节点状态、阻塞项           │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+> state.json 详细结构见 [06 管线状态](06-state.md)。

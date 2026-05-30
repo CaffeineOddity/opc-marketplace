@@ -9,44 +9,25 @@
 ```markdown
 ---
 name: tdd-implementation
-stage: 04-implementation
-description: TDD 驱动的功能实现，RED → GREEN → REFACTOR
-
-requires:
-  - type: artifact
-    value: spec.md
-  - type: artifact
-    value: architecture.md
-  - type: knowledge
-    category: requirement
-    doc: main
-
-provides:
-  - artifacts: [tests/, src/]
-  - knowledge:
-      category: implementation
-      doc: tech
-
+phase: 04-implementation
+description: TDD 驱动的后端功能实现，RED → GREEN → REFACTOR
+tags: [backend, database]
 agents:
-  primary: [backend-engineer, frontend-engineer]
+  primary: [backend-engineer]
   optional: [database-engineer]
+
 skills: [test-driven-development]
 mode: parallel
 
-entry_gates: [spec-exists, architecture-reviewed]
-exit_gates: [tests-passing, coverage-80pct, verification-complete]
+input:
+  - artifact: spec.md
+  - artifact: architecture.md
+  - knowledge: requirement/main
 
-depends_on: []
-conflicts_with: []
-enhances: []
+output:
+  - artifacts: [tests/, src/]
+  - knowledge: implementation/tech
 
-effort: medium
-reusable: true
-
-signals:
-  match_description: "涉及后端功能实现、API 开发和数据库操作的任务"
-  tags: [backend, database]
-  keywords: [实现, 开发, implement, build, feature, 功能]
 ---
 
 ## TDD 功能实现
@@ -67,20 +48,72 @@ signals:
 - 运行 /verification-before-completion
 ```
 
-## 信号匹配机制（两层筛选）
+## 字段定义
 
-1. **关键词初筛**（快速过滤）：`keywords` 字段做字符串匹配，快速排除不相关节点，缩小候选集。关键词为空的节点不过滤。
-2. **语义匹配**（精准排序）：将 task-analyzer 输出的任务描述与每个候选节点 `signals.match_description` 做语义相似度计算（embedding 或 haiku 打分），选出 Top-N 节点。
+### 基础
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 节点唯一标识，kebab-case |
+| `phase` | string | 是 | 所属阶段，如 `04-implementation` |
+| `description` | string | 是 | 节点描述。同时用于节点选择列表展示和语义匹配 |
+| `tags` | string[] | 是 | 技术标签。与任务 tags 求交集，交集为 0 的节点默认排除 |
+| `mode` | string | 是 | `parallel` — 节点内多个 Agent 并行；`sequential` — 按 primary → optional 顺序执行 |
+
+### 依赖
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `input` | list | 否 | 输入。执行前必须就绪的 artifact / knowledge |
+| `output` | list | 是 | 输出。完成后产出的 artifact / knowledge |
+
+### Agent
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `agents.primary` | string[] | 是 | 核心 Agent。不可用则节点无法执行 |
+| `agents.optional` | string[] | 否 | 辅助 Agent。可用则加入，不可用则跳过 |
+| `skills` | string[] | 否 | 需要加载的 Skill 列表 |
+
+### `input` 条目格式
+
+```yaml
+input:
+  - artifact: spec.md                # 文件名
+  - artifact: architecture.md
+  - knowledge: requirement/main      # 分类/文档名
+    min_version: 2                   # 可选，最低版本号
+```
+
+### `output` 条目格式
+
+```yaml
+output:
+  - artifacts: [tests/, src/]        # 产出路径
+  - knowledge: implementation/tech   # 写入的分类/文档名
+```
+
+---
+
+## 信号匹配机制
+
+两层筛选，由 node-resolver 执行：
+
+1. **tag 交集过滤**：任务 tags 与节点 tags 求交集。交集为 0 的节点默认排除。
+2. **语义匹配**：任务 description 与节点 description 做语义相似度计算，降序排列。
 
 ```
 任务: "搞一下登录功能"
-→ 关键词初筛: 大部分节点无匹配，不过滤
-→ 语义匹配: "搞一下登录功能" vs "涉及后端功能实现、API 开发和数据库操作的任务" → 相似度 0.72
-→ 语义匹配: "搞一下登录功能" vs "构建用户界面组件、实现响应式布局" → 相似度 0.18
-→ 选中: tdd-implementation (0.72), backend-endpoint (0.68), auth-integration (0.85)
-```
+task-analyzer: { description: "实现用户登录认证功能", tags: [backend, auth] }
 
-这种方式对口语化表达（"搞一下"、"写个"、"搭一个"）也能正常工作，不需要维护庞大的关键词库。
+tag 过滤:
+  tdd-implementation:  tags [backend, database]  → 交集 [backend]  → 候选
+  frontend-component:  tags [frontend]           → 交集 []        → 跳过
+
+语义匹配:
+  "实现用户登录认证功能" vs "TDD 驱动的后端功能实现" → 相似度 0.78
+  "实现用户登录认证功能" vs "构建前端 UI 组件"       → 相似度 0.18
+```
 
 ## 并发执行与文件域隔离
 
@@ -91,7 +124,7 @@ node 的 `mode` 字段控制 node 内部 Agent 的执行方式：
 | `parallel` | node 内多个 Agent 可以并行工作 |
 | `sequential` | node 内 Agent 按顺序执行 |
 
-跨 node 的并行由 resolver 的 Group 机制控制。并行执行时，resolver 检查每个 node 的 `provides.artifacts` 和文件操作范围是否重叠：
+跨 node 的并行由 resolver 的 Group 机制控制。并行执行时，resolver 检查每个 node 的 `output.artifacts` 和文件操作范围是否重叠：
 
 ```
 Group 1: [backend-endpoint → src/api/], [frontend-component → src/components/]
@@ -103,57 +136,52 @@ Group 2: [tdd-implementation → src/, tests/], [backend-endpoint → src/api/]
 
 ## 节点依赖解析
 
-node-resolver.ts 输入选中节点列表，输出有序执行计划：
+node-resolver.ts 输入选中节点列表，通过匹配 output → input 自动推导依赖：
 
 ```
-输入: [backend-endpoint, tdd-implementation, security-review]
+输入: [api-design, tdd-implementation, security-review]
 
-解析 depends_on:
-  backend-endpoint:     []
-  tdd-implementation:   []
-  security-review:      [tdd-implementation]
+节点 output → input 匹配:
+  api-design.output:     [spec.md, architecture.md]
+  tdd-implementation.input:  [spec.md, architecture.md]  → 隐式依赖 api-design
+  security-review.input: []                              → 无依赖
 
 拓扑排序:
-  Group 1: [backend-endpoint, tdd-implementation]  (并行)
-  Group 2: [security-review]                        (依赖 Group 1)
+  Group 1: [api-design]                                 (先产出 spec)
+  Group 2: [tdd-implementation]                          (需要 spec)
+  Group 3: [security-review, ...]  ← 可与 Group 2 并行 (无共同依赖)
 ```
 
 ## 阶段节点选择
 
-每个阶段通过 `nodes.md` 定义选择规则。节点选择经过三层筛选：
-
 ```
 任务: "实现用户认证系统"
-task-analyzer 分析结果: { 
+task-analyzer: { 
   description: "实现用户认证系统，包括登录注册和会话管理",
-  tags: ["backend", "auth", "database"],
-  complexity: medium
+  tags: [backend, auth, database]
 }
 
 04-implementation 阶段匹配:
-  第1层 - tag 交集过滤:
-    任务 tags: [backend, auth, database]
-    节点 tags 与任务 tags 的交集大小决定初始候选:
-      tdd-implementation:  tags [backend, database]  → 交集 2 → 候选
-      backend-endpoint:    tags [backend, database]  → 交集 2 → 候选
-      auth-integration:    tags [auth, backend]      → 交集 2 → 候选
-      security-review:     tags [security]           → 交集 0 → 不匹配 tag，降级为推荐
-      frontend-component:  tags [frontend]           → 交集 0 → 跳过
 
-  第2层 - 语义匹配:
-    认证系统的描述 vs match_description 相似度排序:
-      auth-integration:      0.92 → 候选
-      tdd-implementation:    0.78 → 候选
-      backend-endpoint:      0.75 → 候选
-      security-review:       0.68 → 推荐
-      frontend-component:    0.15 → 跳过
-      scaffold:              0.05 → 跳过
+  tag 交集过滤:
+    tdd-implementation:  tags [backend, database]  → 交集 2 → 候选
+    backend-endpoint:    tags [backend, database]  → 交集 2 → 候选
+    auth-integration:    tags [auth, backend]      → 交集 2 → 候选
+    security-review:     tags [security]           → 交集 0 → 推荐 (无交集，但 auth 任务通常需要)
+    frontend-component:  tags [frontend]           → 交集 0 → 跳过
+
+  语义匹配 (任务 description vs 节点 description):
+    auth-integration:      0.92 → 候选
+    tdd-implementation:    0.78 → 候选
+    backend-endpoint:      0.75 → 候选
+    security-review:       0.68 → 推荐
+    frontend-component:    0.15 → 跳过
 
 用户确认: [tdd-implementation, backend-endpoint, auth-integration, security-review]
 
-resolver 解析:
-  auth-integration depends_on [backend-endpoint]
-  security-review depends_on [tdd-implementation]
+resolver (匹配 output → input 自动推导依赖):
+  auth-integration.input 需要 backend-endpoint.output → 串行
+  security-review.input 需要 tdd-implementation.output → 串行
 
 执行计划:
   Group 1: [backend-endpoint, tdd-implementation]  并行 (文件域无重叠)
@@ -170,7 +198,7 @@ resolver 解析:
   "name": "dev-kit",
   "depends": ["opc-core"],
   "capabilities": {
-    "stages": ["04-implementation"],
+    "phases": ["04-implementation"],
     "agents": [
       { "name": "frontend-engineer", "model": "sonnet", "expertise": ["react", "nextjs"] },
       { "name": "backend-engineer", "model": "sonnet", "expertise": ["api", "database"] }

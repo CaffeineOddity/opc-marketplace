@@ -21,21 +21,17 @@
 | 状态 | 含义 | 后续 node 可否加载 |
 |------|------|-------------------|
 | `draft` | 刚写入，未经验证 | 可加载但需注明 "未验证" |
-| `final` | 已通过 exit-gate 或用户确认 | 正常加载 |
+| `final` | 已由用户确认 | 正常加载 |
 
-knowledge-save hook 写入的知识默认为 `draft`，需通过以下任一方式变为 `final`：
-- 所在阶段的所有 exit-gates 通过
-- 用户手动确认（`/opc-status` 中标记为 "已确认"）
+knowledge-save hook 写入的知识默认为 `draft`，需通过用户手动确认变为 `final`（`/opc-status` 中标记为 "已确认"）。
 
 ## 知识版本
 
-知识条目支持简单版本号（`v1`, `v2`, ...），每次新增写入自动递增。node 的 `requires.knowledge` 可指定版本范围：
+知识条目支持简单版本号（`v1`, `v2`, ...），每次新增写入自动递增。node 的 `input.knowledge` 可指定版本范围：
 
 ```yaml
-requires:
-  - type: knowledge
-    category: requirement
-    doc: main
+input:
+  - knowledge: requirement/main
     min_version: 2  # 至少 v2
 ```
 

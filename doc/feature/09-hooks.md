@@ -1,11 +1,9 @@
 # Hook 体系
 
 ```
-entry-gate-check   PreToolUse(Agent)    调度前检查入口条件
-exit-gate-check    PostToolUse(Agent)   完成后检查出口条件
 knowledge-load     PreToolUse(Agent)    自动加载前置知识
 knowledge-save     PostToolUse(Agent)   自动保存产出知识（draft 状态）
-stage-transition   Stop                检测完成，提示推进
+phase-transition   Stop                检测完成，提示推进
 node-completion    PostToolUse(Agent)   解锁依赖节点
 tdd-gate           PreToolUse(Write, "src/**")  RED 阶段放行 / GREEN+REFACTOR 拦截
 verification-gate  PreToolUse(Write, "src/**")  强制验证完成
