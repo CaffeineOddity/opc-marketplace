@@ -103,7 +103,7 @@ quality_gates:
 | `timeout_minutes` | number | 否 | 无（永不超时） | 从 `opc_node_start` 起算的最大执行时间 |
 | `max_retries` | number | 否 | 3（当 `timeout_minutes` 有值时） | 超时自动重试上限，超限后标记 failed |
 
-> **设计说明**：超时检测是惰性的——没有后台线程或定时器，因为 MCP server 是纯响应式服务。检测在以下 MCP 工具调用时顺便执行：`opc_pipeline_status`、`opc_phase_start`、`opc_node_start`、`opc_pipeline_recover`。Agent 占着 turn 期间无法被外部中断（Claude Code 架构限制），所以不存在"10:31 自动检测重跑"。用户 Ctrl+C 后，Claude 在下个 turn 调 MCP 工具时顺便完成超时处理和自动重试。详见 [06-state.md](06-state.md) `check_node_timeout()`。
+> **设计说明**：超时检测是惰性的——没有后台线程或定时器，因为 MCP server 是纯响应式服务。检测在以下 MCP 工具调用时顺便执行：`opc_pipeline_status`、`opc_phase_start`、`opc_node_start`、`opc_pipeline_recover`。Agent 占着 turn 期间无法被外部中断（Claude Code 架构限制），所以不存在"10:31 自动检测重跑"。用户 Ctrl+C 后，Claude 在下个 turn 调 MCP 工具时顺便完成超时处理和自动重试。详见 [17 opc-state-server](17-mcp-state-server.md)。
 
 ### `input` 条目格式
 

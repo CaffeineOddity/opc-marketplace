@@ -152,7 +152,7 @@ order:
 ---
 phase: 04-implement-design
 phase_review:
-  require_user_approval: true
+  min_confidence_for_auto: 0.85
   max_reflection_rounds:
     medium: 2
     high: 4
@@ -171,22 +171,41 @@ phase_review:
 
 ## 阶段推进
 
-### 高置信度自动推进
+AI 根据置信度自行决定推进策略，不要求用户预授权。
 
-当前 phase 完成时，结合 complexity 检查下一 phase：
+### 置信度评估
 
-| complexity | 条件 | 行为 |
-|-----------|------|------|
-| low | — | 不走管线，无 phase 概念，Agent 直接执行 |
-| medium | scenario 命中 + 语义相似度 > 0.9 | 自动推进 |
-| medium | 其他 | 提示用户确认后推进 |
-| high | 任意条件 | 每阶段需用户主动确认 |
+`opc_phase_start` 和 `opc_phase_complete` 时，AI 综合以下因素评估置信度：
 
-### 手动回退
+| 因素 | 权重 | 说明 |
+|------|------|------|
+| scenario 匹配度 | 高 | scenario_hints 命中了几个、语义相似度多少 |
+| 节点覆盖率 | 中 | 候选节点是否覆盖了任务 tags 的核心领域 |
+| 决策一致性 | 中 | 多轮反思中 node 选择是否稳定收敛 |
+| 风险等级 | 高 | 是否涉及数据库 schema 变更、auth 安全、破坏性操作 |
 
-用户可通过 `/opc-phase back <phase>` 回退。回退后：
-- 回退点之后的 knowledge version 降为 0（需重新验证）
-- 回退点之后的 node 状态重置为 `pending`
+### 推进行为
+
+| 置信度 vs 阈值 | 节点选择 | 阶段推进 |
+|--------------|---------|---------|
+| 置信度 ≥ `min_confidence_for_auto` | AI 自行确定节点列表，记录决策依据 | `auto_advance: true`，直接推进下一 phase |
+| 置信度 < `min_confidence_for_auto` | 展示候选列表 + 推理依据，请求用户确认 | `auto_advance: false`，提示用户确认后推进 |
+
+### 各 phase 默认阈值
+
+| Phase | `min_confidence_for_auto` | 理由 |
+|-------|--------------------------|------|
+| 00-ideation | 0.75 | 探索性强，允许 AI 自主尝试 |
+| 01-validation | 0.80 | PRD 影响后续全链路 |
+| 03-design | 0.80 | UI/UX 主观性强 |
+| 04-implement-design | 0.85 | API/DB 设计决策关键 |
+| 05-implement | 0.80 | 节点多但操作性为主 |
+| 06-testing | 0.70 | 验证性为主，低风险 |
+| 07-release | 0.85 | 部署涉及生产环境 |
+| 08-growth | 0.75 | 营销策略可逆 |
+| 09-scale | 0.90 | 架构演进影响面大，保守 |
+
+AI 在每次决策时评估自身置信度，与 phase 阈值比较。决策依据（scenario 匹配分数、节点覆盖率、风险评估、最终决策）写入 state.json 的 phase 记录中，供事后审查。
 
 ## 节点来源（由 opc_phase_start 自动生成）
 

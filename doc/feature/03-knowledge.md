@@ -120,7 +120,7 @@ version 不依赖任何外部索引文件，写入只涉及单个 .md 文件的�
 
 ## MCP 工具
 
-`opc-knowledge-server` 提供 8 个工具：
+`opc-knowledge-server` 提供 8 个工具，详细 API 规范见 [18 opc-knowledge-server](18-mcp-knowledge-server.md)。
 
 | 工具 | 说明 |
 |------|------|

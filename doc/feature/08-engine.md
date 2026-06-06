@@ -83,4 +83,4 @@ platform/mcp/opc-state-server/engine/
 
 ### opc-knowledge-server
 
-独立的知识库 MCP 服务，不属于引擎层。提供 7 个工具：`opc_knowledge_open/get/get_batch/write/delete/list/search`。详见 [03 知识体系](03-knowledge.md)。
+独立的知识库 MCP 服务，不属于引擎层。提供 8 个工具，详见 [18 opc-knowledge-server](18-mcp-knowledge-server.md)。
