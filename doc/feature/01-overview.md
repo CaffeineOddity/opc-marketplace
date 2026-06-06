@@ -35,7 +35,6 @@ opc-marketplace/
 │   │   │   └── paths.ts
 │   │   ├── hooks/
 │   │   │   ├── knowledge-load.json
-│   │   │   ├── knowledge-save.json
 │   │   │   └── phase-transition.json
 │   │   └── references/
 │   │       └── platform-protocol.md
@@ -315,8 +314,8 @@ sequenceDiagram
             P->>KF: 加载 input.knowledge
             KF->>A: 注入知识上下文
             A->>A: 执行 node 指令
-            A-->>KF: 产出 knowledge
-            KF-->>SM: knowledge-save (draft)
+            A-->>KF: MCP 调用 knowledge write
+            KF-->>SM: knowledge written (draft)
             A-->>SM: node status -> completed
         end
         
@@ -358,7 +357,7 @@ sequenceDiagram
       S --> T{knowledge-load}
       T --> U[Agent 执行]
       U --> V{执行结果}
-      V -->|成功| W[knowledge-save]
+      V -->|成功| W[Agent 通过 MCP<br/>写入知识]
       W --> X[state-manager<br/>node -> completed]
       X --> Y{当前 phase<br/>全部 node 完成?}
       Y -->|否| S
@@ -408,7 +407,7 @@ sequenceDiagram
 3. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 4. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
 5. **知识属于项目** —— 切换目录 = 切换知识上下文
-6. **Hook 驱动自动化** —— gate、knowledge load/save 全自动，但 knowledge-save 只保存 draft 状态
+6. **Hook 驱动加载，MCP 驱动写入** —— knowledge-load hook 自动注入前置知识；知识写入由 Agent 通过 MCP 工具显式调用（draft 状态）
 7. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
 8. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
 9. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛

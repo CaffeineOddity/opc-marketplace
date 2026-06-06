@@ -36,7 +36,7 @@
 │  用户确认 → resolver: Group 1 (并行) [api-design, db-schema]  │
 │                                                              │
 │  执行 Group 1:                                               │
-│    knowledge-load → Agent → knowledge-save (→ opc-knowledge)  │
+│    knowledge-load → Agent → MCP knowledge write (→ opc-knowledge)│
 │                                                              │
 │  phase-transition → "planning 完成，进入实现?"                │
 └──────────────────────────────────────────────────────────────┘

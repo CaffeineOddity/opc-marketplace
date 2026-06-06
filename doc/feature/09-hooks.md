@@ -2,7 +2,6 @@
 
 ```
 knowledge-load     PreToolUse(Agent)    自动加载前置知识
-knowledge-save     PostToolUse(Agent)   自动保存产出知识（draft 状态）
 phase-transition   Stop                检测完成，提示推进
 node-completion    PostToolUse(Agent)   解锁依赖节点
 tdd-gate           PreToolUse(Write, "src/**")  RED 阶段放行 / GREEN+REFACTOR 拦截
@@ -29,6 +28,8 @@ tdd-gate 根据当前 node 执行阶段调整行为：
 | GREEN（写实现） | 要求 `tests/` 目录有修改，且测试通过 |
 | REFACTOR（重构） | 放行，但要求已有测试继续通过 |
 
-## knowledge-save 条件触发
+## knowledge-load Hook
 
-并非所有 Agent 调用都触发知识保存。只有被标记为 "production" 级别的 Agent 调用（即 node 中定义的 primary/optional agent）才触发。探索性调用不保存。
+知识加载由 hook 自动触发，在 Agent 开始执行前，读取 node 的 `input.knowledge` 列表，通过 MCP 工具逐条读取知识内容，注入 Agent 上下文。
+
+知识写入不再通过 hook 自动保存，而是由 Agent 在 node 执行中通过 MCP 工具显式调用。

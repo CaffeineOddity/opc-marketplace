@@ -22,10 +22,13 @@ platform/opc-core/mcp/engine/
   node-resolver:    隐式依赖（output → input）全部 completed？
          │
          ▼
-  全部通过 → knowledge-flow 加载 input 中的 knowledge → Agent 执行
+  全部通过 → knowledge-load hook 加载 input.knowledge → 注入 Agent 上下文
          │
          ▼
-  Agent 完成 → knowledge-save 写入 opc-knowledge
+  Agent 执行（通过 MCP 工具显式读写知识）
+         │
+         ▼
+  node-completion hook → state-manager 记录 output
 ```
 
 ## 各引擎职责
@@ -62,7 +65,8 @@ platform/opc-core/mcp/engine/
 
 ### knowledge-flow
 
-管理知识在 node 间的流转：加载前置知识注入到 Agent 上下文，将 Agent 产出写入 opc-knowledge。
+管理知识在 node 间的流转：加载前置知识注入 Agent 上下文，提供 MCP 工具让 Agent 在运行时显式读写知识。
 
-- 加载: 读取节点 `input.knowledge` → 从 opc-knowledge 读取对应条目 → 注入 Agent prompt
-- 保存: Agent 完成后 → 按 `output.knowledge` 写入 opc-knowledge（draft 状态）
+- 加载: 读取 node `input.knowledge` → 通过 `opc_knowledge_get` 读取条目 → 注入 Agent prompt
+- MCP 工具: 提供 `opc_knowledge_get/write/delete/list/search`，Agent 在 node 执行中通过 MCP 显式读写知识
+- 不再自动保存: 知识写入由 Agent 调用 MCP 工具完成，知识流引擎不自动触发写入
