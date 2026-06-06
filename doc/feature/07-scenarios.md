@@ -19,9 +19,9 @@ Scenario 也可以作为**快速启动模板**：用户可以直接声明 "用 a
 # Scenario: add-feature
 
 ## 推荐
-- 02-planning: api-design, database-schema
-- 04-implementation: tdd-implementation
-- 05-testing: integration-test (+ security-scan 如涉及安全)
+- 04-implement-design: api-design, database-schema, scaffold
+- 05-implement: tdd-implementation
+- 06-testing: integration-test (+ security-scan 如涉及安全)
 
 ## 常见变化
 - 只需后端 → 跳过前端节点
@@ -32,7 +32,7 @@ Scenario 也可以作为**快速启动模板**：用户可以直接声明 "用 a
 ## 可用 Scenarios
 
 ```
-scenarios/
+platform/opc-orchestrator/scenarios/
 ├── build-saas.md
 ├── build-mobile-app.md
 ├── add-feature.md

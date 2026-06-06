@@ -11,73 +11,62 @@ opc-marketplace/
 │
 ├── platform/
 │   │
-│   ├── opc-core/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── mcp/
-│   │   │   ├── index.ts
+│   ├── mcp/
+│   │   ├── opc-state-server/
 │   │   │   ├── server.ts
 │   │   │   ├── tools/
-│   │   │   │   ├── state.ts
-│   │   │   │   ├── knowledge.ts
-│   │   │   │   ├── session.ts
-│   │   │   │   ├── phase.ts
-│   │   │   │   ├── node.ts
-│   │   │   │   └── guidance.ts
-│   │   │   ├── engine/
-│   │   │   │   ├── state-manager.ts
-│   │   │   │   ├── phase-validator.ts
-│   │   │   │   ├── task-analyzer.ts
-│   │   │   │   ├── node-resolver.ts
-│   │   │   │   └── knowledge-flow.ts
-│   │   │   ├── state.ts
-│   │   │   ├── session.ts
-│   │   │   ├── lock.ts
-│   │   │   └── paths.ts
-│   │   ├── hooks/
-│   │   │   ├── knowledge-load.json
-│   │   │   └── phase-transition.json
-│   │   └── references/
-│   │       └── platform-protocol.md
+│   │   │   ├── pipeline.ts      # pipeline_start, pipeline_status
+│   │   │   ├── phase.ts         # phase_start, phase_confirm, phase_complete, phase_reset
+│   │   │   └── node.ts          # node_start, node_complete, node_fail
+│   │   │   └── engine/
+│   │   │       ├── state-manager.ts
+│   │   │       ├── phase-validator.ts
+│   │   │       ├── task-analyzer.ts
+│   │   │       └── node-resolver.ts
+│   │   └── opc-knowledge-server/
+│   │       ├── server.ts
+│   │       └── tools/
+│   │           ├── open.ts
+│   │           ├── get.ts
+│   │           ├── write.ts
+│   │           ├── delete.ts
+│   │           ├── list.ts
+│   │           └── search.ts
 │   │
 │   └── opc-orchestrator/
 │       ├── .claude-plugin/plugin.json
-│       ├── agents/
-│       │   ├── orchestrator.md
-│       │   ├── task-classifier.md
-│       │   └── phase-guide.md
-│       ├── skills/
-│       │   ├── opc-status/SKILL.md
-│       │   ├── opc-phase/SKILL.md
-│       │   └── opc-nodes/SKILL.md
-│       ├── hooks/
-│       │   └── capability-discovery.json
-│       └── references/
-│           ├── orchestration-guide.md
-│           └── phase-protocol.md
+│       ├── pipeline/
+│       │   ├── intent-analysis.md
+│       │   ├── task-analysis.md
+│       │   ├── task-decomposition.md
+│       │   ├── brief-generation.md
+│       │   ├── knowledge-operation.md
+│       │   └── phase-execution.md
+│       ├── scenarios/
+│       │   ├── add-feature.md
+│       │   ├── fix-bug.md
+│       │   └── ...
 │
-├── phases/
+├── phases/                                       # 阶段 = 定义 + 节点 + 模板
 │   ├── 00-ideation/
-│   │   ├── phase.md
-│   │   ├── nodes.md
+│   │   ├── phase.md + nodes.md
+│   │   ├── nodes/
+│   │   └── templates/
 │   ├── 01-validation/
-│   ├── 02-planning/
+│   │   ├── phase.md + nodes.md
+│   │   ├── nodes/
+│   │   │   ├── user-persona.md
+│   │   │   └── prd-writing.md
+│   │   └── templates/
+│   │       ├── prd-template.md
+│   │       └── persona-template.md
 │   ├── 03-design/
-│   ├── 04-implementation/
-│   ├── 05-testing/
-│   ├── 06-release/
-│   ├── 07-growth/
-│   └── 08-scale/
-│
-├── scenarios/
-│   ├── build-saas.md
-│   ├── build-mobile-app.md
-│   ├── add-feature.md
-│   ├── fix-bug.md
-│   ├── security-audit.md
-│   ├── redesign-product.md
-│   ├── performance-optimize.md
-│   ├── launch-product.md
-│   └── incident-response.md
+│   ├── 04-implement-design/
+│   ├── 05-implement/
+│   ├── 06-testing/
+│   ├── 07-release/
+│   ├── 08-growth/
+│   └── 09-scale/
 │
 ├── kits/
 │   │
@@ -90,28 +79,10 @@ opc-marketplace/
 │   │   │   └── ux-researcher.md
 │   │   ├── skills/
 │   │   │   ├── write-prd/
-│   │   │   │   ├── SKILL.md
-│   │   │   │   ├── checklist.md
-│   │   │   │   └── examples.md
 │   │   │   ├── competitor-analysis/
 │   │   │   ├── market-sizing/
 │   │   │   ├── startup-brainstorm/
 │   │   │   └── pricing-strategy/
-│   │   ├── nodes/
-│   │   │   ├── market-research.md
-│   │   │   ├── competitive-analysis.md
-│   │   │   ├── user-persona.md
-│   │   │   ├── prd-writing.md
-│   │   │   └── opportunity-sizing.md
-│   │   ├── knowledge/
-│   │   │   ├── jobs-to-be-done.md
-│   │   │   ├── lean-startup.md
-│   │   │   └── product-playbooks.md
-│   │   ├── templates/
-│   │   │   ├── prd-template.md
-│   │   │   └── persona-template.md
-│   │   ├── hooks/
-│   │   │   └── spec-validation.json
 │   │   └── mcp/.mcp.json
 │   │
 │   ├── design-kit/
@@ -126,22 +97,6 @@ opc-marketplace/
 │   │   │   ├── generate-ui/
 │   │   │   ├── accessibility-audit/
 │   │   │   └── mobile-ux-review/
-│   │   ├── nodes/
-│   │   │   ├── wireframe.md
-│   │   │   ├── design-system.md
-│   │   │   ├── web-ui.md
-│   │   │   ├── mobile-ui.md
-│   │   │   ├── brand-identity.md
-│   │   │   ├── interaction-design.md
-│   │   │   └── accessibility-review.md
-│   │   ├── knowledge/
-│   │   │   ├── ios-hig.md
-│   │   │   ├── material-design.md
-│   │   │   └── interaction-patterns.md
-│   │   ├── templates/
-│   │   │   ├── design-spec-template.md
-│   │   │   └── design-system-template.md
-│   │   ├── hooks/
 │   │   └── mcp/.mcp.json
 │   │
 │   ├── dev-kit/
@@ -158,27 +113,6 @@ opc-marketplace/
 │   │   │   ├── auth-system/
 │   │   │   ├── code-review/
 │   │   │   └── security-audit/
-│   │   ├── nodes/
-│   │   │   ├── scaffold.md
-│   │   │   ├── api-design.md
-│   │   │   ├── database-schema.md
-│   │   │   ├── tdd-implementation.md
-│   │   │   ├── frontend-component.md
-│   │   │   ├── backend-endpoint.md
-│   │   │   ├── auth-integration.md
-│   │   │   ├── security-review.md
-│   │   │   ├── performance-optimize.md
-│   │   │   └── dependency-update.md
-│   │   ├── knowledge/
-│   │   │   ├── clean-architecture.md
-│   │   │   ├── react-patterns.md
-│   │   │   └── database-patterns.md
-│   │   ├── templates/
-│   │   │   ├── architecture-template.md
-│   │   │   └── api-spec-template.md
-│   │   ├── hooks/
-│   │   │   ├── tdd-gate.json
-│   │   │   └── verification-gate.json
 │   │   └── mcp/.mcp.json
 │   │
 │   ├── qa-kit/
@@ -207,28 +141,46 @@ my-project/                              # 用户工程目录（claude 执行目
 │   └── permissions.json
 │
 ├── .opc/                                # 运行时状态（gitignore）
-│   ├── state/
-│   │   ├── pipelines/                  # 管线状态（每个 task 一个 json）
-│   │   ├── locks/
-│   │   └── sessions/
+│   ├── pipelines/
+│   │   ├── pipeline-xxx/                # 单管线 = 1 条子管线
+│   │   │   ├── pipeline-plan.json       # 管线编排计划（始终存在）
+│   │   │   ├── manifest.md
+│   │   │   └── sub-pipelines/
+│   │   │       └── sub-1/  (state.json + brief.md + phases/)
+│   │   │
+│   │   └── pipeline-ecommerce-xxx/      # 拆分管线 = N 条子管线
+│   │       ├── pipeline-plan.json
+│   │       ├── manifest.md
+│   │       └── sub-pipelines/
+│   │           ├── sub-1/  (state.json + brief.md + phases/)
+│   │           ├── sub-2/
+│   │           └── sub-3/
+│   ├── sessions/
 │   └── .project-init
 │
-├── opc-nodes/                           # 项目自定义节点（git 跟踪，覆盖内置）
-│   └── ...
+├── opc-nodes/                           # 覆盖内置节点（同 phases/ 目录结构）
+│   ├── 04-implement-design/nodes/api-design.md
+│   └── 05-implement/nodes/tdd-implementation.md
 │
 ├── opc-knowledge/                       # 项目知识库（git 跟踪）
 │   ├── index.json
-│   ├── user-auth/
-│   │   ├── requirement/main.md
-│   │   ├── planning/
-│   │   │   ├── api-design.md
+│   ├── user-auth/                       # ← unit
+│   │   ├── login/                       # ← section
+│   │   │   ├── api.md                   # ← subsection
+│   │   │   ├── ui.md
 │   │   │   └── architecture.md
-│   │   ├── implementation/
-│   │   │   ├── tech.md
-│   │   │   └── backend-api.md
-│   │   └── testing/
-│   │       └── test-plan.md
-│   └── payment/
+│   │   ├── register/
+│   │   │   ├── api.md
+│   │   │   └── ui.md
+│   │   └── session/
+│   │       ├── api.md
+│   │       ├── model.md
+│   │       └── architecture.md
+│   ├── authorization/
+│   │   └── role-management/
+│   │       ├── api.md
+│   │       └── model.md
+│   └── subscription/
 │       └── ...
 │
 ├── opc-memory/                          # 项目持久记忆（git 跟踪）
@@ -237,13 +189,6 @@ my-project/                              # 用户工程目录（claude 执行目
 │   ├── coding-conventions.md
 │   ├── design-system.md
 │   └── decisions.md
-│
-├── opc-deliverables/                    # 阶段产出物（git 跟踪）
-│   ├── 02-planning/
-│   │   ├── api-design.md
-│   │   └── database-schema.md
-│   └── 04-implementation/
-│       └── ...
 │
 ├── opc-logs/                            # 运行日志（gitignore）
 │   ├── phases/
@@ -264,14 +209,16 @@ my-project/                              # 用户工程目录（claude 执行目
 ```
 ┌──────────────────────────────────────────────────┐
 │  kits/ (业务层)                                    │
-│  领域 Agent + Skill + Node + Knowledge + Template  │
-│  每个 kit 通过 plugin.json 声明式暴露能力            │
+│  领域 Agent + Skill，通过 plugin.json 暴露能力      │
+│  Node + Template 按阶段组织在 phases/                │
 ├──────────────────────────────────────────────────┤
 │  platform/opc-orchestrator (编排层)                 │
-│  意图识别 -> 任务分析 -> 阶段推荐 -> 节点解析 -> 调度    │
+│  pipeline + scenarios                              │
+│  意图识别 → 任务分析 → 阶段推荐 → 节点解析 → 调度    │
 ├──────────────────────────────────────────────────┤
-│  platform/opc-core (基础设施层)                      │
-│  MCP 工具 + Gate 引擎 + 节点解析器 + 知识流引擎       │
+│  platform/mcp (基础设施层)                           │
+│  opc-state-server:     任务跟进 MCP 服务             │
+│  opc-knowledge-server: 知识库 MCP 服务               │
 │  所有引擎都是 TypeScript 代码，不是 prompt           │
 └──────────────────────────────────────────────────┘
 ```
@@ -285,103 +232,158 @@ sequenceDiagram
     actor U as 用户
     participant O as Orchestrator
     participant TA as TaskAnalyzer
-    participant SM as StateManager
-    participant P as Phase
-    participant CD as CapabilityDiscovery
+    participant KS as KnowledgeServer
+    participant SS as StateServer
     participant NR as NodeResolver
-    participant KF as KnowledgeFlow
     participant A as Agent
 
-    U->>O: "实现用户认证系统"
-    O->>TA: 分析意图
-    TA-->>O: tags, complexity, suggested_phases, feature
-    O->>SM: 创建 state.json
+    U->>SS: opc_pipeline_start("用户输入")
+    SS->>SS: ① intent-analysis
 
-    loop 每个 Phase
-        SM->>P: 进入 phase (in_progress)
-        P->>CD: 扫描 node（按 phase 字段归类）
-        CD-->>P: 候选 node 列表
-        P->>NR: 候选 nodes + task 信息
-        NR->>NR: tag 交集过滤
-        NR->>NR: description 语义匹配
-        NR->>NR: scenario 加权
-        NR-->>U: 排序后的候选列表
-        U-->>NR: 确认选择
-        NR->>NR: 匹配 output -> input 推导依赖
-        NR-->>SM: 写入 nodes (blocked_by)
-        
-        loop 每个 Node（按依赖顺序）
-            P->>KF: 加载 input.knowledge
-            KF->>A: 注入知识上下文
-            A->>A: 执行 node 指令
-            A-->>KF: MCP 调用 knowledge write
-            KF-->>SM: knowledge written (draft)
-            A-->>SM: node status -> completed
+    alt intent = general_question / chat
+        SS-->>U: 零 OPC 介入，直接回复
+    else intent = project_question
+        SS->>KS: opc_knowledge_search (关键词)
+        KS-->>SS: 匹配的知识条目 + snippet
+        SS-->>U: 注入知识上下文后回答（不创建管线）
+    else intent = task
+        SS->>KS: ② knowledge_list
+        KS-->>SS: 已有 unit 列表 + 结构
+        SS->>TA: ③ task-analysis (带知识上下文)
+        TA-->>SS: tags, complexity, phases, knowledge_unit, scenario_hints
+        alt complexity = low
+            SS-->>A: 快速通道: Agent 直接执行（无管线/无 state）
+        else complexity = medium / high
+            alt 需修改的 unit ≥ 2
+                SS->>SS: ③b task-decomposition → 拆分分析
+                SS-->>U: 展示拆分方案，等待确认
+                U-->>SS: 确认拆分
+            end
+            SS->>KS: ④ knowledge_open (每条子管线)
+            KS-->>SS: 知识库就绪
+            SS->>SS: ⑤ 每条子管线 brief.md + state.json
+            SS->>SS: ⑥ state-manager 写入管线编排计划 pipeline-plan.json
+            SS-->>O: pipeline(s) created
         end
-        
-        SM-->>P: phase -> completed
     end
 
-    SM-->>U: pipeline completed
+    SS->>SS: 04-implement-design → in_progress
+
+    Note over SS,NR: ── Phase: 04-implement-design ──
+    SS->>NR: 候选 nodes (api-design, database-schema, scaffold)
+    NR->>NR: tag 交集 → 语义匹配 → scenario 加权
+    NR-->>U: 排序后的候选列表
+    U-->>NR: 确认选择
+    NR->>NR: output → input 推导依赖
+    NR-->>SS: opc_phase_confirm → 写入阶段节点计划
+
+    loop 每个 Node（按依赖顺序）
+        A->>KS: opc_knowledge_get
+        A->>A: 执行 node 指令
+        alt 成功
+            A->>KS: opc_knowledge_write
+            A->>SS: opc_node_complete
+        else 失败
+            A->>SS: opc_node_fail → 修复 → retry / abort
+        end
+    end
+    SS->>SS: 04-implement-design → completed
+    SS->>SS: 自动推进到 05-implement
+
+    Note over SS,NR: ── Phase: 05-implement ──
+    SS->>NR: 候选 nodes (tdd-implementation, backend-endpoint, ...)
+    NR-->>U: 排序后的候选列表
+    U-->>NR: 确认选择
+    NR-->>SS: opc_phase_confirm → 写入阶段节点计划
+
+    loop 每个 Node
+        A->>KS: opc_knowledge_get
+        A->>A: 执行 node 指令
+        alt 成功
+            A->>KS: opc_knowledge_write
+            A->>SS: opc_node_complete
+        else 失败
+            A->>SS: opc_node_fail → 修复 → retry / abort
+        end
+    end
+    SS->>SS: 05-implement → completed
+
+    alt 下一 phase 高置信度
+        SS->>SS: 自动推进到 06-testing
+    else 需确认
+        SS-->>U: 提示进入 06-testing
+    end
+
+    Note over SS,NR: ── Phase: 06-testing ──
+    SS->>SS: 类似流程（高置信度场景自动推进）
+
+    SS-->>U: pipeline completed
 ```
 
 ## 五、流程图
 
 ```mermaid
- flowchart TD
-      A[用户输入自然语言] --> B{意图识别<br/>置信度判断}
-      B -->|低置信度| C[主动确认]
-      C --> B
-      B -->|高置信度| D[task-analyzer<br/>分析任务]
-      D --> E[state-manager<br/>创建 state.json]
-      E --> F[确定 phase 列表<br/>仅写入 suggested_phases]
-      F --> G[进入第一个 phase]
+flowchart TD
+    A[用户输入自然语言] --> B[opc_pipeline_start<br/>MCP 原子入口]
+    B --> B1{意图识别<br/>intent-analysis}
+    B1 -->|task| B3[knowledge_list<br/>扫描已有 unit]
+    B1 -->|project_question| PQ[opc_knowledge_search<br/>轻量查询项目知识]
+    PQ --> PQ1[注入知识上下文后回答<br/>不创建管线/state]
+    B1 -->|general_question / chat| NC[零 OPC 介入<br/>直接回复]
+    B3 --> B4[task-analyzer<br/>带知识上下文分析]
+    B4 --> B4a{complexity?}
+    B4a -->|low| FAST[快速通道: Agent 直接执行<br/>无管线 / 无 phases / 无 state]
+    B4a -->|medium / high| DEC{需修改的 unit ≥ 2?}
+    DEC -->|是| DEC1[task-decomposition<br/>拆分子管线 + 推导依赖]
+    DEC1 --> DEC2[用户确认拆分方案]
+    DEC2 --> B5[knowledge_open<br/>每条子管线独立加载 unit]
+    DEC -->|否| B5
+    B5 --> B6[每条子管线: brief.md + state.json<br/>state-manager 写入管线编排计划 pipeline-plan.json]
+    B6 --> G[进入第一个 phase<br/>Agent 读取 brief.md]
 
-      G --> H[capability-discovery<br/>扫描内置 + 项目 node]
-      H --> I[tag 交集过滤]
-      I --> J[语义匹配排序]
-      J --> K[scenario 加权]
-      K --> L[生成初始 node 方案]
+    G --> H[capability-discovery<br/>扫描内置 + 项目 node]
+    H --> I[tag 交集过滤]
+    I --> J[语义匹配排序]
+    J --> K[scenario 加权]
+    K --> L[生成初始 node 方案]
 
-      L --> M{自动通过?}
-      M -->|高置信度无需确认| R[node-resolver<br/>推导依赖 + 生成执行计划]
-      M -->|需审核| N[展示执行计划预览]
+    L --> M{自动通过?}
+    M -->|高置信度无需确认| R[node-resolver<br/>解析依赖 → 阶段节点计划]
+    M -->|需审核| N[展示阶段节点计划预览]
 
-      N --> O[反思调整<br/>检查: 是否缺 node / 是否多余]
-      O -->|增删 node| P[调整 node 列表]
-      P --> Q[重新预览]
-      Q -->|继续反思| O
-      O -->|确认| R
+    N --> O[反思调整<br/>检查: 是否缺 node / 是否多余]
+    O -->|增删 node| P[调整 node 列表]
+    P --> Q[重新预览]
+    Q -->|继续反思| O
+    O -->|确认| R
 
-      R --> S[按 blocked_by 顺序执行 node]
-      S --> T{knowledge-load}
-      T --> U[Agent 执行]
-      U --> V{执行结果}
-      V -->|成功| W[Agent 通过 MCP<br/>写入知识]
-      W --> X[state-manager<br/>node -> completed]
-      X --> Y{当前 phase<br/>全部 node 完成?}
-      Y -->|否| S
-      Y -->|是| Z[phase -> completed]
-      Z --> AA{还有下一 phase?}
-      AA -->|是| G
-      AA -->|否| AB[pipeline -> completed]
+    R --> S[按 blocked_by 顺序执行 node]
+    S --> T[Agent 加载前置知识<br/>opc_knowledge_get]
+    T --> U[Agent 执行]
+    U --> V{执行结果}
+    V -->|成功| W[opc_knowledge_write<br/>opc_node_complete]
+    W --> X{当前 phase<br/>全部 node 完成?}
+    X -->|否| S
+    X -->|是| Y[phase → completed]
+    Y --> Z{还有下一 phase?}
+    Z -->|是, 高置信度| G
+    Z -->|是, 需确认| ZA[提示用户推进] --> G
+    Z -->|否| ZB[pipeline → completed]
 
-      V -->|失败| AC[node -> failed<br/>写入 error]
-      AC --> AD[尝试修复]
-      AD -->|修复完成| S
-      AD -->|无法修复| AE[pipeline -> aborted]
+    V -->|失败| ZC[node → failed<br/>写入 error]
+    ZC --> ZD[尝试修复]
+    ZD -->|修复完成| S
+    ZD -->|无法修复| ZE[pipeline → aborted]
 ```
 
 ### 节点来源
 
-节点有两个来源，capability-discovery 统一扫描：
+节点按阶段组织在 `phases/<phase>/nodes/`，模板在 `phases/<phase>/templates/`。项目通过 `opc-nodes/` 覆盖。
 
 | 来源 | 位置 | 维护者 | 说明 |
 |------|------|--------|------|
-| 内置节点 | `kits/*/nodes/` | 插件开发者 | 随 kit 分发，定义通用工作流 |
-| 项目节点 | `opc-nodes/` | 项目用户 | 针对具体项目定制，可覆盖内置节点 |
-
-项目节点优先级高于内置节点（同名覆盖），用户可按项目需求增加或调整节点。
+| 内置节点 | `platform/opc-orchestrator/pipeline/` + `phases/<phase>/nodes/` | 插件开发者 | 随 marketplace 分发 |
+| 项目节点 | `opc-nodes/` | 项目用户 | 同目录结构，同名覆盖 |
 
 ### 节点选择：反思调整
 
@@ -403,12 +405,14 @@ sequenceDiagram
 ## 六、设计原则
 
 1. **意图触发，置信度兜底** —— 用户直接说话；低置信度时主动确认
-2. **代码引擎 > Prompt 引擎** —— Gate、依赖解析、知识流用 TypeScript 实现；意图分析和语义匹配用 LLM
+2. **代码引擎 > Prompt 引擎** —— 核心逻辑用 TypeScript 实现；意图分析和语义匹配用 LLM
 3. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 4. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
 5. **知识属于项目** —— 切换目录 = 切换知识上下文
-6. **Hook 驱动加载，MCP 驱动写入** —— knowledge-load hook 自动注入前置知识；知识写入由 Agent 通过 MCP 工具显式调用（draft 状态）
-7. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
-8. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
-9. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛
-10. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
+6. **双 MCP 服务** —— opc-state-server 管任务跟进，opc-knowledge-server 管知识库，一切走 MCP 协议
+7. **知识先于状态** —— 知识库在 state.json 创建前初始化，供所有 phase 参考
+8. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
+9. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
+10. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛
+11. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
+12. **阶段自包含** —— 节点、模板、阶段定义同目录（`phases/<phase>/`），一目了然

@@ -9,7 +9,7 @@
 ```markdown
 ---
 name: tdd-implementation
-phase: 04-implementation
+phase: 05-implement
 description: TDD 驱动的后端功能实现，RED → GREEN → REFACTOR
 tags: [backend, database]
 agents:
@@ -20,13 +20,13 @@ skills: [test-driven-development]
 mode: parallel
 
 input:
-  - artifact: spec.md
-  - artifact: architecture.md
-  - knowledge: requirement/main
+  - knowledge: user-auth/login/spec
+  - knowledge: user-auth/login/architecture
+  - knowledge: user-auth/session/api
 
 output:
   - artifacts: [tests/, src/]
-  - knowledge: implementation/tech
+  - knowledge: user-auth/session/api
 
 ---
 
@@ -55,7 +55,7 @@ output:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `name` | string | 是 | 节点唯一标识，kebab-case |
-| `phase` | string | 是 | 所属阶段，如 `04-implementation` |
+| `phase` | string | 是 | 所属阶段，如 `05-implement` |
 | `description` | string | 是 | 节点描述。同时用于节点选择列表展示和语义匹配 |
 | `tags` | string[] | 是 | 技术标签。与任务 tags 求交集，交集为 0 的节点默认排除 |
 | `mode` | string | 是 | `parallel` — 节点内多个 Agent 并行；`sequential` — 按 primary → optional 顺序执行 |
@@ -64,8 +64,8 @@ output:
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `input` | list | 否 | 输入。执行前必须就绪的 artifact / knowledge |
-| `output` | list | 是 | 输出。完成后产出的 artifact / knowledge |
+| `input` | list | 否 | 输入。执行前必须就绪的 knowledge / code artifact |
+| `output` | list | 是 | 输出。完成后产出的 knowledge / code artifact |
 
 ### Agent
 
@@ -79,18 +79,21 @@ output:
 
 ```yaml
 input:
-  - artifact: spec.md                # 文件名
-  - artifact: architecture.md
-  - knowledge: requirement/main      # 分类/文档名
-    min_version: 2                   # 可选，最低版本号
+  - knowledge: user-auth/login/spec       # unit/section/subsection
+  - knowledge: user-auth/login/architecture
+  - knowledge: user-auth/login/api
+    min_version: 2                       # 可选，最低版本号
 ```
+
+`min_version` 校验在执行时由 Agent 完成：调用 `opc_knowledge_get_batch` 获取全部 input 知识后，逐项比对返回的 version 是否 ≥ min_version。不满足则阻止执行，等待前置节点产出足够新版本的知识。version=0（被回退的过期知识）始终不满足任何 min_version ≥ 1 的要求。
 
 ### `output` 条目格式
 
 ```yaml
 output:
-  - artifacts: [tests/, src/]        # 产出路径
-  - knowledge: implementation/tech   # 写入的分类/文档名
+  - artifacts: [tests/, src/]                    # 代码产出路径
+  - knowledge: user-auth/session/api             # unit/section/subsection
+  - knowledge: user-auth/session/architecture    # 新增知识特性
 ```
 
 ---
@@ -161,7 +164,7 @@ task-analyzer: {
   tags: [backend, auth, database]
 }
 
-04-implementation 阶段匹配:
+05-implement 阶段匹配:
 
   tag 交集过滤:
     tdd-implementation:  tags [backend, database]  → 交集 2 → 候选
@@ -196,9 +199,9 @@ resolver (匹配 output → input 自动推导依赖):
 ```json
 {
   "name": "dev-kit",
-  "depends": ["opc-core"],
+  "depends": ["mcp"],
   "capabilities": {
-    "phases": ["04-implementation"],
+    "phases": ["04-implement-design", "05-implement"],
     "agents": [
       { "name": "frontend-engineer", "model": "sonnet", "expertise": ["react", "nextjs"] },
       { "name": "backend-engineer", "model": "sonnet", "expertise": ["api", "database"] }
@@ -213,4 +216,4 @@ resolver (匹配 output → input 自动推导依赖):
 }
 ```
 
-`capability-discovery` hook 在 SessionStart 时扫描已安装 kit 的 plugin.json，动态构建 agent 目录、skill 索引和节点注册表。
+`opc_phase_start` 在启动每个 phase 时扫描 `platform/opc-orchestrator/pipeline/` + `phases/<phase>/nodes/` 和项目 `opc-nodes/` 对应目录；同时扫描已安装 kit 的 plugin.json，动态构建 agent 目录和 skill 索引。

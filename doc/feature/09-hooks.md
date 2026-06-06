@@ -1,35 +1,57 @@
-# Hook 体系
+# MCP 服务
 
-```
-knowledge-load     PreToolUse(Agent)    自动加载前置知识
-phase-transition   Stop                检测完成，提示推进
-node-completion    PostToolUse(Agent)   解锁依赖节点
-tdd-gate           PreToolUse(Write, "src/**")  RED 阶段放行 / GREEN+REFACTOR 拦截
-verification-gate  PreToolUse(Write, "src/**")  强制验证完成
-spec-validation    PostToolUse(Write, "specs/**")  自动校验 spec
-capability-scan    SessionStart         扫描插件能力
-```
+OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自动化行为由 MCP 工具在内部处理，不需要 Claude Code hook。
 
-## Hook 路径过滤
+## 两个 MCP 服务
 
-PreToolUse/PostToolUse hook 支持路径匹配，避免全局拦截：
+| 服务 | 职责 |
+|------|------|
+| opc-state-server | 任务跟进：管线状态、阶段推进、节点执行、依赖解锁 |
+| opc-knowledge-server | 知识库：知识 CRUD、版本管理、全文搜索 |
 
-- `PreToolUse(Write, "src/**")` —— 只拦截源代码目录的写入
-- `PreToolUse(Write, "specs/**")` —— 只拦截 spec 文件目录
-- 配置文件和日志文件不会被意外拦截
+## 原 Hook → MCP 工具对照
 
-## TDD Gate 的阶段感知
+| 原 Hook | 新机制 |
+|---------|--------|
+| knowledge-load | Agent 调用 `opc_knowledge_get` 加载前置知识 |
+| knowledge-save | Agent 调用 `opc_knowledge_write` 写入知识 |
+| phase-transition | `opc_phase_complete` 内部处理：高置信度自动推进，否则提示用户 |
+| node-completion | `opc_node_complete` 内部处理：自动解锁 blocked_by 节点 |
+| capability-scan | `opc_phase_start` 内部扫描内置 + 项目 node |
+| tdd-gate | node 指令中声明（Agent 自约束） |
+| verification-gate | node 指令中声明（Agent 自约束） |
 
-tdd-gate 根据当前 node 执行阶段调整行为：
+## 自动机制
 
-| TDD 阶段 | Gate 行为 |
-|----------|----------|
-| RED（写测试） | 放行 `tests/` 目录写入，不要求测试通过 |
-| GREEN（写实现） | 要求 `tests/` 目录有修改，且测试通过 |
-| REFACTOR（重构） | 放行，但要求已有测试继续通过 |
+以下行为由 MCP 工具内部自动处理，调用方无需感知：
 
-## knowledge-load Hook
+### 依赖解锁
 
-知识加载由 hook 自动触发，在 Agent 开始执行前，读取 node 的 `input.knowledge` 列表，通过 MCP 工具逐条读取知识内容，注入 Agent 上下文。
+`opc_node_complete` 完成后，自动检查 phase 内所有 pending node，将 `blocked_by` 已满足的节点标记为可执行。
 
-知识写入不再通过 hook 自动保存，而是由 Agent 在 node 执行中通过 MCP 工具显式调用。
+### 阶段自动推进
+
+`opc_phase_complete` 完成后：
+
+- 检查下一 phase 是否在高置信度列表（`scenario_hints` 命中 + 语义相似度 > 0.9）
+- 高置信度 → 自动调用 `opc_phase_start` 进入下一 phase
+- 需确认 → 提示用户确认后推进
+
+### 管线恢复
+
+opc-state-server 在 SessionStart 时扫描 `.opc/pipelines/`，发现 `in_progress` 的管线则提示用户恢复。
+
+## 节点驱动取代 Hook
+
+原有的 hook 目录（`hooks/`）已移除。管线每一步由对应节点驱动：
+
+| 原 Hook 触发点 | 对应节点 |
+|---------------|---------|
+| 意图识别 | `intent-analysis` |
+| 任务分析 | `task-analysis` |
+| 知识加载/写入 | `knowledge-operation` |
+| 阶段推进 | `phase-execution` |
+| TDD gate | 任务节点指令中声明（Agent 自约束） |
+| verification gate | 任务节点指令中声明（Agent 自约束） |
+
+详见 [13 节点系统](13-guides.md)。
