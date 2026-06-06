@@ -53,13 +53,20 @@ node 执行失败通过 `opc_node_fail` 标记，通过 `opc_node_retry` 重试�
 | 测试失败 | 用户修复后 opc_node_retry | 代码或测试用例有问题，修复后重跑 |
 | 依赖节点失败 | 阻塞下游 | 前置节点不完成，下游保持 pending |
 | 用户中断 | 保存进度（state.json） | 下次通过 opc_pipeline_recover 恢复 |
+| 质量门未通过 | 修复后重新 opc_node_complete | L1/L2 校验不通过，node 保持 in_progress |
+| 已完成节点重跑 | 全自动级联重置下游 | 上游 output 变了，下游全量重置为 pending |
+| 节点超时 | 惰性检测 + 按 retry_count 自动重试/放弃 | Agent 卡死；Ctrl+C 后首次 MCP 调用时触发 |
 
-失败节点状态流转：`in_progress → (opc_node_fail) failed → (opc_node_retry) in_progress`
+失败节点状态流转：`in_progress → (opc_node_fail) → retry_count < max → auto in_progress → ... → retry_count ≥ max → failed`
+
+失败时不做暂停、不询问用户。`opc_node_fail` 内部检查重试次数，未达上限直接自动转为 in_progress 重跑。达到上限后才标记 failed，此时检查并返回被阻塞的下游节点列表。
 
 `opc_node_retry` 行为：
-- 仅允许从 failed 状态重试
-- `dependency_failure` 类型的 failed 需等前置节点修复完成
-- retry 后重新加载 node input（可能已被前置重新产出的新版本知识）
+- 允许 failed 和 completed 节点重试
+- 自动计算下游影响面（同 phase 直接依赖 + 下游 phase 所有已完成 node）
+- 自动级联重置（不询问用户，git 兜底）：受影响 node → pending，受影响 phase → pending
+- 当前 node → in_progress，Agent 重新加载 input + 执行
+- 完成后下游按 blocked_by 自然推进
 
 ## 3. 管线取消（Pipeline Abort）
 

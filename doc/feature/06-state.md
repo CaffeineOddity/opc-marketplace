@@ -296,7 +296,7 @@ opc-state-server 内部自动处理：
 | 层 | 场景 | 机制 | 工具 |
 |----|------|------|------|
 | L0 | 调整节点选择 | 反思中修改节点列表 | `opc_phase_adjust`（已有） |
-| L1 | 重做单个知识产出 | 重跑 node，version 正常递增 | `opc_node_retry`（已有） |
+| L1 | 重跑已完成 node，级联重置下游 | 自动计算影响面 → 级联重置下游 node/phase → 当前 node 重跑 | `opc_node_retry`（全自动） |
 | L2 | 废弃整个 phase 的知识 | 从快照恢复 knowledge 文件 | `opc_phase_reset`（新增） |
 | L3 | 废弃知识+代码，全量回退 | git checkout / git revert | 不封装，用户自行操作 |
 
@@ -333,6 +333,168 @@ opc_phase_confirm → 快照:
   - 不依赖 git，未 commit 也能用
 ```
 
+### `opc_node_retry` — 全自动级联重置
+
+上游节点重跑意味着它的 output 已经变了，下游基于旧产出的结果全部失效。不标记 stale，不逐项确认——直接级联重置，让管线自然推进。用户觉得不对就用 git 回退。
+
+```
+opc_node_retry(pipeline_id, sub_pipeline_id, node_name):
+
+① 检查 node.status ∈ [failed, completed]，否则拒绝
+
+② 计算影响面:
+    同 phase: 扫描 blocked_by 包含当前 node_name 的已完成 node
+    下游 phase: 所有已完成 node（上游设计变了，下游全量失效）
+
+③ 自动级联重置（不询问）:
+    for affected_node in affected_nodes:
+      affected_node.status → pending
+      清空 input_versions、output
+    for affected_phase in affected_phases:
+      affected_phase.status → pending
+
+④ 当前 node → in_progress，Agent 开始重跑
+
+⑤ 返回摘要（告知，不需要用户确认）:
+    {
+      node: "api-design",
+      status: "in_progress",
+      cascade_reset: {
+        nodes: ["database-schema", "scaffold", "tdd-implementation", "auth-integration", "integration-test"],
+        phases: ["04-implement-design", "05-implement", "06-testing"]
+      }
+    }
+```
+
+执行示例：
+
+```
+>>> opc_node_retry("api-design")
+
+系统自动:
+  → 计算影响面: 6 个下游节点，3 个 phase
+  → 级联重置为 pending
+  → api-design → in_progress
+
+Agent 重新设计 API → opc_node_complete(evidence)
+  → L1+L2 校验通过
+  → unblocked_nodes: ["database-schema"]
+
+>>> opc_node_start("database-schema")
+  → 基于新 API 重新建表
+  ... 自然推进，与首次执行一模一样
+```
+
+为什么不问用户确认？git 就是确认按钮。所有状态文件在 `.opc/` 下，代码产物在 git 跟踪下，任何一步都可以回退。
+
+用户回退路径：
+- 刚 reset 还没跑 → git checkout `.opc/` 下对应 state 文件
+- 已经跑了一部分 → git revert + `opc_phase_start` 从断点继续
+
+### `check_node_timeout()` — 惰性超时检测 + 自动重试
+
+超时检测没有后台线程或定时器——MCP server 是纯响应式服务，不会自己醒来干活。检测写在关键 MCP 工具的函数体开头，调用时顺便执行。
+
+```
+触发工具:
+  - opc_pipeline_status   ← 用户查状态时
+  - opc_phase_start       ← 启动新 phase 时
+  - opc_node_start        ← 启动新 node 时
+  - opc_pipeline_recover  ← 恢复管线时
+
+check_node_timeout(pipeline_id, sub_id):
+  for node in current_sub_pipeline.phases[].nodes[]:
+    if node.status != "in_progress": continue
+    if !node.timeout_minutes: continue
+    
+    elapsed = now() - node.started_at
+    if elapsed > node.timeout_minutes * 60:
+      if node.retry_count < node.max_retries:
+        → 自动 opc_node_retry（级联重置下游 + 重跑）
+        → node.retry_count += 1
+        → 返回: "NODE node 超时，自动重试 ({retry_count}/{max_retries})"
+      else:
+        → node.status → failed
+        → node.error → { type: "timeout", message: "超时 {N} 次，已放弃" }
+        → 返回: "NODE node 超时 {max_retries} 次，已放弃，请手动介入"
+```
+
+state.json node 记录新增字段：
+
+```json
+{
+  "name": "tdd-implementation",
+  "status": "in_progress",
+  "started_at": "2026-06-06T10:00:00Z",
+  "timeout_minutes": 30,
+  "retry_count": 0,
+  "max_retries": 3
+}
+```
+
+> **为什么不能做到 10:31 自动检测重跑？**
+> 
+> Agent 执行 node 期间占着 Claude Code 的 turn。MCP server 是纯响应式的，没有后台线程，只有在收到 tool call 时才执行函数。CronCreate 在 REPL 非 idle 时不会触发。Agent 卡死占着 turn → 整个系统无法向 MCP server 发请求 → 超时检测无法执行。这是 Claude Code 的架构边界，不是 MCP 设计缺陷。
+> 
+> 实际流程：
+> ```
+> 10:00  opc_node_start → Agent 卡死...
+> 10:31  超时。Agent 占着 turn → 什么都不发生
+> 10:45  用户 Ctrl+C → turn 结束 → REPL idle
+>        用户: "继续"
+>        Claude 调 opc_phase_start 或 opc_pipeline_status
+>          → check_node_timeout(): 超时 45min → retry_count=0 < 3
+>          → 自动 opc_node_retry（级联重置 + 重跑）
+>        用户看到: "tdd-implementation 超时，已自动重试 (1/3)，当前 in_progress"
+>        用户什么也没做，管线继续推进
+> ```
+
+### `opc_node_fail` — 失败自动重试
+
+node 失败时不做暂停、不询问用户。retry_count 未达上限就直接重试，达到上限才标记失败。
+
+```
+opc_node_fail(pipeline_id, sub_id, node_name, error):
+  
+  ① retry_count += 1，写入 error 到 state.json
+  
+  ② if retry_count < max_retries:
+       → node status: failed → in_progress
+       → 不清空 output（保留部分产出供 Agent 参考）
+       → 返回 {
+            status: "auto_retrying",
+            attempt: retry_count,
+            max: max_retries,
+            error: "上次失败原因"
+         }
+       → Claude 收到后，重新执行该 node
+     
+     else:
+       → node status: 保持 failed
+       → 扫描该 phase 内 blocked_by 依赖本节点的 pending node
+       → 返回 {
+            status: "failed",
+            exhausted: true,
+            attempt: retry_count,
+            max: max_retries,
+            blocked_nodes: ["auth-integration", "security-review"]
+         }
+```
+
+为什么失败重试不做级联重置？
+
+失败节点**没有产出新版本知识**——它失败了，output 为空或保持原样。下游 blocked 节点本来就在 pending，不需要额外重置。级联重置（`opc_node_retry`）是给**已完成节点重跑**用的——那种情况下上���产出变了，下游必须重置。失败则不同，下游只要等上游通过就行。
+
+和超时检测的关系：
+
+`check_node_timeout` 对超时节点也是直接调 `opc_node_retry`（含级联），因为超时的节点可能产出了部分脏数据。而 `opc_node_fail` 是 Agent 主动报告失败——它知道自己没产出正确结果，所以不需要级联，只重试自己。
+
+| 场景 | 触发 | 机制 | 是否级联 |
+|------|------|------|---------|
+| Agent 执行出错 | `opc_node_fail` | 自动重试当前 node | 否 |
+| 节点超时 | `check_node_timeout` | 自动 `opc_node_retry` | 是 |
+| 用户手动重跑已完成 node | `opc_node_retry` | 级联重置 + 重跑 | 是 |
+
 ## 管线恢复与并发隔离
 
 每条 `pipeline-plan.json` 包含 `owner` 字段，记录当前占用管线的 session 和进程 PID。恢复时通过 PID 判断管线是否为孤儿：
@@ -364,15 +526,99 @@ SessionStart
 | phase 重置 | `opc_phase_reset` — 从快照恢复该 phase 的 knowledge 文件，下游 phase/node → pending |
 | node 开始 | `opc_node_start` — 写入 `input` + `status: in_progress` + `agent` + `started_at` |
 | node 完成 | `opc_node_complete` — 写入 `output` + `status: completed` + `completed_at`，自动解锁依赖 |
-| node 失败 | `opc_node_fail` — 写入 `status: failed` + `error` |
-| node 重试 | `opc_node_retry` — 写入 `status: in_progress`（仅允许 failed 节点） |
+| node 失败 | `opc_node_fail` — 写入 `error`，retry_count < max_retries 时自动转为 in_progress 重试（不下游级联）；超限则标记 failed + 返回 blocked_nodes 列表 |
+| node 重试 | `opc_node_retry` — 自动计算下游影响面 → 级联重置 → 当前 node → in_progress（不询问用户，git 兜底） |
 
 ### input/output 写入规则
 
 - **pending**: 不写入 `input`/`output`。这些信息在 node 定义文件中。
 - **in_progress**: 写入 `input`，值必须与 node 定义一致。
-- **completed**: 写入 `output`，记录实际产出路径。
+- **completed**: 写入 `output`，记录实际产出路径 + `evidence` 摘要。
 - **failed**: 保留 `input`，`output` 为空或部分写入，附加 `error`。
+
+### opc_node_complete 质量校验
+
+`opc_node_complete` 是质量关卡的执行点。校验分两层，由 opc-state-server 强制执行，Agent 不可跳过。
+
+#### 入参
+
+```
+opc_node_complete(pipeline_id, sub_pipeline_id, node_name, evidence?)
+```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `evidence` | 否 | 质量证据。node 声明 `quality_gates` 时为必填 |
+
+`evidence` 结构：
+
+```json
+{
+  "summary": "TDD 实现完成：3 个测试文件，12/12 通过，0 lint 错误",
+  "test_results": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0
+  },
+  "lint_results": {
+    "errors": 0,
+    "warnings": 2
+  },
+  "build_passed": true,
+  "type_check_passed": true,
+  "files_created": ["src/auth/login.ts", "tests/auth/login.test.ts"],
+  "knowledge_written": [
+    {"path": "user-auth/session/api", "version": 2}
+  ]
+}
+```
+
+#### 校验流程
+
+```
+opc_node_complete 内部:
+
+① L1 — 产出物存在性校验（始终执行，不可跳过）:
+    node_def = 读取节点定义文件
+    for each path in node_def.output.knowledge:
+      检查 opc-knowledge/<path>.md 存在且 frontmatter.version ≥ 1
+      不存在 → reject("knowledge 文件未找到: {path}")
+    for each path in node_def.output.artifacts:
+      检查工作区中路径存在
+      不存在 → reject("产物路径不存在: {path}")
+
+② L2 — 质量门校验（仅当 node 声明了 quality_gates）:
+    若声明了 quality_gates 但未传 evidence → reject("缺少 quality evidence")
+    for each gate in node_def.quality_gates:
+      test_pass → 校验 evidence.test_results.failed === 0
+      lint_pass → 校验 evidence.lint_results.errors === 0
+      build_pass → 校验 evidence.build_passed === true
+      type_check_pass → 校验 evidence.type_check_passed === true
+      不满足 → reject，返回 failed_gates 详情
+
+③ 全部通过:
+    写入 output + evidence 摘要到 state.json
+    标记 completed
+    返回 { status: "completed", unblocked_nodes: [...] }
+```
+
+#### 失败返回
+
+```json
+{
+  "status": "rejected",
+  "failed_gates": [
+    { "type": "test_pass", "reason": "测试未通过: 3/12 失败" }
+  ],
+  "suggestion": "修复后重新调用 opc_node_complete"
+}
+```
+
+node 状态保持 `in_progress`，Agent 修复后可再次提交。
+
+#### 向后兼容
+
+不声明 `quality_gates` 的节点只走 L1。当前所有节点定义均未声明此字段，行为与改造前一致。L1 是新增的兜底校验（当前无任何校验）。
 
 ### error 字段
 
@@ -394,6 +640,8 @@ SessionStart
 | `agent_error` | Agent 执行异常，可通过 opc_node_retry 重试 |
 | `test_failure` | 测试未通过，需用户修复后重试 |
 | `dependency_failure` | 前置节点失败导致，需等前置修复 |
+| `quality_gate_failed` | opc_node_complete 时 L1/L2 校验不通过，node 保持 in_progress |
+| `timeout` | 执行时间超过 node 定义的 `timeout_minutes`，retry_count 未达上限时自动重试 |
 | `user_abort` | 用户通过 opc_pipeline_abort 中断 |
 
 ## /opc-status 展示

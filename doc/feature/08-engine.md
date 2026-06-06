@@ -41,8 +41,12 @@ platform/mcp/opc-state-server/engine/
 - 恢复：`opc_pipeline_recover` — 检查 owner.pid → 更新 owner
 - 完成：`opc_pipeline_complete` — 校验全部子管线 + 生成 manifest.md
 - 取消：`opc_pipeline_abort` — 标记全部子管线/phase/node 为 aborted
-- 更新：`opc_node_start` / `opc_node_complete` / `opc_node_fail` / `opc_node_retry` — node 状态变更
+- 更新：`opc_node_start` / `opc_node_complete`（含质量校验 L1+L2） / `opc_node_fail` / `opc_node_retry`（含级联重置）— node 状态变更
 - 读取：`opc_pipeline_status` — 读取 state.json 展示进度
+- 校验：`validate_node_completion()` — `opc_node_complete` 时执行 L1（产出物存在性）+ L2（quality_gates）校验
+- 级联：`cascade_reset_after_retry()` — `opc_node_retry` 时计算下游影响面，自动重置受影响 node/phase
+- 超时：`check_node_timeout()` — 惰性检测 in_progress node 是否超时，未达上限自动 retry，超限标记 failed
+- 自动重试：`auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
 - SessionStart：扫描未完成管线，提示恢复
 
 ### phase-validator
@@ -67,9 +71,12 @@ platform/mcp/opc-state-server/engine/
 
 ### node-resolver
 
-对选中的节点列表做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组的文件域冲突。
+对选中的节点列表做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组的冲突：
 
-- `resolve(phase, nodes)`: opc_phase_confirm 时解析依赖 + 拓扑排序
+- **artifacts 冲突**：`output.artifacts` 路径重叠 → 降级串行
+- **knowledge 冲突**：`output.knowledge` 路径重叠 → 降级串行（避免后写覆盖先写）
+
+- `resolve(phase, nodes)`: opc_phase_confirm 时解析依赖 + 冲突检测 + 拓扑排序
 - `adjust(phase, nodes)`: opc_phase_adjust 时重新生成预览（不锁定）
 - 输入: 选中节点列表
 - 输出: `[{ group: 1, nodes: [...], parallel: true }, { group: 2, nodes: [...], parallel: false }]`

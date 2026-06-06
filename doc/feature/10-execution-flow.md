@@ -105,8 +105,15 @@ complexity 在 task-analysis 判定后立即分叉。
 │  Agent 执行每个 node:                                          │
 │    → opc_knowledge_get_batch 批量加载前置知识                   │
 │    → 执行 node 指令 + 写入知识                                  │
-│    → 成功: opc_node_complete → 解锁下游 | 失败: opc_node_fail  │
-│    → 失败可 opc_node_retry 重试                                │
+│    → 收集 quality evidence（跑测试/跑 lint/构建验证）           │
+│    → opc_node_complete(evidence) → state-server L1+L2 校验     │
+│      ├── 通过 → completed → 解锁下游                           │
+│      └── 不通过 → rejected → node 保持 in_progress → 修复重交  │
+│    → 失败: opc_node_fail → retry_count < 3 → 自动 in_progress  │
+│      重试（不暂停，不询问用户）                                  │
+│    → retry_count ≥ 3 → 真正 failed → 下游 blocked 节点等待修复  │
+│    → 若 node 有 timeout_minutes，Agent 在接近超时前主动          │
+│      self-fail；若 Agent 全卡，用户 Ctrl+C 后惰性检测自动重试    │
 │                                                              │
 │  opc_phase_complete → 自动推进到 05-implement                  │
 └──────────────────────────────────────────────────────────────┘
@@ -132,8 +139,13 @@ complexity 在 task-analysis 判定后立即分叉。
 │  Agent 执行每个 node:                                          │
 │    → opc_knowledge_get_batch 批量加载前置知识                   │
 │    → 执行 node 指令 + 写入知识                                  │
-│    → 成功: opc_node_complete → 解锁下游 | 失败: opc_node_fail  │
+│    → 收集 quality evidence（跑测试/跑 lint/构建验证）           │
+│    → opc_node_complete(evidence) → state-server L1+L2 校验     │
+│      ├── 通过 → completed → 解锁下游                           │
+│      └── 不通过 → rejected → node 保持 in_progress → 修复重交  │
 │    → 失败可 opc_node_retry 重试                                │
+│    → 若 node 有 timeout_minutes，Agent 在接近超时前主动          │
+│      self-fail；若 Agent 全卡，用户 Ctrl+C 后惰性检测自动重试    │
 │                                                              │
 │  opc_phase_complete → 按 complexity 推进:                     │
 │    medium→高置信度自动 / high→等用户确认                        │
@@ -189,16 +201,33 @@ complexity 在 task-analysis 判定后立即分叉。
 ### 节点重试
 
 ```
-┌─ 节点重试 (opc_node_retry) ───────────────────────────────────┐
+┌─ 节点重试 (opc_node_retry) — 全自动级联重置 ──────────────────┐
 │  node → failed (test_failure: 3/12 tests failing)            │
+│  或 user: "重跑 api-design，设计有遗漏"                        │
 │         │                                                     │
 │         ▼                                                     │
-│  用户修复问题后: opc_node_retry(pipeline_id, sub_id, node)     │
-│    → 仅允许 failed 节点重试                                     │
-│    → 非 dependency_failure 的 error 才可直接 retry             │
-│    → dependency_failure → 需等前置节点先修复完成                 │
-│    → node status: failed → in_progress                        │
-│    → 重新加载 input + 执行 node 指令                            │
+│  opc_node_retry(pipeline_id, sub_id, "api-design")           │
+│    → 检查 node.status ∈ [failed, completed]，否则拒绝          │
+│    → 计算影响面:                                                │
+│       同 phase: blocked_by 包含 api-design 的已完成 node       │
+│       下游 phase: 所有已完成 node                              │
+│    → 自动级联重置（不询问用户）:                                 │
+│       受影响 node → pending                                    │
+│       受影响 phase → pending                                   │
+│    → api-design → in_progress                                 │
+│    → 返回 { cascade_reset: { nodes: [...], phases: [...] } }  │
+│    → Agent 重新加载 input + 执行 node 指令                      │
+│    → opc_node_complete → L1+L2 校验 → 解锁下游                 │
+│    → 管线自然推进，与首次执行一致                                │
+│                                                               │
+│  回退: 用户觉得做错了 → git revert，git 就是确认按钮            │
+│                                                               │
+│  超时自动重试:                                                   │
+│    10:00 node_start → Agent 卡死...                             │
+│    10:45 用户 Ctrl+C → "继续"                                   │
+│    → Claude 调 opc_pipeline_status                              │
+│      → check_node_timeout(): 超时 45min, retry_count=0<3      │
+│      → 自动 opc_node_retry → 级联重置 → 重跑                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 

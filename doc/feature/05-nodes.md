@@ -28,6 +28,10 @@ output:
   - artifacts: [tests/, src/]
   - knowledge: user-auth/session/api
 
+quality_gates:
+  - test_pass
+  - lint_pass
+
 ---
 
 ## TDD 功能实现
@@ -74,6 +78,32 @@ output:
 | `agents.primary` | string[] | 是 | 核心 Agent。不可用则节点无法执行 |
 | `agents.optional` | string[] | 否 | 辅助 Agent。可用则加入，不可用则跳过 |
 | `skills` | string[] | 否 | 需要加载的 Skill 列表 |
+
+### 质量门
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `quality_gates` | list | 否 | 节点完成时必须满足的质量条件。不声明则仅检查产出物存在性（L1）；声明后额外校验 evidence（L2） |
+
+`quality_gates` 可选值：
+
+| gate 类型 | 含义 | 校验方式 |
+|-----------|------|---------|
+| `test_pass` | 测试全部通过 | `evidence.test_results.failed === 0` |
+| `lint_pass` | 无 lint 错误 | `evidence.lint_results.errors === 0` |
+| `build_pass` | 构建成功 | `evidence.build_passed === true` |
+| `type_check_pass` | 类型检查通过 | `evidence.type_check_passed === true` |
+
+不声明 `quality_gates` 的节点只走 L1（产出物存在性校验）。声明了 `quality_gates` 的节点，Agent 需在 `opc_node_complete` 时提交 `evidence` 参数，state-server 逐一校验。
+
+### 超时与重试
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `timeout_minutes` | number | 否 | 无（永不超时） | 从 `opc_node_start` 起算的最大执行时间 |
+| `max_retries` | number | 否 | 3（当 `timeout_minutes` 有值时） | 超时自动重试上限，超限后标记 failed |
+
+> **设计说明**：超时检测是惰性的——没有后台线程或定时器，因为 MCP server 是纯响应式服务。检测在以下 MCP 工具调用时顺便执行：`opc_pipeline_status`、`opc_phase_start`、`opc_node_start`、`opc_pipeline_recover`。Agent 占着 turn 期间无法被外部中断（Claude Code 架构限制），所以不存在"10:31 自动检测重跑"。用户 Ctrl+C 后，Claude 在下个 turn 调 MCP 工具时顺便完成超时处理和自动重试。详见 [06-state.md](06-state.md) `check_node_timeout()`。
 
 ### `input` 条目格式
 
@@ -127,15 +157,24 @@ node 的 `mode` 字段控制 node 内部 Agent 的执行方式：
 | `parallel` | node 内多个 Agent 可以并行工作 |
 | `sequential` | node 内 Agent 按顺序执行 |
 
-跨 node 的并行由 resolver 的 Group 机制控制。并行执行时，resolver 检查每个 node 的 `output.artifacts` 和文件操作范围是否重叠：
+跨 node 的并行由 resolver 的 Group 机制控制。并行执行时，resolver 检查两层冲突：
+
+1. **artifacts 文件域**：`output.artifacts` 路径重叠 → 降级串行
+2. **knowledge 路径**：`output.knowledge` 路径重叠 → 降级串行
 
 ```
 Group 1: [backend-endpoint → src/api/], [frontend-component → src/components/]
-         文件域无重叠 → 安全并行 ✓
+         文件域无重叠，knowledge 无重叠 → 安全并行 ✓
 
 Group 2: [tdd-implementation → src/, tests/], [backend-endpoint → src/api/]
-         文件域重叠 src/ → 标记冲突，自动降级为串行
+         文件域重叠 src/ → 降级为串行
+
+Group 3: [api-design → knowledge:user-auth/session/api],
+         [database-schema → knowledge:user-auth/session/api]
+         knowledge 路径重叠 → 降级为串行
 ```
+
+同一 knowledge 路径出现在两个并行 node 的 output 中，后写覆盖先写。降级串行后按顺序写，version 自然递增，避免丢失。
 
 ## 节点依赖解析
 

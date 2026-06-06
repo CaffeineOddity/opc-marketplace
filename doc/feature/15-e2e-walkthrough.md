@@ -302,9 +302,14 @@ database-schema.input: [knowledge: user-auth/login/api,
                       → 依赖 api-design.output → blocked_by: [api-design]
 
 文件域检查:
-  api-design:      无 artifact 产出（只写 knowledge）
-  database-schema: 无 artifact 产出（只写 knowledge）
-  → 无冲突
+  api-design.output.artifacts:      无
+  database-schema.output.artifacts: 无
+  → 无 artifact 冲突
+
+knowledge 冲突检查:
+  api-design.output.knowledge:      [user-auth/register/api, user-auth/login/api, user-auth/session/api]
+  database-schema.output.knowledge: [user-auth/session/model, user-auth/login/architecture]
+  → 无重叠 → 无 knowledge 冲突
 
 拓扑排序:
   Group 1: [api-design]         ← 无 blocked_by
@@ -356,7 +361,7 @@ Agent 执行：
 ③ opc_knowledge_write("user-auth", "register", "api",
      "# 注册 API\n\nPOST /api/auth/register\n..."
    )
-   → version: v1, 更新 index.json
+   → version: v1, 更新 frontmatter
 
 ④ opc_knowledge_write("user-auth", "login", "api",
      "# 登录 API\n\nPOST /api/auth/login\n..."
@@ -368,7 +373,19 @@ Agent 执行：
    )
    → version: v1
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "api-design")
+opc_node_complete("pipeline-20260606-001", "sub-1", "api-design",
+  evidence: {
+    summary: "设计完成：3 个 API 端点，4 条知识写入",
+    knowledge_written: [
+      {path: "user-auth/register/api", version: 1},
+      {path: "user-auth/login/api", version: 1},
+      {path: "user-auth/session/api", version: 1}
+    ]
+  }
+)
+→ L1 校验: 3 个 knowledge 文件存在且 version ≥ 1 ✓
+→ L2: api-design 节点未声明 quality_gates，跳过
+→ completed
 ```
 
 返回：
@@ -411,7 +428,16 @@ Agent 执行：
    )
    → version: v1
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "database-schema")
+opc_node_complete("pipeline-20260606-001", "sub-1", "database-schema",
+  evidence: {
+    summary: "数据库设计完成：users 表 + sessions 表，2 条知识写入",
+    knowledge_written: [
+      {path: "user-auth/session/model", version: 1},
+      {path: "user-auth/login/architecture", version: 1}
+    ]
+  }
+)
+→ L1 校验通过 → completed
 ```
 
 返回：
@@ -528,11 +554,16 @@ security-review.input:     [knowledge: user-auth/login/api,
 文件域检查:
   tdd-implementation.output.artifacts: [src/, tests/]
   auth-integration.output.artifacts:   [src/auth/]
-  → 重叠 src/ → 不能并行
+  → artifacts 重叠 src/ → 不能并行
+
+knowledge 冲突检查:
+  tdd-implementation.output.knowledge:      [user-auth/session/api]
+  auth-integration.output.knowledge:        [user-auth/register/architecture, user-auth/session/api]
+  → knowledge 重叠 user-auth/session/api → 不能并行
 
 拓扑排序:
   Group 1: [tdd-implementation]
-  Group 2: [auth-integration]     ← 等 tdd 产出的基础代码
+  Group 2: [auth-integration]     ← artifacts + knowledge 双重冲突，降级串行
   Group 3: [security-review]      ← 等 auth-integration 产出的完整认证模块
 ```
 
@@ -567,13 +598,30 @@ Agent 执行：
    src/auth/session.ts
    src/models/user.ts
    src/models/session.ts
-   → 运行测试 → 全绿 ✓
+   → 运行测试 → 全绿 (12/12) ✓
 
 ④ REFACTOR: 重构
    提取公共逻辑，改善命名
    → 运行测试 → 仍然全绿 ✓
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "tdd-implementation")
+⑤ 运行 lint → 0 errors, 2 warnings
+
+opc_node_complete("pipeline-20260606-001", "sub-1", "tdd-implementation",
+  evidence: {
+    summary: "TDD 实现完成：3 个测试文件，12/12 通过，lint 0 errors",
+    test_results: { passed: 12, failed: 0, skipped: 0 },
+    lint_results: { errors: 0, warnings: 2 },
+    files_created: [
+      "src/auth/register.ts", "src/auth/login.ts", "src/auth/session.ts",
+      "src/models/user.ts", "src/models/session.ts",
+      "tests/auth/register.test.ts", "tests/auth/login.test.ts", "tests/auth/session.test.ts"
+    ],
+    knowledge_written: []
+  }
+)
+→ L1 校验: artifacts 路径存在 ✓
+→ L2 校验: test_pass ✓ (failed=0), lint_pass ✓ (errors=0)
+→ completed
 ```
 
 返回：

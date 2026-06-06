@@ -18,8 +18,8 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 | phase-transition | `opc_phase_complete` 内部处理：高置信度自动推进，否则提示用户 |
 | node-completion | `opc_node_complete` 内部处理：自动解锁 blocked_by 节点 |
 | capability-scan | `opc_phase_start` 内部扫描内置 + 项目 node |
-| tdd-gate | node 指令中声明（Agent 自约束） |
-| verification-gate | node 指令中声明（Agent 自约束） |
+| tdd-gate | `opc_node_complete` L2 校验 `test_pass`，state-server 强制执行 |
+| verification-gate | `opc_node_complete` L1 校验产出物存在性 + L2 校验 quality_gates |
 
 ## 自动机制
 
@@ -36,6 +36,12 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 - 检查下一 phase 是否在高置信度列表（`scenario_hints` 命中 + 语义相似度 > 0.9）
 - 高置信度 → 自动调用 `opc_phase_start` 进入下一 phase
 - 需确认 → 提示用户确认后推进
+
+### 节点超时自动重试
+
+`opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 等工具调用时，内部检测 in_progress node 是否超时。超时且 `retry_count < max_retries` 时自动 `opc_node_retry`（含级联重置）。超限则标记 failed。
+
+> **注意**：超时检测是惰性的——MCP server 无后台线程，Agent 占着 turn 期间无法检测。用户 Ctrl+C 后首次调 MCP 工具时触发。
 
 ### 管线恢复
 

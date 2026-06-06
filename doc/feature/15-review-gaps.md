@@ -4,6 +4,19 @@
 
 ---
 
+## 〇、节点质量关卡（已解决）
+
+~~Agent 自约束的 "tdd-gate" 和 "verification-gate" 无强制力——`opc_node_complete` 不校验产出物是否真实存在、测试是否真的通过。~~
+
+**决策**：`opc_node_complete` 增加两层质量校验，由 opc-state-server 强制执行：
+
+- **L1（产出物存在性）**：始终生效。检查 `output.knowledge` 文件和 `output.artifacts` 路径是否真实存在。
+- **L2（质量门）**：node 定义中声明 `quality_gates`（test_pass / lint_pass / build_pass / type_check_pass）。Agent 提交 `evidence`，state-server 逐一校验。不通过则 reject，node 保持 in_progress。
+
+见 [05-nodes.md](05-nodes.md) quality_gates 字段、[06-state.md](06-state.md) opc_node_complete 校验流程、[14-mcp-requirements.md](14-mcp-requirements.md) §1.8。
+
+---
+
 ## 一、知识体系
 
 ### 1.1 写入非原子化（已解决）
@@ -12,11 +25,11 @@
 
 **决策**：移除 index.json。version 直接存入 .md 文件 frontmatter，写入只涉及单文件原子操作。`opc_knowledge_list` 用 readdir 扫描目录，`opc_knowledge_search` 走派生索引 .opc-knowledge.idx（可重建）。数据一致性风险消除。
 
-### 1.2 并行写入冲突
+### 1.2 并行写入冲突（已解决）
 
-两个并行 node 同时写 `user-auth/session/api`，后写覆盖先写。当前没有任何冲突检测。
+~~两个并行 node 同时写 `user-auth/session/api`，后写覆盖先写。当前没有任何冲突检测。~~
 
-**建议**：node-resolver 在文件域检查时，除了 artifacts 路径重叠，还要检查 `output.knowledge` 路径重叠。同一 knowledge 路径出现在两个并行 node 的 output 中 → 降级为串行，或标记冲突让用户决策。
+**决策**：node-resolver 在分组时同时检查 `output.artifacts` 路径重叠（已有）和 `output.knowledge` 路径重叠（新增）。同一 knowledge 路径出现在两个并行 node 的 output 中 → 直接降级为串行，不做用户确认。降级后按顺序写，version 自然递增，无覆盖风险。见 [05-nodes.md](05-nodes.md) 并发执行与文件域隔离。
 
 ### 1.3 知识依赖粒度太粗
 
@@ -54,17 +67,23 @@ intent=task,decomposed → { intent, needs_decomposition: true, sub_pipelines: [
 
 **建议**：所有返回统一包含 `intent` + `complexity`（非 task 时为 null），额外字段用可选 key。
 
-### 2.2 缺少 opc_phase_pause
+### 2.2 缺少 opc_phase_pause（已解决——改为自动重试）
 
-`opc_node_fail` 后当前 phase 的其他 node 继续跑。但如果 failed node 产出的 knowledge 被下游依赖，继续跑没意义。
+~~`opc_node_fail` 后当前 phase 的其他 node 继续跑。但如果 failed node 产出的 knowledge 被下游依赖，继续跑没意义。~~
 
-**建议**：`opc_node_fail` 检查是否有其他 pending node 的 blocked_by 依赖本节点。如有，返回 `phase_should_pause: true`，让 Claude 决定是否暂停整个 phase 待修复。
+**决策**：不做暂停、不询问用户。`opc_node_fail` 内部检查 `retry_count < max_retries`，未达上限直接自动转为 in_progress 重跑当前 node。达到上限后才标记 failed，此时返回被阻塞的下游节点列表。下游 blocked 节点本来就在 pending，不受影响。
 
-### 2.3 缺少 node 重试上限
+和 `opc_node_retry`（已完成节点重跑）的区别：
+- `opc_node_fail` 自动重试：只重试当前 node，**不级联**（因为失败了没产出新版本知识）
+- `opc_node_retry`：**级联重置**所有下游（因为上游产出变了，下游全量失效）
 
-`opc_node_retry` 可以无限调用。没有熔断机制。
+见 [06-state.md](06-state.md) `opc_node_fail`。
 
-**建议**：state.json 的 node 记录加 `retry_count`，超过 3 次自动拒绝重试，要求用户介入。
+### 2.3 缺少 node 重试上限（已解决）
+
+~~`opc_node_retry` 可以无限调用。没有熔断机制。~~
+
+**决策**：node 定义新增 `max_retries`（默认 3），state.json 记录 `retry_count`。超时自动重试计数，达到上限后标记 failed 要求用户介入。手动 `opc_node_retry` 同样计数。见 [06-state.md](06-state.md) `check_node_timeout()`。
 
 ### 2.4 opc_node_start 不校验 Agent 可用性
 
@@ -132,11 +151,13 @@ node 定义了 `agents.primary: [backend-engineer]`，但 `opc_node_start` 不�
 
 ## 五、错误处理
 
-### 5.1 下游 node 不知道上游重试了
+### 5.1 下游 node 不知道上游重试了（已解决）
 
-`opc_node_retry("api-design")` 重跑后产出了新版本的 knowledge（v3）。但 `database-schema` 已经用 v2 跑完了，状态是 completed。它不会自动重新跑。
+~~`opc_node_retry("api-design")` 重跑后产出了新版本 knowledge（v3），但 `database-schema` 已用 v2 跑完，状态是 completed，不会自动重跑。~~
 
-**建议**：`opc_node_retry` 成功后，检查哪些已完成的下游 node 的 input.knowledge 版本低于新产出的版本。返回 `stale_nodes: ["database-schema"]`，提示用户这些可能需要重跑。
+**决策**：`opc_node_retry` 改为全自动级联重置。上游重跑时，自动计算下游影响面并重置所有受影响 node/phase 为 pending。不标记 stale，不逐项确认——直接重置，让管线自然推进。用户觉得不对就用 git 回退。
+
+见 [06-state.md](06-state.md) opc_node_retry、[14-mcp-requirements.md](14-mcp-requirements.md) §1.2。
 
 ### 5.2 opc_node_fail 不区分可恢复/不可恢复
 
@@ -190,15 +211,16 @@ plugin.json 声明了 capability（agents, skills, nodes），但 `opc_phase_sta
 |--------|------|------|
 | ~~P0~~ | ~~1.1 写入非原子化~~ | ✅ 已解决 — 移除 index.json，version 存 .md frontmatter |
 | ~~P0~~ | ~~1.4 回退无级联失效~~ | ✅ 已解决 — 分层策略 + `opc_phase_reset` 快照恢复 |
-| **P1** | 1.2 并行写入冲突 | 并行 node 场景必现 |
-| **P1** | 2.3 缺少重试上限 | 无限重试循环 |
+| ~~P1~~ | ~~1.2 并行写入冲突~~ | ✅ 已解决 — node-resolver 检查 `output.knowledge` 路径重叠，自动降级串行 |
+| ~~P1~~ | ~~2.3 缺少重试上限~~ | ✅ 已解决 — `max_retries`（默认 3）+ `retry_count`，达上限后标记 failed |
+| ~~P1~~ | ~~Node 无超时~~ | ✅ 已解决 — `timeout_minutes` + `check_node_timeout()` 惰性检测 + `max_retries` 自动重试 |
 | **P1** | 4.2 并行 Agent 无协调 | 并行执行可能互相覆盖 |
-| **P1** | 5.1 下游不知道上游重试 | 已完成 node 的产出过期 |
+| ~~P1~~ | ~~5.1 下游不知道上游重试~~ | ✅ 已解决 — `opc_node_retry` 全自动级联重置下游 |
 | **P2** | 2.1 返回值类型不稳定 | 调用方复杂度高 |
 | **P2** | 2.4 Agent 可用性校验 | 提前发现问题 |
 | **P2** | 3.4 SessionStart 触发 | 实现细节待定 |
 | **P2** | 4.1 节点无版本快照 | 并发修改问题 |
-| **P3** | 2.2 opc_phase_pause | 边缘场景 |
+| ~~P3~~ | ~~2.2 opc_phase_pause~~ | ✅ 已解决 — 改为自动重试，不做暂停、不询问用户 |
 | **P3** | 2.5 管线修改工具 | 可通过 abort+重来绕过 |
 | **P3** | 3.1 管线超时 | 暂不致命 |
 | **P3** | 3.2 部分完成 | 拆分管线场景 |
@@ -214,7 +236,7 @@ plugin.json 声明了 capability（agents, skills, nodes），但 `opc_phase_sta
 
 | 场景 | 当前状态 | 需要明确的决策 |
 |------|---------|---------------|
-| 两个并行 node 写同一 knowledge | 未定义 | 降级串行 / 标记冲突 / 后写覆盖 |
+| 两个并行 node 写同一 knowledge | 已定义 | 降级串行（node-resolver 检查 `output.knowledge` 路径重叠 → 自动降级） |
 | 回退后已完成的下游 node | 已定义 | `opc_phase_reset` 级联下游 phase/node → pending |
 | 管线在 node 执行中 crash | 超时检测已设计 | 确认超时阈值 30 分钟，心跳粒度 |
 | 同一 knowledge 被多次 write | 版本递增 | 确认不检查内容是否真的变化 |
