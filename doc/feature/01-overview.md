@@ -163,7 +163,8 @@ my-project/                              # 用户工程目录（claude 执行目
 │   └── 05-implement/nodes/tdd-implementation.md
 │
 ├── opc-knowledge/                       # 项目知识库（git 跟踪）
-│   ├── index.json
+│   ├── .opc-knowledge.json              #   _refs（跨 unit 依赖）
+│   ├── .opc-knowledge.idx               #   搜索索引（派生数据，可重建）
 │   ├── user-auth/                       # ← unit
 │   │   ├── login/                       # ← section
 │   │   │   ├── api.md                   # ← subsection
@@ -214,7 +215,7 @@ my-project/                              # 用户工程目录（claude 执行目
 ├──────────────────────────────────────────────────┤
 │  platform/opc-orchestrator (编排层)                 │
 │  pipeline + scenarios                              │
-│  意图识别 → 任务分析 → 阶段推荐 → 节点解析 → 调度    │
+│  意图识别 -> 任务分析 -> 阶段推荐 -> 节点解析 -> 调度    │
 ├──────────────────────────────────────────────────┤
 │  platform/mcp (基础设施层)                           │
 │  opc-state-server:     任务跟进 MCP 服务             │
@@ -255,7 +256,7 @@ sequenceDiagram
             SS-->>A: 快速通道: Agent 直接执行（无管线/无 state）
         else complexity = medium / high
             alt 需修改的 unit ≥ 2
-                SS->>SS: ③b task-decomposition → 拆分分析
+                SS->>SS: ③b task-decomposition -> 拆分分析
                 SS-->>U: 展示拆分方案，等待确认
                 U-->>SS: 确认拆分
             end
@@ -267,15 +268,15 @@ sequenceDiagram
         end
     end
 
-    SS->>SS: 04-implement-design → in_progress
+    SS->>SS: 04-implement-design -> in_progress
 
     Note over SS,NR: ── Phase: 04-implement-design ──
     SS->>NR: 候选 nodes (api-design, database-schema, scaffold)
-    NR->>NR: tag 交集 → 语义匹配 → scenario 加权
+    NR->>NR: tag 交集 -> 语义匹配 -> scenario 加权
     NR-->>U: 排序后的候选列表
     U-->>NR: 确认选择
-    NR->>NR: output → input 推导依赖
-    NR-->>SS: opc_phase_confirm → 写入阶段节点计划
+    NR->>NR: output -> input 推导依赖
+    NR-->>SS: opc_phase_confirm -> 写入阶段节点计划
 
     loop 每个 Node（按依赖顺序）
         A->>KS: opc_knowledge_get
@@ -284,17 +285,17 @@ sequenceDiagram
             A->>KS: opc_knowledge_write
             A->>SS: opc_node_complete
         else 失败
-            A->>SS: opc_node_fail → 修复 → retry / abort
+            A->>SS: opc_node_fail -> 修复 -> retry / abort
         end
     end
-    SS->>SS: 04-implement-design → completed
+    SS->>SS: 04-implement-design -> completed
     SS->>SS: 自动推进到 05-implement
 
     Note over SS,NR: ── Phase: 05-implement ──
     SS->>NR: 候选 nodes (tdd-implementation, backend-endpoint, ...)
     NR-->>U: 排序后的候选列表
     U-->>NR: 确认选择
-    NR-->>SS: opc_phase_confirm → 写入阶段节点计划
+    NR-->>SS: opc_phase_confirm -> 写入阶段节点计划
 
     loop 每个 Node
         A->>KS: opc_knowledge_get
@@ -303,10 +304,10 @@ sequenceDiagram
             A->>KS: opc_knowledge_write
             A->>SS: opc_node_complete
         else 失败
-            A->>SS: opc_node_fail → 修复 → retry / abort
+            A->>SS: opc_node_fail -> 修复 -> retry / abort
         end
     end
-    SS->>SS: 05-implement → completed
+    SS->>SS: 05-implement -> completed
 
     alt 下一 phase 高置信度
         SS->>SS: 自动推进到 06-testing
@@ -348,7 +349,7 @@ flowchart TD
     K --> L[生成初始 node 方案]
 
     L --> M{自动通过?}
-    M -->|高置信度无需确认| R[node-resolver<br/>解析依赖 → 阶段节点计划]
+    M -->|高置信度无需确认| R[node-resolver<br/>解析依赖 -> 阶段节点计划]
     M -->|需审核| N[展示阶段节点计划预览]
 
     N --> O[反思调整<br/>检查: 是否缺 node / 是否多余]
@@ -364,16 +365,16 @@ flowchart TD
     V -->|成功| W[opc_knowledge_write<br/>opc_node_complete]
     W --> X{当前 phase<br/>全部 node 完成?}
     X -->|否| S
-    X -->|是| Y[phase → completed]
+    X -->|是| Y[phase -> completed]
     Y --> Z{还有下一 phase?}
     Z -->|是, 高置信度| G
     Z -->|是, 需确认| ZA[提示用户推进] --> G
-    Z -->|否| ZB[pipeline → completed]
+    Z -->|否| ZB[pipeline -> completed]
 
-    V -->|失败| ZC[node → failed<br/>写入 error]
+    V -->|失败| ZC[node -> failed<br/>写入 error]
     ZC --> ZD[尝试修复]
     ZD -->|修复完成| S
-    ZD -->|无法修复| ZE[pipeline → aborted]
+    ZD -->|无法修复| ZE[pipeline -> aborted]
 ```
 
 ### 节点来源
@@ -390,7 +391,7 @@ flowchart TD
 节点选择不是一次性确认，而是迭代收敛的过程。反思的核心问题是：**选中的 node 是否合理？有没有遗漏？有没有多余？**
 
 ```
-初始方案 → 预览执行计划 → 反思调整 → 重新预览 → ... → 确认
+初始方案 -> 预览执行计划 -> 反思调整 -> 重新预览 -> ... -> 确认
 ```
 
 | 概念 | 说明 |
