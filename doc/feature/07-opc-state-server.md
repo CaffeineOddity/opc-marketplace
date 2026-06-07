@@ -1,19 +1,10 @@
-# MCP 服务
+# opc-state-server MCP 服务
 
-OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自动化行为由 MCP 工具在内部处理。
-
----
-
-## 一、两个 MCP 服务
-
-| 服务 | 职责 | 工具数 |
-|------|------|--------|
-| opc-state-server | 任务跟进：管线状态、阶段推进、节点执行、依赖解锁 | 19 |
-| opc-knowledge-server | 知识库：知识 CRUD、版本管理、全文搜索 | 8 |
+管线状态管理的 MCP 服务，提供 19 个工具，覆盖管线/阶段/节点三层生命周期。内部由四个轻量引擎驱动。
 
 ---
 
-## 二、原 Hook → MCP 工具对照
+## 一、原 Hook → MCP 工具对照
 
 | 原 Hook | 新机制 |
 |---------|--------|
@@ -27,7 +18,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 
 ---
 
-## 三、自动机制
+## 二、自动机制
 
 以下行为由 MCP 工具内部自动处理：
 
@@ -43,7 +34,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 
 ---
 
-## 四、opc-state-server 工具速览（19 个）
+## 三、工具速览（19 个）
 
 ### 管线级（9 个）
 
@@ -81,9 +72,9 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 
 ---
 
-## 五、opc-state-server 核心 API
+## 四、核心 API
 
-### 5.1 opc_pipeline_start
+### 4.1 opc_pipeline_start
 
 ```
 参数: user_message: string
@@ -97,7 +88,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 
 返回统一 schema：`{ intent, complexity }`，额外字段按意图分发。
 
-### 5.2 opc_pipeline_create
+### 4.2 opc_pipeline_create
 
 ```
 参数: description, complexity, sub_pipelines[], execution_order[]
@@ -109,7 +100,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
   → 校验 execution_order 与 blocked_by 的拓扑一致性
 ```
 
-### 5.3 opc_pipeline_status
+### 4.3 opc_pipeline_status
 
 ```
 参数: pipeline_id, sub_pipeline_id? (可选)
@@ -118,7 +109,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 不带 → 各子管线状态聚合 + ready_sub_pipelines
 ```
 
-### 5.4 opc_pipeline_recover
+### 4.4 opc_pipeline_recover
 
 ```
 参数: pipeline_id
@@ -131,7 +122,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
   → 返回可恢复的 in_progress node 列表
 ```
 
-### 5.5 opc_phase_start
+### 4.5 opc_phase_start
 
 ```
 参数: pipeline_id, sub_pipeline_id, phase
@@ -143,7 +134,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 返回: { phase, candidates: [{name, score, tags, recommended}], max_reflection_rounds }
 ```
 
-### 5.6 opc_phase_confirm
+### 4.6 opc_phase_confirm
 
 ```
 参数: pipeline_id, sub_pipeline_id, phase, nodes: [{name, blocked_by?}]
@@ -155,7 +146,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
   → 快照节点 output.knowledge 路径 → .opc/snapshots/
 ```
 
-### 5.7 opc_phase_complete
+### 4.7 opc_phase_complete
 
 ```
 参数: pipeline_id, sub_pipeline_id, phase
@@ -165,7 +156,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 
 调用方根据 `auto_advance` 决定自动推进或提示确认。
 
-### 5.8 opc_phase_reset
+### 4.8 opc_phase_reset
 
 ```
 参数: pipeline_id, sub_pipeline_id, phase
@@ -176,7 +167,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
   → 下游 phase → pending
 ```
 
-### 5.9 opc_phase_run（/comma）
+### 4.9 opc_phase_run（/comma）
 
 ```
 参数: phase, pipeline_id?, dry_run?, mock_inputs?, nodes?, report_path?
@@ -191,7 +182,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
 返回: 阶段执行报告（nodes, knowledge_produced, duration_ms, warnings）
 ```
 
-### 5.10 opc_node_start
+### 4.10 opc_node_start
 
 ```
 参数: pipeline_id, sub_pipeline_id, node_name
@@ -204,7 +195,7 @@ OPC 提供两个独立的 MCP 服务，替代传统的 hook 体系。所有自�
   ⑤ 全部可用 → 写入 input + status: in_progress + agent + started_at
 ```
 
-### 5.11 opc_node_complete
+### 4.11 opc_node_complete
 
 ```
 参数: pipeline_id, sub_pipeline_id, node_name, evidence?
@@ -227,7 +218,7 @@ evidence 结构:
 }
 ```
 
-### 5.12 opc_node_fail
+### 4.12 opc_node_fail
 
 ```
 参数: pipeline_id, sub_pipeline_id, node_name, error: {message, type}
@@ -238,7 +229,7 @@ evidence 结构:
   ③ retry_count ≥ max_retries → exhausted（标记 failed）
 ```
 
-### 5.13 opc_node_retry
+### 4.13 opc_node_retry
 
 ```
 参数: pipeline_id, sub_pipeline_id, node_name
@@ -253,24 +244,7 @@ evidence 结构:
 
 ---
 
-## 六、opc-knowledge-server 工具速览（8 个）
-
-详见 [03 知识体系](03-knowledge.md)，此节仅列表。
-
-| # | 工具 | 说明 |
-|---|------|------|
-| 1 | `opc_knowledge_open` | 打开知识点：已有则返回结构树+version，没有则创建 |
-| 2 | `opc_knowledge_get` | 读单条知识（支持指定 version） |
-| 3 | `opc_knowledge_get_batch` | 批量读取多条知识 |
-| 4 | `opc_knowledge_write` | 写入 .md，自动判断创建/更新，version 写入 frontmatter |
-| 5 | `opc_knowledge_delete` | 删除 subsection，自动清理空目录 |
-| 6 | `opc_knowledge_list` | readdir 扫描目录结构 |
-| 7 | `opc_knowledge_search` | 全文搜索，走 .opc-knowledge.idx |
-| 8 | `opc_knowledge_reindex` | 全量重建搜索索引 |
-
----
-
-## 七、完整调用链路
+## 五、完整调用链路
 
 ### 链路 A：单管线
 
@@ -318,24 +292,31 @@ task / complexity=low → Agent 直接执行（无管线/无 phases/无 state）
 
 ---
 
-## 八、引擎模块
+## 六、内部引擎
 
-详见 [07 引擎](07-engine.md)。
+opc-state-server 内部由四个轻量引擎驱动，均为 TypeScript 代码（非 prompt）：
+
+```
+platform/mcp/opc-state-server/engine/
+├── state-manager.ts       # 管线状态读写、创建/恢复/完成/取消、质量校验、级联重置、超时检测
+├── phase-validator.ts     # 阶段转换校验、推进指令生成
+├── task-analyzer.ts       # LLM 任务分析（唯一调用 LLM 的引擎）
+└── node-resolver.ts       # 节点依赖解析、冲突检测、拓扑排序
+```
 
 | 引擎 | 职责 |
 |------|------|
-| state-manager | 管线状态读写、创建/恢复/完成/取消、质量校验、级联重置、超时检测 |
-| phase-validator | 阶段转换校验、推进指令生成 |
-| task-analyzer | LLM 任务分析（唯一调用 LLM 的引擎） |
-| node-resolver | 节点依赖解析、冲突检测、拓扑排序 |
+| state-manager | 管线状态的唯一读写入口。启动/创建/恢复/完成/取消管线，node 状态变更（含 L1+L2 校验），级联重置，超时检测，SessionStart 扫描 |
+| phase-validator | 校验阶段转换合法性：前置阶段完成、当前阶段节点 input 依赖满足。高置信度自动推进 |
+| task-analyzer | 唯一调用 LLM 的引擎。加载 task-analysis 节点，用 haiku 分析意图。输入用户消息 + knowledge_list 上下文，输出 intent/description/tags/complexity/suggested_phases/knowledge_unit/scenario_hints |
+| node-resolver | 对选中节点做依赖解析和拓扑排序。检查并行组冲突（artifacts + knowledge 路径重叠 → 降级串行）。opc_phase_confirm 和 opc_phase_adjust 时调用 |
 
 ---
 
-## 九、相关文档
+## 七、相关文档
 
 - [02 意图识别与任务分析](02-intent-analysis.md) — opc_pipeline_start 内部流程
-- [03 知识体系](03-knowledge.md) — knowledge-server 完整 API
 - [04 管线](04-pipeline.md) — 管线创建与状态管理
 - [05 阶段](05-phase.md) — 阶段工具详解
 - [06 节点](06-node.md) — 节点工具详解
-- [07 引擎](07-engine.md) — 引擎实现
+- [08 opc-knowledge-server](08-opc-knowledge-server.md) — 知识库 MCP 服务
