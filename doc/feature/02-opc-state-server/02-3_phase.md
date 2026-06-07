@@ -1,6 +1,6 @@
-# 阶段
+# 02-3 阶段
 
-每个阶段目录自包含：phase.md + nodes.md + nodes/ + templates/。阶段根据任务信号自主选择节点，node-resolver 自动解析依赖并生成执行计划。
+阶段根据任务信号自主选择节点，node-resolver 自动解析依赖、拓扑排序、生成执行计划。每个阶段目录自包含：phase.md + nodes.md + nodes/ + templates/。
 
 ---
 
@@ -9,30 +9,19 @@
 ```
 phases/
 ├── 00-ideation/            # 构思 —— 想法验证、可行性分析
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 01-validation/          # 验证 —— 市场验证、用户调研
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 03-design/              # 设计 —— UI/UX、品牌设计
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 04-implement-design/    # 实现设计 —— API 设计、数据库 schema、脚手架
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 05-implement/           # 编码实现 —— 编码、TDD
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 06-testing/             # 测试 —— QA、安全审计
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 07-release/             # 发布 —— 部署、CI/CD
-│   ├── phase.md, nodes.md, nodes/, templates/
 ├── 08-growth/              # 增长 —— 营销、SEO
-│   ├── phase.md, nodes.md, nodes/, templates/
 └── 09-scale/               # 规模化 —— 性能优化、架构演进
-    ├── phase.md, nodes.md, nodes/, templates/
 ```
 
 ---
 
-## 二、phase.md
-
-阶段元信息。以 04-implement-design 为例：
+## 二、phase.md — 阶段元信息
 
 ```markdown
 ---
@@ -56,17 +45,17 @@ order:
 
 ---
 
-## 三、nodes.md — 选择策略
+## 三、节点选择策略（nodes.md）
 
-`opc_phase_start` 扫描 `phases/<phase>/nodes/` 和项目 `opc-nodes/`，自动填充节点列表。nodes.md 定义选择策略。
+`opc_phase_start` 扫描 `phases/<phase>/nodes/` 和项目 `opc-nodes/`，自动填充节点列表。
 
 ### 3.1 两层匹配
 
-**tag 交集过滤**：任务 tags 与节点 tags 求交集，交集为 0 的排除（`always_show: true` 除外）。
+**① tag 交集过滤** — 任务 tags 与节点 tags 求交集，交集为 0 的排除（`always_show: true` 除外）。
 
-**语义匹配排序**：任务 description 与节点 description 语义相似度降序排列。
+**② 语义匹配排序** — 任务 description 与节点 description 语义相似度降序排列。
 
-**Scenario 加权**：命中 scenario 推荐的节点 +0.3 权重加成。
+**③ Scenario 加权** — 命中 scenario 推荐的节点 +0.3 权重加成。
 
 ```
 节点匹配得分 = 语义相似度 × 0.7 + scenario 加权 × 0.3
@@ -81,32 +70,17 @@ order:
 
 每个 phase 独立配置 `max_reflection_rounds`：
 
-| Phase | 节点数 | medium | high | 理由 |
-|-------|--------|--------|------|------|
-| 00-ideation | 3 | 4 | 6 | 方向性探索，需多轮试错 |
-| 01-validation | 2 | 2 | 4 | PRD/画像，少量关键决策 |
-| 03-design | 7 | 3 | 5 | UI/UX 视觉决策需迭代 |
-| 04-implement-design | 3 | 2 | 4 | API/DB 设计决策关键 |
-| 05-implement | 7 | 3 | 5 | 节点最多，依赖链长 |
-| 06-testing | 1 | 1 | 2 | 验证性为主 |
-| 07-release | 2 | 1 | 2 | 操作性强 |
-| 08-growth | 1 | 2 | 3 | 营销/SEO 策略需权衡 |
-| 09-scale | 1 | 2 | 4 | 架构演进影响面大 |
-
-low 复杂度不走管线。
-
-nodes.md 声明示例：
-
-```markdown
----
-phase: 04-implement-design
-phase_review:
-  min_confidence_for_auto: 0.85
-  max_reflection_rounds:
-    medium: 2
-    high: 4
----
-```
+| Phase | medium | high | 理由 |
+|-------|--------|------|------|
+| 00-ideation | 4 | 6 | 方向性探索，需多轮试错 |
+| 01-validation | 2 | 4 | PRD/画像，少量关键决策 |
+| 03-design | 3 | 5 | UI/UX 视觉决策需迭代 |
+| 04-implement-design | 2 | 4 | API/DB 设计决策关键 |
+| 05-implement | 3 | 5 | 节点最多，依赖链长 |
+| 06-testing | 1 | 2 | 验证性为主 |
+| 07-release | 1 | 2 | 操作性强 |
+| 08-growth | 2 | 3 | 营销/SEO 策略需权衡 |
+| 09-scale | 2 | 4 | 架构演进影响面大 |
 
 ### 3.3 置信度阈值
 
@@ -124,8 +98,8 @@ phase_review:
 
 | 置信度 vs 阈值 | 节点选择 | 阶段推进 |
 |--------------|---------|---------|
-| ≥ `min_confidence_for_auto` | AI 自行确定节点列表 | `auto_advance: true`，直接推进 |
-| < `min_confidence_for_auto` | 展示候选列表，请求确认 | `auto_advance: false`，提示确认 |
+| ≥ `min_confidence_for_auto` | AI 自行确定节点列表 | `auto_advance: true` |
+| < `min_confidence_for_auto` | 展示候选列表，请求确认 | `auto_advance: false` |
 
 ---
 
@@ -177,7 +151,6 @@ opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase
 行为:
   → 扫描 phases/<phase>/nodes/ + opc-nodes/
   → tag 交集过滤 → 语义匹配排序 → scenario 加权
-  → 返回候选节点列表
 
 返回:
 {
@@ -223,7 +196,7 @@ opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase
 
 ### 5.4 执行节点
 
-逐组执行，每个 node 走完整流程（详见 [06 节点](06-node.md)）：
+逐组执行，每个 node 走完整流程（详见 [02-4 节点](02-4_node.md)）：
 
 ```
 opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_node_fail
@@ -244,7 +217,7 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 }
 ```
 
-调用方根据 `auto_advance` 决定：true → 直接 `opc_phase_start`；false → 提示用户确认。
+调用方根据 `auto_advance` 决定自动推进或提示确认。
 
 ### 5.6 opc_phase_reset — 阶段重置
 
@@ -263,7 +236,9 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
   - 管线 aborted 后不可 reset（快照已清理）
 ```
 
-### 5.7 分层回退策略
+---
+
+## 六、分层回退策略
 
 | 层 | 场景 | 工具 |
 |----|------|------|
@@ -274,22 +249,9 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 
 ---
 
-## 六、节点来源
-
-`opc_phase_start` 扫描两个来源，同名节点项目覆盖内置：
-
-| 来源 | 位置 | 说明 |
-|------|------|------|
-| 内置节点 | `phases/<phase>/nodes/` | 随 marketplace 分发 |
-| 项目节点 | `opc-nodes/` | 同目录结构，同名覆盖 |
-
----
-
-## 七、/comma 命令：阶段独立运行与测试
+## 七、/comma 命令：阶段独立运行
 
 `/comma` 命令允许在不启动完整管线的情况下，单独运行和测试任意阶段。
-
-### 命令格式
 
 ```
 /comma <phase-id> [选项]
@@ -299,7 +261,7 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 |------|------|
 | `--pipeline <id>` | 在已有管线上下文中运行 |
 | `--dry-run` | 测试模式：执行但不持久化 |
-| `--mock-inputs` | 自动生成 mock 知识数据，满足 node 的 input.knowledge 要求 |
+| `--mock-inputs` | 自动生成 mock 知识数据 |
 | `--nodes <list>` | 指定运行的节点子集 |
 | `--report <path>` | 执行报告输出路径 |
 
@@ -308,18 +270,6 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 **独立模式**（无 `--pipeline`）：创建临时管线上下文，执行完毕后自动清理（dry-run）或保留产物。
 
 **附加模式**（有 `--pipeline`）：在已有管线上下文中运行，复用 brief + state。
-
-### 输入处理
-
-```
-① opc_knowledge_get 检查 opc-knowledge/ 中是否已有知识
-  → 有 → 直接使用
-  → 无 → 进入 ②
-
-② 检查 --mock-inputs
-  → 是 → 生成 mock 数据（_mock: true, version: 0）
-  → 否 → 打印缺失清单，提示用户
-```
 
 ### dry-run vs 正常执行
 
@@ -330,15 +280,59 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 | L2 校验 | 执行 | 执行 |
 | state.json | 正常更新 | 临时，结束后删除 |
 
-### MCP 工具
+---
 
-对应 `opc_phase_run`，详见 [08 MCP 服务](08-mcp.md)。
+## 八、节点来源
+
+`opc_phase_start` 扫描两个来源，同名节点项目覆盖内置：
+
+| 来源 | 位置 | 说明 |
+|------|------|------|
+| 内置节点 | `phases/<phase>/nodes/` | 随 marketplace 分发 |
+| 项目节点 | `opc-nodes/` | 同目录结构，同名覆盖 |
 
 ---
 
-## 八、相关文档
+## 九、MCP 工具
 
-- [02 意图识别与任务分析](02-intent-analysis.md) — 任务复杂度决定反思轮次和推进策略
-- [04 管线](04-pipeline.md) — 管线状态管理
-- [06 节点](06-node.md) — 节点定义与执行
-- [08 MCP 服务](08-mcp.md) — MCP 工具完整 API
+### 阶段级工具（6 个）
+
+| # | 工具 | 说明 |
+|---|------|------|
+| 10 | `opc_phase_start` | 扫描 node，返回候选列表 |
+| 11 | `opc_phase_adjust` | 调整节点列表，重新生成预览 |
+| 12 | `opc_phase_confirm` | 锁定节点计划，写入 state，创建快照 |
+| 13 | `opc_phase_complete` | 标记完成，返回推进指令 |
+| 14 | `opc_phase_reset` | 从快照恢复 knowledge，下游级联 pending |
+| 15 | `opc_phase_run` | 独立运行阶段（/comma），支持 dry-run / mock-inputs |
+
+### opc_phase_run（/comma）
+
+```
+参数: phase, pipeline_id?, dry_run?, mock_inputs?, nodes?, report_path?
+
+行为:
+  ① 校验 phase-id 存在
+  ② standalone（创建临时管线）或 attached（复用已有）
+  ③ 输入检查 + mock 补齐
+  ④ phase_start → 确认 → 逐 node 执行 → phase_complete
+  ⑤ 清理临时管线（dry-run）/ 保留产物
+
+返回: 阶段执行报告（nodes, knowledge_produced, duration_ms, warnings）
+```
+
+---
+
+## 十、自动机制
+
+**阶段自动推进** — `opc_phase_complete` 后检查下一 phase 置信度：
+- ≥ `min_confidence_for_auto` → 自动 `opc_phase_start` 进入下一 phase
+- < `min_confidence_for_auto` → 提示用户确认后推进
+
+---
+
+## 十一、相关文档
+
+- [02-1 意图分析](02-1_intent-analysis.md) — 任务复杂度决定反思轮次和推进策略
+- [02-2 管线](02-2_pipeline.md) — 管线状态管理
+- [02-4 节点](02-4_node.md) — 节点定义与执行

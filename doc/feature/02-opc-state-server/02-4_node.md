@@ -1,4 +1,4 @@
-# 节点
+# 02-4 节点
 
 阶段根据任务信号自主选择节点，node-resolver 自动解析依赖、拓扑排序、生成执行计划。
 
@@ -70,23 +70,19 @@ quality_gates:
 |------|------|------|------|
 | `name` | string | 是 | 节点唯一标识，kebab-case |
 | `phase` | string | 是 | 所属阶段 |
-| `description` | string | 是 | 节点描述，同时用于节点选择列表展示和语义匹配 |
-| `tags` | string[] | 是 | 技术标签。与任务 tags 求交集，交集为 0 的排除 |
-| `mode` | string | 是 | `parallel` — 节点内多 Agent 并行；`sequential` — 按顺序执行 |
+| `description` | string | 是 | 用于节点选择列表展示和语义匹配 |
+| `tags` | string[] | 是 | 技术标签。与任务 tags 求交集 |
+| `mode` | string | 是 | `parallel` / `sequential` |
 
 ### 3.2 Agent
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `agents.primary` | string[] | 是 | 核心 Agent。不可用则节点无法执行 |
-| `agents.optional` | string[] | 否 | 辅助 Agent。可用则加入，不可用则跳过 |
+| `agents.primary` | string[] | 是 | 核心 Agent，不可用则节点无法执行 |
+| `agents.optional` | string[] | 否 | 辅助 Agent，可用则加入，不可用则跳过 |
 | `skills` | string[] | 否 | 需要加载的 Skill 列表 |
 
 ### 3.3 质量门
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `quality_gates` | list | 否 | 不声明仅检查 L1（产出物存在性）；声明后附加 L2 校验 |
 
 | gate 类型 | 含义 | 校验方式 |
 |-----------|------|---------|
@@ -95,14 +91,16 @@ quality_gates:
 | `build_pass` | 构建成功 | `evidence.build_passed === true` |
 | `type_check_pass` | 类型检查通过 | `evidence.type_check_passed === true` |
 
+不声明 `quality_gates` 仅检查 L1（产出物存在性）；声明后附加 L2 校验。
+
 ### 3.4 超时与重试
 
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `timeout_minutes` | number | 否 | 无 | 从 `opc_node_start` 起算的最大执行时间 |
-| `max_retries` | number | 否 | 3 | 超时自动重试上限，超限后标记 failed |
+| `timeout_minutes` | number | 否 | 无 | 从 `opc_node_start` 起算 |
+| `max_retries` | number | 否 | 3 | 超时自动重试上限 |
 
-超时检测是惰性的：MCP server 无后台线程，检测在 `opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 等调用时触发。
+超时检测是惰性的：在 `opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 等调用时触发。
 
 ### 3.5 input 格式
 
@@ -114,7 +112,7 @@ input:
     min_version: 2
 ```
 
-`min_version` 校验在 `opc_node_start` 时由 state-server 强制执行：逐项比对返回的 version 是否 ≥ min_version。
+`min_version` 校验在 `opc_node_start` 时强制执行。
 
 ### 3.6 output 格式
 
@@ -175,8 +173,6 @@ Group 3: [api-design → knowledge: user-auth/session/api],
          [database-schema → knowledge: user-auth/session/api]
          knowledge 路径重叠 → 降级为串行
 ```
-
-同一 knowledge 路径出现在两个并行 node 的 output 中，后写覆盖先写。降级串行后按顺序写，version 自然递增。
 
 ---
 
@@ -251,7 +247,7 @@ opc_node_retry(pipeline_id, sub_id, node_name)
 my-project/
 └── opc-nodes/
     ├── 04-implement-design/nodes/
-    │   └── api-design.md               # 覆盖内置任务节点
+    │   └── api-design.md
     └── 05-implement/nodes/
         └── tdd-implementation.md
 ```
@@ -283,12 +279,112 @@ my-project/
 }
 ```
 
-`opc_phase_start` 扫描 `phases/<phase>/nodes/` + 项目 `opc-nodes/`；同时扫描已安装 kit 的 plugin.json，构建 Agent 目录和 Skill 索引。
+`opc_phase_start` 扫描已安装 kit 的 plugin.json，构建 Agent 目录和 Skill 索引。
 
 ---
 
-## 十、相关文档
+## 十、MCP 工具
 
-- [05 阶段](05-phase.md) — 节点选择与阶段生命周期
-- [03 知识体系](03-knowledge.md) — 知识读写与版本管理
-- [07 引擎](07-engine.md) — node-resolver 依赖解析
+### 节点级工具（4 个）
+
+| # | 工具 | 说明 |
+|---|------|------|
+| 16 | `opc_node_start` | node 开始执行（含 Agent 可用性校验） |
+| 17 | `opc_node_complete` | node 完成（L1 + L2 校验） |
+| 18 | `opc_node_fail` | node 失败（retry_count < max 自动重试） |
+| 19 | `opc_node_retry` | 重跑 completed/failed node（自动级联重置下游） |
+
+### opc_node_start
+
+```
+参数: pipeline_id, sub_pipeline_id, node_name
+
+行为:
+  ① 读取 node 定义，提取 agents.primary[]
+  ② 扫描已安装 kit → 构建可用 Agent 集合
+  ③ 逐一校验 primary Agent 是否可用 → 不可用立即报错
+  ④ 校验 input.knowledge 的 min_version 是否满足（L0）
+  ⑤ 全部可用 → 写入 input + status: in_progress + agent + started_at
+```
+
+### opc_node_complete
+
+```
+参数: pipeline_id, sub_pipeline_id, node_name, evidence?
+
+行为:
+  ① L1 — 产出物存在性校验（始终执行）
+  ② L2 — 质量门校验（仅当 node 声明了 quality_gates）
+  ③ 全部通过 → 写入 output + evidence 摘要，标记 completed
+  ④ 自动解锁 blocked_by 下游节点
+
+evidence 结构:
+{
+  "summary": "TDD 实现完成：3 个测试文件，12/12 通过",
+  "test_results": { "passed": 12, "failed": 0, "skipped": 0 },
+  "lint_results": { "errors": 0, "warnings": 2 },
+  "build_passed": true,
+  "type_check_passed": true,
+  "files_created": ["src/auth/login.ts"],
+  "knowledge_written": [{"path": "user-auth/session/api", "version": 2}]
+}
+```
+
+### opc_node_fail
+
+```
+参数: pipeline_id, sub_pipeline_id, node_name, error: {message, type}
+
+行为:
+  ① retry_count += 1，写入 error 到 state.json
+  ② retry_count < max_retries → auto_retrying（不级联）
+  ③ retry_count ≥ max_retries → exhausted（标记 failed）
+```
+
+### opc_node_retry
+
+```
+参数: pipeline_id, sub_pipeline_id, node_name
+
+行为:
+  → 检查 node.status ∈ [failed, completed]，否则拒绝
+  → 计算影响面:
+      同 phase: blocked_by 包含当前 node 的已完成 node
+      下游 phase: 所有已完成 node
+  → 自动级联重置下游 → 当前 node → in_progress
+```
+
+---
+
+## 十一、自动机制
+
+**依赖解锁** — `opc_node_complete` 后自动检查 phase 内所有 pending node，将 blocked_by 已满足的标记为可执行。
+
+**节点超时自动重试** — `opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 调用时惰性检测 in_progress node 是否超时。超时且未达重试上限时自动 `opc_node_retry`（含级联重置）。
+
+---
+
+## 十二、内部引擎
+
+### node-resolver
+
+对选中节点做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组冲突：
+
+- `resolve(phase, nodes)`: opc_phase_confirm 时解析依赖 + 冲突检测 + 拓扑排序
+- `adjust(phase, nodes)`: opc_phase_adjust 时重新生成预览（不锁定）
+- 输入: 选中节点列表
+- 输出: `[{ group: 1, nodes: [...], parallel: true }, { group: 2, nodes: [...], parallel: false }]`
+
+### state-manager（节点部分）
+
+- `validate_node_completion()` — L1（产出物存在性）+ L2（quality_gates）校验
+- `cascade_reset_after_retry()` — 计算下游影响面，自动重置受影响 node/phase
+- `check_node_timeout()` — 惰性检测 in_progress node 超时
+- `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
+
+---
+
+## 十三、相关文档
+
+- [02-3 阶段](02-3_phase.md) — 节点选择与阶段生命周期
+- [03-1 知识模型](03-1_knowledge-model.md) — 知识读写与版本管理

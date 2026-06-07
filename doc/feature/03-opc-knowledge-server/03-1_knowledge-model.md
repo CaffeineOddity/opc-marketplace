@@ -1,6 +1,6 @@
-# 知识体系（opc-knowledge-server）
+# 03-1 知识模型与存储
 
-知识库通过 opc-knowledge-server MCP 服务提供 CRUD。知识跟随项目，按 **unit → section → subsection** 三层组织。文件系统是唯一真相源，version 存在 .md frontmatter 中。
+知识库按 **unit → section → subsection** 三层组织。文件系统是唯一真相源，version 存在 .md frontmatter 中。
 
 ---
 
@@ -135,24 +135,7 @@ Agent 对每个 `output.knowledge` 的目标路径：
 
 ---
 
-## 六、与 opc-state-server 的协作
+## 六、相关文档
 
-| 场景 | knowledge-server 角色 | state-server 角色 |
-|------|----------------------|-------------------|
-| 管线启动 | knowledge_list → knowledge_open | 接收 knowledge_unit，写入 brief.md |
-| node 执行 | get_batch 加载 input，write 产出 output | node_complete 校验 knowledge 文件存在性（L1） |
-| 阶段回退 | 无感知（文件被快照覆盖） | phase_reset 从快照恢复 knowledge 文件 |
-| 搜索 | search / list / reindex | 无感知 |
-
----
-
-知识 MCP 工具的完整 API 规范见 [08 opc-knowledge-server](08-opc-knowledge-server.md)
-
----
-
-## 七、相关文档
-
-- [02 意图识别与任务分析](02-intent-analysis.md) — knowledge_list → task-analysis
-- [04 管线](04-pipeline.md) — 管线创建与状态管理
-- [06 节点](06-node.md) — 节点定义中的 knowledge input/output 声明
-- [08 opc-knowledge-server](08-opc-knowledge-server.md) — 知识 MCP 工具完整 API
+- [03-2 知识 API](03-2_knowledge-api.md) — 8 个 MCP 工具完整规范
+- [02-4 节点](02-4_node.md) — 节点定义中的 knowledge input/output 声明

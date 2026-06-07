@@ -1,15 +1,15 @@
-# 管线
+# 02-2 管线
 
-管线的创建、编排、状态管理和生命周期。
+管线的创建、编排、状态管理和生命周期。管线是 opc-state-server 的核心数据模型，所有管线工具直接操作 pipeline-plan.json 和 state.json。
 
 ---
 
 ## 一、两层 Plan 模型
 
-| Plan | 位置 | 生成时机 | 内容 | 生成者 |
-|------|------|---------|------|--------|
-| **管线编排计划** | `pipeline-plan.json` | `opc_pipeline_create` | 子管线列表、依赖关系、执行分组 | state-manager |
-| **阶段节点计划** | `state.json` → `phases[].nodes[]` | `opc_phase_confirm` | 当前 phase 选中的 node 列表、blocked_by、分组 | node-resolver |
+| Plan | 位置 | 生成时机 | 内容 |
+|------|------|---------|------|
+| **管线编排计划** | `pipeline-plan.json` | `opc_pipeline_create` | 子管线列表、依赖关系、执行分组 |
+| **阶段节点计划** | `state.json` → `phases[].nodes[]` | `opc_phase_confirm` | 当前 phase 选中的 node 列表、blocked_by、分组 |
 
 ---
 
@@ -52,8 +52,6 @@
     "pid": 12345,
     "since": "2026-05-30T10:00:00Z"
   },
-  "created_at": "2026-05-30T10:00:00Z",
-  "updated_at": "2026-05-30T10:30:00Z",
   "sub_pipelines": [
     {
       "id": "sub-1",
@@ -121,8 +119,6 @@
 
 ### 3.5 owner 字段 — 并发隔离
 
-SessionStart 扫描时通过 PID 判断管线是否为孤儿：
-
 ```
 → 扫描 .opc/pipelines/*/pipeline-plan.json
 → 发现 status: in_progress 的管线
@@ -135,7 +131,7 @@ SessionStart 扫描时通过 PID 判断管线是否为孤儿：
 
 ## 四、state.json
 
-位于 `sub-pipelines/<name>/state.json`。单管线和拆分格式相同。
+位于 `sub-pipelines/<name>/state.json`。
 
 ### 4.1 完整结构
 
@@ -151,14 +147,10 @@ SessionStart 扫描时通过 PID 判断管线是否为孤儿：
     "scenario_hints": ["add-feature"]
   },
   "status": "in_progress",
-  "created_at": "2026-05-30T10:00:00Z",
-  "updated_at": "2026-05-30T10:30:00Z",
   "phases": [
     {
       "phase": "04-implement-design",
       "status": "completed",
-      "started_at": "2026-05-30T10:00:00Z",
-      "completed_at": "2026-05-30T10:15:00Z",
       "nodes": [
         {
           "name": "api-design",
@@ -172,8 +164,6 @@ SessionStart 扫描时通过 PID 判断管线是否为孤儿：
             {"type": "knowledge", "path": "product/api", "version": 1}
           ],
           "error": null,
-          "started_at": "2026-05-30T10:01:00Z",
-          "completed_at": "2026-05-30T10:10:00Z",
           "timeout_minutes": 30,
           "retry_count": 0,
           "max_retries": 3
@@ -188,7 +178,6 @@ SessionStart 扫描时通过 PID 判断管线是否为孤儿：
 
 | 字段 | 说明 |
 |------|------|
-| `id` | 子管线 ID |
 | `task.complexity` | `low` / `medium` / `high` |
 | `task.knowledge_unit` | 本条子管线负责的 unit 列表 |
 | `phases[].status` | `pending` / `in_progress` / `completed` / `blocked` |
@@ -197,7 +186,6 @@ SessionStart 扫描时通过 PID 判断管线是否为孤儿：
 | `phases[].nodes[].input` | 输入项，含 `type` + `path` |
 | `phases[].nodes[].output` | 实际产出，knowledge 带 `version` |
 | `phases[].nodes[].error` | 失败时写入，含 `message` + `type` |
-| `phases[].nodes[].timeout_minutes` | 来自 node 定义 |
 | `phases[].nodes[].retry_count` | 已重试次数 |
 | `phases[].nodes[].max_retries` | 重试上限，默认 3 |
 
@@ -244,11 +232,11 @@ task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，触发 task-d
 
 ### 6.2 单管线
 
-只有 1 条子管线（sub-1），blocked_by 为空，1 个 execution group。`opc_pipeline_start` 返回 `sub_pipelines: null`，跳过用户确认拆分环节。
+只有 1 条子管线（sub-1），blocked_by 为空，1 个 execution group。跳过用户确认拆分环节。
 
 ### 6.3 knowledge_unit 按子管线分配
 
-每条子管线独立加载自己的 knowledge_unit。`_refs` 关联的 unit 自动标记为可读（跨 unit 上下文）。
+每条子管线独立加载自己的 knowledge_unit。`_refs` 关联的 unit 自动标记为可读。
 
 ---
 
@@ -312,7 +300,7 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 - `sequential`：按顺序执行
 - group 之间严格串行
 
-`execution_order` 必须与 `blocked_by` 推导的拓扑排序一致。`opc_pipeline_create` 时校验，不一致则拒绝创建。
+`execution_order` 必须与 `blocked_by` 推导的拓扑排序一致，`opc_pipeline_create` 时校验。
 
 ### 8.3 失败传播
 
@@ -321,8 +309,6 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 ---
 
 ## 九、多 Feature 并行
-
-多个独立管线可并存：
 
 ```
 .opc/pipelines/
@@ -370,14 +356,108 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 
 ---
 
-## 十一、部分完成
+## 十一、MCP 工具
 
-拆分管线中，独立子管线可单独完成并交付。`opc_pipeline_status` 展示各子管线的独立完成情况，`manifest.md` 中标记部分完成状态。
+### 管线级工具（9 个）
+
+| # | 工具 | 说明 |
+|---|------|------|
+| 1 | `opc_pipeline_start` | 分析任务（详见 [02-1 意图分析](02-1_intent-analysis.md)） |
+| 2 | `opc_pipeline_create` | 创建管线：写入 pipeline-plan.json + 逐条 init_sub |
+| 3 | `opc_pipeline_init_sub` | 初始化子管线：knowledge_open→brief→state.json |
+| 4 | `opc_pipeline_status` | 读取管线状态（支持子管线筛选） |
+| 5 | `opc_session_init` | Session 初始化：扫描孤儿管线，返回待恢复列表 |
+| 6 | `opc_pipeline_recover` | 手动恢复指定孤儿管线 |
+| 7 | `opc_pipeline_complete` | 管线完成：校验 + manifest.md |
+| 8 | `opc_pipeline_abort` | 管线取消：级联终止 |
+| 9 | `opc_pipeline_replan` | 管线修改：调整子管线列表和执行顺序 |
+
+### opc_pipeline_create
+
+```
+参数: description, complexity, sub_pipelines[], execution_order[]
+
+行为:
+  → 创建 .opc/pipelines/<id>/
+  → 写入 pipeline-plan.json（含 sub_pipelines + execution_order + owner）
+  → 逐条 init_sub（knowledge_open → brief → state.json）
+  → 校验 execution_order 与 blocked_by 的拓扑一致性
+```
+
+### opc_pipeline_status
+
+```
+参数: pipeline_id, sub_pipeline_id? (可选)
+
+带 sub_pipeline_id → state.json 完整内容 + node 状态 + unblocked_nodes
+不带 → 各子管线状态聚合 + ready_sub_pipelines
+```
+
+### opc_pipeline_recover
+
+```
+参数: pipeline_id
+
+行为:
+  → 检查 owner.pid 是否存活
+    ├── 存活 → 拒绝
+    └── 已死 → 更新 owner 为当前 session
+  → 检查 in_progress node 超时 → 标记 failed
+  → 返回可恢复的 in_progress node 列表
+```
 
 ---
 
-## 十二、相关文档
+## 十二、完整调用链路
 
-- [02 意图识别与任务分析](02-intent-analysis.md) — task-analysis 与拆分
-- [05 阶段](05-phase.md) — 阶段执行、节点选择
-- [06 节点](06-node.md) — 节点执行、质量门、重试
+### 单管线
+
+```
+用户: "实现用户认证系统"
+
+① opc_pipeline_start → intent=task, complexity=medium
+② opc_pipeline_create → 创建 pipeline-plan.json + init_sub
+③ opc_phase_start("04-implement-design") → 候选节点
+④ opc_phase_adjust / opc_phase_confirm → 锁定
+⑤ 逐 node: opc_node_start → Agent → opc_node_complete
+⑥ opc_phase_complete → auto_advance
+⑦ 回到 ③ → 进入 05-implement → 重复
+⑧ opc_pipeline_complete → manifest.md
+```
+
+### 拆分管线
+
+```
+用户: "实现电商系统：商品+购物车+支付+用户中心"
+
+① opc_pipeline_start → 拆分 → sub-1(product) ∥ sub-2(user-center)
+                                       → sub-3(cart) → sub-4(order+payment)
+② opc_pipeline_create → 写入 4 条子管线 + execution_order
+③ 按 execution_order 执行: Group 1(sub-1∥sub-2) → sub-3 → sub-4
+④ 全部 completed → opc_pipeline_complete
+```
+
+### 其他意图
+
+```
+project_question → opc_knowledge_search → 注入上下文回答（不创建管线）
+general_question / chat → 零 OPC 介入，Claude 直接回答
+task / complexity=low → Agent 直接执行（无管线/无 phases/无 state）
+```
+
+### 异常路径
+
+```
+中断恢复: opc_pipeline_recover → PID 检查 → 接管 → 返回断点
+取消:     opc_pipeline_abort → 全部 in_progress → aborted
+回退:     opc_phase_reset → 快照恢复 → 下游 pending
+重跑:     opc_node_retry → 级联重置下游 → 重跑当前 node
+```
+
+---
+
+## 十三、相关文档
+
+- [02-1 意图分析](02-1_intent-analysis.md) — 管线入口与任务分析
+- [02-3 阶段](02-3_phase.md) — 阶段执行与节点选择
+- [02-4 节点](02-4_node.md) — 节点执行与质量门

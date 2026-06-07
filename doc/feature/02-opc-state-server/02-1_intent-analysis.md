@@ -1,6 +1,6 @@
-# 意图识别与任务分析
+# 02-1 意图识别与任务分析
 
-不设 `/opc` 入口命令。自然语言就是入口。orchestrator 在 `opc_pipeline_start` 中串行执行：意图识别 → 知识列表 → 任务分析 →（拆分判断）。
+不设 `/opc` 入口命令。自然语言就是入口。`opc_pipeline_start` 中串行执行：意图识别 → 知识列表 → 任务分析 →（拆分判断）→ 工作单生成。
 
 ---
 
@@ -13,12 +13,11 @@
 用户: 今天天气怎么样        → 静默，不介入
 ```
 
+---
+
 ## 二、意图识别（intent-analysis）
 
-驱动引擎: task-analyzer  
-模型: haiku  
-输入: 用户原始消息  
-输出: `{ intent, confidence, needs_clarification }`
+驱动引擎: task-analyzer（唯一调用 LLM 的引擎，用 haiku）
 
 ### 2.1 四种意图
 
@@ -209,16 +208,12 @@ order._refs → [cart, user-center]
 {
   "sub_pipelines": [
     { "id": "sub-1", "title": "商品管理", "knowledge_unit": ["product"],
-      "suggested_phases": ["04-implement-design", "05-implement", "06-testing"],
       "blocked_by": [] },
     { "id": "sub-2", "title": "用户中心", "knowledge_unit": ["user-center"],
-      "suggested_phases": ["04-implement-design", "05-implement", "06-testing"],
       "blocked_by": [] },
     { "id": "sub-3", "title": "购物车", "knowledge_unit": ["cart"],
-      "suggested_phases": ["04-implement-design", "05-implement", "06-testing"],
       "blocked_by": ["sub-1", "sub-2"] },
     { "id": "sub-4", "title": "下单与支付", "knowledge_unit": ["order", "payment"],
-      "suggested_phases": ["04-implement-design", "05-implement", "06-testing"],
       "blocked_by": ["sub-3", "sub-2"] }
   ]
 }
@@ -247,11 +242,11 @@ order._refs → [cart, user-center]
 | 关联 Scenario | add-feature |
 
 ## 范围
-### 包含 (In-scope)
-- [具体要做的内容 1]
+### 包含
+- [具体要做的内容]
 
-### 不包含 (Out-of-scope)
-- [明确不做的事情 1]
+### 不包含
+- [明确不做的事情]
 
 ## 约束
 [用户显式约束，无约束则写"无特殊约束"]
@@ -282,13 +277,44 @@ order._refs → [cart, user-center]
 - **范围**：根据 tags 和 description 推导 in-scope；out-of-scope 宁可多列不遗漏
 - **约束**：仅写入用户显式提出的约束，不臆造
 - **阶段计划**：从 suggested_phases 按顺序列出
-- **关联知识**：逐条列 knowledge_unit → 折叠为已有 subsection 路径，标注操作类型和当前状态。high 复杂度额外展开 _refs 关联 unit
+- **关联知识**：逐条列 knowledge_unit → 折叠为已有 subsection 路径，标注操作类型和当前状态
 - **准入检查**：固定 4 条基础检查项
 - **写入后不修改**：brief.md 生成后不随管线执行自动修改
 
 ---
 
-## 七、精确命令
+## 七、MCP 工具
+
+### opc_pipeline_start
+
+```
+参数: user_message: string
+
+内部串行步骤:
+  ① intent-analysis → 判断意图
+  ② knowledge_list（仅 task 意图）→ 扫描已有 unit 结构
+  ③ task-analysis（仅 task 意图）→ 带知识上下文的 LLM 分析
+  ④ task-decomposition（仅 task + unit ≥ 2）
+
+返回统一 schema: { intent, complexity }，额外字段按意图分发:
+  - chat/general_question: { intent, confidence }
+  - project_question:      { intent, results: [...] }
+  - task/low:              { intent, complexity: "low", description, tags, knowledge_unit }
+  - task/medium-high:      { intent, complexity, description, tags, knowledge_unit,
+                             suggested_phases, scenario_hints, sub_pipelines? }
+```
+
+### task-analyzer 引擎
+
+唯一调用 LLM 的引擎。加载 `task-analysis` 节点，用 haiku 分析意图。
+
+- 输入: 用户原始消息 + knowledge_list 返回的已有 unit 列表及结构
+- 输出: `{ intent, confidence, description, tags, complexity, suggested_phases, knowledge_unit, scenario_hints, knowledge_plan }`
+- 知识上下文让 task-analyzer 基于项目真实状态判断，而非盲猜 knowledge_unit
+
+---
+
+## 八、精确命令
 
 | 命令 | 用途 |
 |------|------|
@@ -298,8 +324,8 @@ order._refs → [cart, user-center]
 
 ---
 
-## 八、相关文档
+## 九、相关文档
 
-- [03 知识体系](03-knowledge.md) — 知识库 CRUD 与版本管理
-- [04 管线](04-pipeline.md) — 管线创建、状态管理与生命周期
-- [05 阶段](05-phase.md) — 阶段定义与执行
+- [02-2 管线](02-2_pipeline.md) — 管线创建与生命周期
+- [02-3 阶段](02-3_phase.md) — 阶段执行与节点选择
+- [03-1 知识模型](03-1_knowledge-model.md) — 知识结构与存储

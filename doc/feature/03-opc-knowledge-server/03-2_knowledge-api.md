@@ -1,6 +1,6 @@
-# opc-knowledge-server MCP 服务
+# 03-2 知识 MCP API
 
-知识库 MCP 服务，提供 8 个工具用于知识的 CRUD、版本管理和全文搜索。知识概念模型（unit→section→subsection 三层结构、存储格式、版本管理）详见 [03 知识体系](03-knowledge.md)。
+opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全文搜索。知识概念模型（三层结构、存储格式、版本管理）详见 [03-1 知识模型](03-1_knowledge-model.md)。
 
 ---
 
@@ -149,49 +149,7 @@
 
 ---
 
-## 四、智能复用
-
-Agent 对每个 `output.knowledge` 的目标路径：
-
-1. 调用 `opc_knowledge_get` 检查 `unit/section/subsection` 是否存在
-2. **不存在** → `opc_knowledge_write` 创建新文件
-3. **已存在** → 读取当前内容 → 分析差异 → 合并/补充/覆盖 → `opc_knowledge_write` 更新
-
----
-
-## 五、Node 声明与驱动
-
-### 5.1 声明知识意图
-
-```yaml
-# node frontmatter
-input:
-  - knowledge: user-auth/login/api
-  - knowledge: user-auth/session/api
-    min_version: 2
-
-output:
-  - knowledge: user-auth/session/api           # 更新已有特性
-  - knowledge: user-auth/session/architecture  # 新增特性
-```
-
-路径格式：`<unit>/<section>/<subsection>`
-
-### 5.2 执行流程
-
-```
-Agent 执行 node:
-  → opc_knowledge_get_batch([...]) 批量加载 input.knowledge
-    → 按 min_version 校验版本，不满足则阻止
-  → 执行 node 指令
-  → 需要更多知识时调用 opc_knowledge_list / opc_knowledge_search
-  → 产出知识时调用 opc_knowledge_write(unit, section, subsection, content)
-    → MCP 工具自动处理创建 vs 更新
-```
-
----
-
-## 六、与 opc-state-server 的协作
+## 四、与 opc-state-server 的协作
 
 | 场景 | knowledge-server 角色 | state-server 角色 |
 |------|----------------------|-------------------|
@@ -202,8 +160,8 @@ Agent 执行 node:
 
 ---
 
-## 七、相关文档
+## 五、相关文档
 
-- [03 知识体系](03-knowledge.md) — 概念模型、存储结构、版本管理
-- [06 节点](06-node.md) — 节点定义中的 knowledge input/output 声明
-- [07 opc-state-server](07-opc-state-server.md) — 管线状态管理 MCP 服务
+- [03-1 知识模型](03-1_knowledge-model.md) — 概念模型、存储结构、版本管理
+- [02-4 节点](02-4_node.md) — 节点定义中的 knowledge input/output 声明
+- [02-2 管线](02-2_pipeline.md) — 管线创建与状态管理
