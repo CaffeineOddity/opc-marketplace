@@ -8,7 +8,8 @@
 
 ```
 opc-knowledge/
-└── index.json → {}    # 空项目，无已有知识
+├── .opc-knowledge.json → { "_refs": {} }   # 仅 _refs，无跨 unit 依赖
+└── .opc-knowledge.idx                      # 搜索索引（空，派生数据）
 ```
 
 ---
@@ -41,7 +42,7 @@ opc_pipeline_start("实现用户认证系统，支持邮箱注册登录和会话
 
 ```
 扫描 opc-knowledge/
-  → index.json: {}    ← 空项目，无已有 unit
+  → readdir 遍历目录结构，无 unit 子目录
   → 返回: units: []
 ```
 
@@ -139,7 +140,6 @@ opc_pipeline_create({
 opc_knowledge_open(["user-auth"])
   → opc-knowledge/ 下无 user-auth/
   → 创建 user-auth/ 目录
-  → 写入空 index.json
   → 无 _refs 关联
   → 返回: { units: { "user-auth": {} }, related: [] }
 ```
@@ -777,28 +777,30 @@ manifest.md：
 
 ```
 opc-knowledge/
-├── index.json
+├── .opc-knowledge.json         ← _refs: {}（无跨 unit 依赖）
+├── .opc-knowledge.idx          ← 搜索索引（派生数据）
 └── user-auth/
     ├── register/
-    │   ├── api.md              (v1)
-    │   └── architecture.md     (v1)
+    │   ├── api.md              (version: 1)
+    │   └── architecture.md     (version: 1)
     ├── login/
-    │   ├── api.md              (v1)
-    │   └── architecture.md     (v1)
+    │   ├── api.md              (version: 1)
+    │   └── architecture.md     (version: 1)
     └── session/
-        ├── api.md              (v2)    ← 被 auth-integration 更新过
-        └── model.md            (v1)
+        ├── api.md              (version: 2)  ← 被 auth-integration 更新过
+        └── model.md            (version: 1)
 ```
 
-index.json：
-```json
-{
-  "user-auth": {
-    "register":     { "api": {"version":1}, "architecture": {"version":1} },
-    "login":        { "api": {"version":1}, "architecture": {"version":1} },
-    "session":      { "api": {"version":2}, "model": {"version":1} }
-  }
-}
+version 存储在 .md frontmatter 中（文件系统是唯一真相源，不设 index.json）：
+
+session/api.md frontmatter 示例（被 auth-integration 更新为 v2）：
+```yaml
+---
+version: 2
+updated_at: "2026-06-06T11:45:00Z"
+pipeline_id: "pipeline-20260606-001"
+node: "auth-integration"
+---
 ```
 
 ---
