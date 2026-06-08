@@ -1,0 +1,173 @@
+# 意图识别与任务分析
+
+用户`输入消息`后, UserPromptSubmit hook 注入一条极简指令，引导 Claude 调用 `opc_flow_query` 查询流程状态。后续每一步都由 MCP 工具返回的 `next` 字段驱动，pipeline 文档作为**方法论参考**按需读取。
+
+本文档已按主题拆分为多个子文档，本文是**聚合索引**，按阅读顺序指向各子文档。
+
+---
+
+## 端到端时序图
+
+从用户消息进入到管线创建完成的完整链路：Hook 注入提示 → Claude 调用 flow tool → 按需读方法论文档 → 工具返回 `next` 驱动下一步。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant H as UserPromptSubmit<br/>Hook
+    participant C as Claude
+    participant F as flow-router<br/>(state-server)
+    participant P as prompts/*.md<br/>(方法论文档)
+    participant K as knowledge-server
+
+    U->>H: 自然语言<br/>"实现用户认证系统"
+    H->>C: 注入极简指令<br/>"先调 opc_flow_query"
+
+    C->>F: opc_flow_query()
+    F-->>C: active=false<br/>+ suggested_actions<br/>+ methodology.docs
+
+    C->>F: opc_flow_start({user_message})
+    F-->>C: intent_analysis 指令
+
+    C->>P: Read intent-analysis.md (按需)
+    P-->>C: 4 种意图判定规则
+    C->>C: 意图识别<br/>intent=task, conf=0.85
+    C->>F: opc_intent_complete({intent, confidence})
+    F-->>C: 路由 task 分支<br/>→ task_analysis 指令
+
+    C->>K: opc_knowledge_list()
+    K-->>C: 已存在知识单元清单
+    C->>C: 7 步任务分析<br/>+ 5 维度自省
+
+    alt 置信度 ≥ 阈值
+        C->>F: opc_task_analysis_complete
+    else 置信度 < 阈值
+        C->>F: opc_flow_reflect()
+        F-->>C: 反思指令
+        C->>C: 重新分析
+    end
+
+    F-->>C: 路由判定<br/>(complexity + modify_count)
+
+    opt 需要拆分
+        C->>C: 子管线拆分推导
+        C->>F: opc_decomposition_complete
+    end
+
+    C->>C: 按模板生成工作单
+    C->>F: opc_brief_complete({brief_content})
+    F-->>C: next: opc_pipeline_create<br/>(预填全部参数)
+
+    C->>F: opc_pipeline_create({...})
+    F-->>C: flow_next: opc_knowledge_open
+    C->>K: opc_knowledge_open({units})
+    K-->>C: flow_next: opc_phase_start
+    Note over C: 进入阶段执行循环<br/>(见 03_phase-overview.md)
+```
+
+---
+
+## 意图与置信度决策流
+
+`opc_flow_query` 返回 `active=false` 后，Claude 按下图决策路由：
+
+```mermaid
+flowchart TD
+    Start([用户消息]) --> Query[opc_flow_query]
+    Query --> Active{active?}
+
+    Active -->|true| Resume[按 9 种<br/>suggested_actions<br/>选择路径]
+    Resume --> EndR([继续已有流程])
+
+    Active -->|false| FlowStart[opc_flow_start]
+    FlowStart --> Intent[意图识别]
+    Intent --> IType{intent 类型}
+
+    IType -->|chat| Chat[直接回复]
+    IType -->|question| Ans[读知识/代码回答]
+    IType -->|ambiguous| Clarify[追问澄清]
+    IType -->|task| Conf{confidence}
+
+    Conf -->|≥ 0.8| HC[直接 task_analysis]
+    Conf -->|0.5–0.8| MC[task_analysis<br/>+ 反思]
+    Conf -->|< 0.5| LC{反思<br/>达上限?}
+    LC -->|否| Intent
+    LC -->|是| LowFallback[低置信度 fallback]
+
+    HC --> Analysis[7 步任务分析]
+    MC --> Analysis
+    LowFallback --> Analysis
+
+    Analysis --> AConf{analysis<br/>_confidence}
+    AConf -->|< 0.7| Reflect[opc_flow_reflect]
+    Reflect --> Analysis
+    AConf -->|≥ 0.7| Route{complexity +<br/>modify_count}
+
+    Route -->|simple / medium<br/>modify=1| Brief[brief_generation]
+    Route -->|modify ≥ 2| Decomp[task_decomposition]
+    Decomp --> Brief
+
+    Brief --> Create[opc_pipeline_create]
+    Create --> Know[opc_knowledge_open]
+    Know --> Phase[opc_phase_start]
+    Phase --> EndP([进入阶段执行循环])
+
+    Chat --> EndC([结束])
+    Ans --> EndC
+    Clarify --> Start
+```
+
+---
+
+## 子文档导航
+
+### 架构基础
+
+| 子文档 | 内容 |
+|------|------|
+| [01_hook-architecture.md](intent-analysis/01_hook-architecture.md) | Hook 触发机制、混合架构（MCP 状态机 + 方法论文档）、文档归属、Hook 脚本高级形态 |
+| [02_flow-tools-entry-lifecycle.md](intent-analysis/02_flow-tools-entry-lifecycle.md) | **流程工具 · 入口与生命周期**（query / start / abort / recover，含总览表） |
+| [03_flow-tools-step-routing.md](intent-analysis/03_flow-tools-step-routing.md) | **流程工具 · 步骤路由**（intent / task_analysis / decomposition / brief / reflect / quick_dispatch） |
+| [04_flow-tools-revise-restart.md](intent-analysis/04_flow-tools-revise-restart.md) | **流程工具 · 修订与重启**（revise / restart + 调用前置校验） |
+| [10_flow-state-schema.md](intent-analysis/10_flow-state-schema.md) | `flow-state.json` 完整 schema + 字段读写分配 |
+
+### 流程步骤（按执行顺序）
+
+| 子文档 | 内容 | 涉及工具 |
+|------|------|------|
+| [05_intent-recognition.md](intent-analysis/05_intent-recognition.md) | 意图识别（4 种意图）+ 置信度阈值 + 纠错指令 | `opc_flow_query` / `opc_flow_start` / `opc_intent_complete` |
+| [06_task-analysis.md](intent-analysis/06_task-analysis.md) | 7 步任务分析 + 5 维度自省评估 + 反思循环 | `opc_task_analysis_complete` / `opc_flow_reflect` |
+| [07_task-decomposition.md](intent-analysis/07_task-decomposition.md) | 子管线拆分原则、依赖推导、4 维度自省 | `opc_decomposition_complete` |
+| [08_brief-generation.md](intent-analysis/08_brief-generation.md) | 工作单模板与生成规则 | `opc_brief_complete` |
+| [09_pipeline-creation.md](intent-analysis/09_pipeline-creation.md) | 管线创建、知识初始化、阶段执行循环入口 | `opc_pipeline_create` → `opc_knowledge_open` → `opc_phase_start` |
+
+### 参考与示例
+
+| 子文档 | 内容 |
+|------|------|
+| [11_complete-example.md](intent-analysis/11_complete-example.md) | 完整流程示例（含流程中追加需求、管线内增节点）+ 精确命令清单 |
+
+---
+
+## 快速入口
+
+**入口工具**：[`opc_flow_query`](intent-analysis/02_flow-tools-entry-lifecycle.md#opc_flow_query) — 流程状态查询，返回快照 + methodology + 9 种 suggested_actions
+
+**核心架构原则**：
+
+- **Hook 极简化**：永远只输出一行提示，不读文件、不拼快照、不做判断
+- **事实查询统一入口**：`opc_flow_query` 是流程状态的唯一事实源，含 pid 存活校验
+- **决策权归 Claude**：query 提供候选清单，最终走哪条路由由 LLM 判断
+- **工具内部强制校验**：所有 `opc_flow_*` 都内置 pid + status 校验
+- **方法论文档按需读**：MCP 工具返回 `methodology.docs` 指向 `prompts/*.md`，复杂边界场景才完整 Read
+
+详见 [01_hook-architecture.md §1.1 设计原则](intent-analysis/01_hook-architecture.md#11-设计原则)。
+
+---
+
+## 相关文档
+
+- [管线](02_pipeline-overview.md) — 管线创建与生命周期、`opc_pipeline_replan` 细粒度规范
+- [阶段](03_phase-overview.md) — 阶段执行与节点选择、节点选择反思
+- [节点](04_node-overview.md) — 节点定义与执行、Agent 委派模式
+- [03-1 知识模型](../03-opc-knowledge-server/01_knowledge-model-overview.md) — 知识结构与存储
