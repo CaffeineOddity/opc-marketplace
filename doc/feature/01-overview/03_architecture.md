@@ -1,222 +1,11 @@
-# OPC 概览
+# 03 架构分层 + 时序 + 流程
 
-## 一、Marketplace 目录结构
-
-```
-opc-marketplace/
-│
-├── marketplace.json
-├── README.md
-├── CLAUDE.md
-│
-├── platform/
-│   │
-│   ├── mcp/
-│   │   ├── opc-state-server/
-│   │   │   ├── server.ts
-│   │   │   ├── prompts/                # 方法论文档（MCP 在工具返回里引用路径，Claude 按需 Read）
-│   │   │   │   ├── intent-analysis.md          无流程时的意图判断
-│   │   │   │   ├── in-flow-decision.md         有活跃流程时的延续/纠正/补充判断
-│   │   │   │   ├── task-analysis.md
-│   │   │   │   ├── task-decomposition.md
-│   │   │   │   ├── brief-generation.md
-│   │   │   │   ├── phase-execution.md
-│   │   │   │   ├── recovery.md                 孤儿流程恢复策略
-│   │   │   │   ├── state-machine.md            每个 F 工具的 expected_steps 路由表
-│   │   │   │   ├── reflection-task-analysis.md
-│   │   │   │   └── reflection-node-selection.md
-│   │   │   ├── flow/                   # 流程状态机
-│   │   │   │   ├── flow-router.ts      #   按 confidence/intent/current_step 路由
-│   │   │   │   ├── flow-state-store.ts #   .opc/sessions/<id>/flow-state.json 读写
-│   │   │   │   └── owner-manager.ts    #   owner pid 接管 + 心跳 + 孤儿检测
-│   │   │   ├── tools/
-│   │   │   │   ├── flow.ts             #   13 个流程工具
-│   │   │   │   ├── pipeline.ts         #   pipeline_create, pipeline_status, pipeline_replan, ...
-│   │   │   │   ├── phase.ts            #   phase_start, phase_confirm, phase_complete, phase_reset
-│   │   │   │   └── node.ts             #   node_start, node_complete, node_fail
-│   │   │   └── engine/
-│   │   │       ├── state-manager.ts
-│   │   │       ├── phase-validator.ts
-│   │   │       └── node-resolver.ts
-│   │   └── opc-knowledge-server/
-│   │       ├── server.ts
-│   │       └── tools/
-│   │           ├── open.ts
-│   │           ├── get.ts
-│   │           ├── write.ts
-│   │           ├── delete.ts
-│   │           ├── list.ts
-│   │           └── search.ts
-│   │
-│   └── opc-orchestrator/                    # 极简插件：hook + scenarios
-│       ├── .claude-plugin/plugin.json        #   UserPromptSubmit hook（指向 opc_flow_query）
-│       ├── bin/opc-hook.sh                   #   可选脚本（slash 命令过滤等工程逻辑）
-│       └── scenarios/                        #   场景配方（Claude 按需读取）
-│           ├── add-feature.md
-│           ├── fix-bug.md
-│           └── ...
-│
-├── phases/                                       # 阶段 = 定义 + 节点 + 模板
-│   ├── 00-ideation/
-│   │   ├── phase.md + nodes.md
-│   │   ├── nodes/
-│   │   └── templates/
-│   ├── 01-validation/
-│   │   ├── phase.md + nodes.md
-│   │   ├── nodes/
-│   │   │   ├── user-persona.md
-│   │   │   └── prd-writing.md
-│   │   └── templates/
-│   │       ├── prd-template.md
-│   │       └── persona-template.md
-│   ├── 03-design/
-│   ├── 04-implement-design/
-│   ├── 05-implement/
-│   ├── 06-testing/
-│   ├── 07-release/
-│   ├── 08-growth/
-│   └── 09-scale/
-│
-├── kits/
-│   │
-│   ├── product-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── product-manager.md
-│   │   │   ├── market-analyst.md
-│   │   │   ├── startup-advisor.md
-│   │   │   └── ux-researcher.md
-│   │   ├── skills/
-│   │   │   ├── write-prd/
-│   │   │   ├── competitor-analysis/
-│   │   │   ├── market-sizing/
-│   │   │   ├── startup-brainstorm/
-│   │   │   └── pricing-strategy/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── design-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── ui-designer.md
-│   │   │   ├── ux-designer.md
-│   │   │   └── design-reviewer.md
-│   │   ├── skills/
-│   │   │   ├── generate-wireframe/
-│   │   │   ├── create-design-system/
-│   │   │   ├── generate-ui/
-│   │   │   ├── accessibility-audit/
-│   │   │   └── mobile-ux-review/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── dev-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── frontend-engineer.md
-│   │   │   ├── backend-engineer.md
-│   │   │   ├── database-engineer.md
-│   │   │   ├── security-engineer.md
-│   │   │   └── architect.md
-│   │   ├── skills/
-│   │   │   ├── scaffold-nextjs/
-│   │   │   ├── build-api/
-│   │   │   ├── auth-system/
-│   │   │   ├── code-review/
-│   │   │   └── security-audit/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── qa-kit/
-│   │   └── ...
-│   │
-│   ├── ship-kit/
-│   │   └── ...
-│   │
-│   └── growth-kit/
-│       └── ...
-│
-├── scripts/
-├── .github/workflows/
-└── .mcp.json
-```
+> 本文档是 [OPC 概览](00_index.md) 的子文档。其他子文档：
+> [Marketplace 目录](01_marketplace-directory.md) · [用户项目目录](02_user-project.md)
 
 ---
 
-## 二、用户项目目录结构
-
-```
-my-project/                              # 用户工程目录（claude 执行目录）
-│
-├── .claude/
-│   ├── settings.json
-│   └── permissions.json
-│
-├── .opc/                                # 运行时状态（gitignore）
-│   ├── sessions/                        #   流程状态机的会话存储
-│   │   └── sess-abc/
-│   │       └── flow-state.json          #     当前流程步骤 + 反思日志 + 累积分析结果
-│   ├── pipelines/
-│   │   ├── pipeline-xxx/                # 单管线 = 1 条子管线
-│   │   │   ├── pipeline-plan.json       # 管线编排计划（始终存在）
-│   │   │   ├── manifest.md
-│   │   │   └── sub-pipelines/
-│   │   │       └── sub-1/  (state.json + brief.md + phases/)
-│   │   │
-│   │   └── pipeline-ecommerce-xxx/      # 拆分管线 = N 条子管线
-│   │       ├── pipeline-plan.json
-│   │       ├── manifest.md
-│   │       └── sub-pipelines/
-│   │           ├── sub-1/  (state.json + brief.md + phases/)
-│   │           ├── sub-2/
-│   │           └── sub-3/
-│   └── .project-init
-│
-├── opc-nodes/                           # 覆盖内置节点（同 phases/ 目录结构）
-│   ├── 04-implement-design/nodes/api-design.md
-│   └── 05-implement/nodes/tdd-implementation.md
-│
-├── opc-knowledge/                       # 项目知识库（git 跟踪）
-│   ├── .opc-knowledge.json              #   _refs（跨 unit 依赖）
-│   ├── .opc-knowledge.idx               #   搜索索引（派生数据，可重建）
-│   ├── user-auth/                       # ← unit
-│   │   ├── login/                       # ← section
-│   │   │   ├── api.md                   # ← subsection
-│   │   │   ├── ui.md
-│   │   │   └── architecture.md
-│   │   ├── register/
-│   │   │   ├── api.md
-│   │   │   └── ui.md
-│   │   └── session/
-│   │       ├── api.md
-│   │       ├── model.md
-│   │       └── architecture.md
-│   ├── authorization/
-│   │   └── role-management/
-│   │       ├── api.md
-│   │       └── model.md
-│   └── subscription/
-│       └── ...
-│
-├── opc-memory/                          # 项目持久记忆（git 跟踪）
-│   ├── architecture.md
-│   ├── api-contracts.md
-│   ├── coding-conventions.md
-│   ├── design-system.md
-│   └── decisions.md
-│
-├── opc-logs/                            # 运行日志（gitignore）
-│   ├── phases/
-│   ├── agent-runs/
-│   ├── failures/
-│   └── telemetry/
-│
-├── src/                                 # 项目实际代码
-├── tests/
-├── package.json
-└── ...
-```
-
----
-
-## 三、架构分层
+## 一、架构分层
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -243,10 +32,9 @@ my-project/                              # 用户工程目录（claude 执行目
 └──────────────────────────────────────────────────┘
 ```
 
-
 ---
 
-## 四、时序图
+## 二、时序图（端到端）
 
 ```mermaid
 sequenceDiagram
@@ -267,7 +55,7 @@ sequenceDiagram
     C->>FL: opc_flow_start({user_message})
     FL-->>C: { step: intent_analysis, prompt 引用, schema, next: opc_intent_complete }
 
-    C->>C: 按方法论判断意图（可选读 prompts/intent-analysis.md）
+    C->>C: 按方法论判断意图（可选读 prompts/01_intent-analysis-overview.md）
     C->>FL: opc_intent_complete({intent, confidence})
 
     alt intent = chat / general_question
@@ -362,7 +150,9 @@ sequenceDiagram
     C-->>U: pipeline completed
 ```
 
-## 五、流程图
+---
+
+## 三、流程图（决策分叉全景）
 
 ```mermaid
 flowchart TD
@@ -449,6 +239,10 @@ flowchart TD
     ZD -->|无法修复| ZE[pipeline → aborted]
 ```
 
+---
+
+## 四、节点选择补充
+
 ### 节点来源
 
 节点按阶段组织在 `phases/<phase>/nodes/`，模板在 `phases/<phase>/templates/`。项目通过 `opc-nodes/` 覆盖。
@@ -482,20 +276,11 @@ flowchart TD
 
 高置信度场景（如 `fix-bug` scenario 命中 + 语义相似度 > 0.9 + 覆盖完整性高）可跳过用户审核直接执行，减少人工介入。
 
-## 六、设计原则
+---
 
-1. **MCP 状态机驱动 + 文档方法论参考** —— flow tools 路由"做什么"，prompts/*.md 解释"为什么这么做"
-2. **意图触发，置信度兜底** —— 用户直接说话；低置信度时主动确认
-3. **MCP 服务器零 LLM 依赖** —— state-server / knowledge-server 都是纯 TypeScript 确定性逻辑；所有 LLM 工作由 Claude Code（MCP Host）承担
-4. **流程可观测可恢复** —— flow-state.json 记录每一步的输入、输出、反思日志，crash 后 `opc_flow_query` 检测到 owner.pid 已死 → `opc_flow_recover` 续跑
-5. **工具返回自包含 next** —— 每个工具返回 `flow_next` 字段告诉 Claude 下一步调什么，避免文档硬编码跳转
-6. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
-7. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
-8. **知识属于项目** —— 切换目录 = 切换知识上下文
-9. **双 MCP 服务** —— opc-state-server 管流程+任务跟进，opc-knowledge-server 管知识库
-10. **知识先于状态** —— 知识库在 state.json 创建前初始化，供所有 phase 参考
-11. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
-12. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
-13. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛（由 Claude 完成）
-14. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
-15. **阶段自包含** —— 节点、模板、阶段定义同目录（`phases/<phase>/`），一目了然
+## 相关文档
+
+- [01_marketplace-directory.md](01_marketplace-directory.md) — Marketplace 自身结构
+- [02_user-project.md](02_user-project.md) — 用户项目目录
+- [../02-opc-state-server/01_intent-analysis-overview.md](../02-opc-state-server/01_intent-analysis-overview.md) — 意图识别完整方法论
+- [../02-opc-state-server/phase/02_node-selection.md](../02-opc-state-server/phase/02_node-selection.md) — 节点选择详细算法
