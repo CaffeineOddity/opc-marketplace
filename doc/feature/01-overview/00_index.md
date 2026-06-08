@@ -12,20 +12,20 @@
 
 ### 02 opc-state-server — 任务跟进
 
-- [意图识别与任务分析](../02-opc-state-server/01_intent-analysis-overview.md) — 自然语言入口、意图分类、置信度、任务分析、复杂度分叉、拆分判断、工作单生成
-- [管线](../02-opc-state-server/02_pipeline-overview.md) — 两层 Plan 模型、pipeline-plan.json、state.json、单管线/拆分管线、生命周期、状态展示、完整调用链路
-- [阶段](../02-opc-state-server/03_phase-overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、置信度阈值、/comma 独立运行、分层回退
-- [节点](../02-opc-state-server/04_node-overview.md) — 节点类型与定义、信号匹配、并发与文件域隔离、依赖解析、质量门、超时重试、plugin.json
+- [意图识别与任务分析](../02-opc-state-server/01-intent-analysis/00_overview.md) — 自然语言入口、意图分类、置信度、任务分析、复杂度分叉、拆分判断、工作单生成
+- [管线](../02-opc-state-server/02-pipeline/00_overview.md) — 两层 Plan 模型、pipeline-plan.json、state.json、单管线/拆分管线、生命周期、状态展示、完整调用链路
+- [阶段](../02-opc-state-server/03-phase/00_overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、置信度阈值、/comma 独立运行、分层回退
+- [节点](../02-opc-state-server/04-node/00_overview.md) — 节点类型与定义、信号匹配、并发与文件域隔离、依赖解析、质量门、超时重试、plugin.json
 
 ### 03 opc-knowledge-server — 知识库
 
-- [知识模型与存储](../03-opc-knowledge-server/01_knowledge-model-overview.md) — unit→section→subsection 三层结构、.md frontmatter、.opc-knowledge.json（_refs）、版本管理、智能复用
-- [知识 MCP API](../03-opc-knowledge-server/02_knowledge-api-overview.md) — 8 个工具完整规范、初始化时序、与 state-server 协作
+- [知识模型与存储](../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — unit→section→subsection 三层结构、.md frontmatter、.opc-knowledge.json（_refs）、版本管理、智能复用
+- [知识 MCP API](../03-opc-knowledge-server/02-knowledge-api/00_overview.md) — 8 个工具完整规范、初始化时序、与 state-server 协作
 
 ### 04 e2e — 验证与测试
 
-- [端到端演练](../04-e2e/01_walkthrough-overview.md) — 从 0 到 1：medium 单管线完整示例
-- [链路测试](../04-e2e/02_test-overview.md) — 10 个测试用例逐条追踪 MCP 调用链，检查工具覆盖和流程完整性
+- [端到端演练](../04-e2e/01-walkthrough/00_overview.md) — 从 0 到 1：medium 单管线完整示例
+- [链路测试](../04-e2e/02-test/00_overview.md) — 10 个测试用例逐条追踪 MCP 调用链，检查工具覆盖和流程完整性
 
 
 

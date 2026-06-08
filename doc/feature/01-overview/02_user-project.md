@@ -83,4 +83,4 @@ my-project/                              # 用户工程目录（claude 执行目
 
 - [01_marketplace-directory.md](01_marketplace-directory.md) — Marketplace 自身结构
 - [03_architecture.md](03_architecture.md) — 架构分层 + 时序图 + 流程图
-- [../03-opc-knowledge-server/knowledge-model/01_concept-and-storage.md](../03-opc-knowledge-server/knowledge-model/01_concept-and-storage.md) — opc-knowledge/ 详细布局
+- [../03-opc-knowledge-server/01-knowledge-model/01_concept-and-storage.md](../03-opc-knowledge-server/01-knowledge-model/01_concept-and-storage.md) — opc-knowledge/ 详细布局

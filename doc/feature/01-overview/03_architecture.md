@@ -282,5 +282,5 @@ flowchart TD
 
 - [01_marketplace-directory.md](01_marketplace-directory.md) — Marketplace 自身结构
 - [02_user-project.md](02_user-project.md) — 用户项目目录
-- [../02-opc-state-server/01_intent-analysis-overview.md](../02-opc-state-server/01_intent-analysis-overview.md) — 意图识别完整方法论
-- [../02-opc-state-server/phase/02_node-selection.md](../02-opc-state-server/phase/02_node-selection.md) — 节点选择详细算法
+- [../02-opc-state-server/01-intent-analysis/00_overview.md](../02-opc-state-server/01-intent-analysis/00_overview.md) — 意图识别完整方法论
+- [../02-opc-state-server/03-phase/02_node-selection.md](../02-opc-state-server/03-phase/02_node-selection.md) — 节点选择详细算法
