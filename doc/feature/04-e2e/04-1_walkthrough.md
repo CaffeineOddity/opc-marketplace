@@ -22,87 +22,209 @@ opc-knowledge/
 
 ---
 
-## 第二步：Claude 分析任务
+## 第二步：Claude 启动流程状态机
 
-UserPromptSubmit hook 已将 `pipeline/intent-analysis.md` 注入 Claude 上下文。
+UserPromptSubmit hook 注入一行指令："先调 opc_flow_query 了解当前流程状态"。
 
-### 2.1 Claude 读 intent-analysis.md → 意图识别
+### 2.0 Claude 调 opc_flow_query opc_flow_query → 确认无活跃流程
 
 ```
+Claude → opc_flow_query()
+
+返回:
+{
+  active: false,
+  session_id: "sess-abc-001",
+  step_instruction: "判断用户最近一条消息的意图。若是开发任务 → opc_flow_start；若是项目问答 → opc_knowledge_search；若是闲聊/纯知识 → 直接回答。",
+  methodology: {
+    docs: ["prompts/intent-analysis.md"],
+    ref: "§三 意图分类",
+    summary: "4 种意图：task/project_question/general_question/chat"
+  },
+  suggested_actions: [
+    {intent: "task", next: {tool: "opc_flow_start", args: {user_message: "实现用户认证系统，支持邮箱注册登录和会话管理"}}},
+    {intent: "project_question", next: {tool: "opc_knowledge_search"}},
+    {intent: "chat / general_question", next: {action: "respond_normally"}}
+  ],
+  orphan_pipelines: []
+}
+
 Claude 判断:
+  消息"实现用户认证系统..." 含动作动词+交付物 → task
+  → 选 suggested_actions[0] → 调 opc_flow_start
+```
+
+### 2.1 Claude 调 opc_flow_start opc_flow_start → 收到 intent_analysis 指令
+
+```
+Claude → opc_flow_start({user_message: "实现用户认证系统，支持邮箱注册登录和会话管理"})
+
+返回:
+{
+  step: "intent_analysis",
+  step_instruction: "判断意图，输出 {intent, confidence, reasoning}",
+  methodology: {
+    docs: ["prompts/intent-analysis.md"],
+    ref: "§三 意图分类 + §3.1 task 信号",
+    summary: "动作动词+0.3，明确交付物+0.2，!task+1.0，疑问词-0.3"
+  },
+  schema: { intent: [...], confidence: "0-1", reasoning: "string" },
+  next: { tool: "opc_intent_complete" }
+}
+
+Claude 按 step_instruction（必读）判断:
   输入: "实现用户认证系统，支持邮箱注册登录和会话管理"
   → 包含动作动词"实现" +0.3
   → 包含明确交付物"系统" +0.2
   → 无否定/疑问信号
   → intent: task, confidence: 0.85
+
+Claude → opc_intent_complete({intent: "task", confidence: 0.85, reasoning: "..."})
 ```
 
-### 2.2 Claude 读 task-analysis.md → 调用 opc_knowledge_list
+### 2.2 opc_intent_complete 路由 task 分支 → 收到 task_analysis 指令
 
 ```
-opc_knowledge_list()
+返回:
+{
+  step: "task_analysis",
+  step_instruction: "先调 opc_knowledge_list() 获取已有 unit，然后做 7 步分析 + 自省",
+  methodology: {
+    docs: ["prompts/task-analysis.md"],
+    ref: "§6.2 分析步骤 + §6.4 自省评估 5 维度",
+    summary: "提炼描述→打标签→判复杂度→推荐阶段→提取知识→匹配 scenario→知识操作计划"
+  },
+  prerequisites: [{tool: "opc_knowledge_list", why: "获取已有 unit 上下文"}],
+  schema: { description, tags, complexity, suggested_phases, knowledge_unit,
+            scenario, knowledge_plan, analysis_confidence, confidence_detail },
+  next: { tool: "opc_task_analysis_complete" }
+}
+
+Claude → opc_knowledge_list()
   → readdir 遍历 opc-knowledge/ → 无 unit 子目录
   → 返回: units: []
 ```
 
-### 2.3 Claude 分析任务
+### 2.3 Claude 按方法论做 7 步分析
 
 ```
-Claude 基于 task-analysis.md 的 prompt 自行分析:
-
+Claude 自行分析:
   ① 提炼描述 → "实现用户认证系统（邮箱注册登录 + 会话管理）"
   ② 打标签 → [backend, auth, database]
   ③ 复杂度 → medium（需要规划，能一轮完成）
   ④ 推荐阶段 → [04-implement-design, 05-implement, 06-testing]
   ⑤ 知识点 → [user-auth]（新 unit）
-  ⑥ 扫描 scenarios/ 目录 → add-feature
+  ⑥ 扫描 scenarios/ → add-feature
+  ⑦ 知识操作计划 → 6 个 subsection 全部 create
 
-结果（Claude 内部持有，不经过 state-server）:
-{
+自省打分:
+  ① 描述精确度: 0.9
+  ② 复杂度确信度: 0.85
+  ③ 知识单元完整度: 0.9
+  ④ 阶段推荐合理度: 0.85
+  ⑤ 场景匹配度: 0.9
+  → 分析置信度 = 0.88
+
+Claude → opc_task_analysis_complete({
   description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
   tags: ["backend", "auth", "database"],
   complexity: "medium",
   suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
   knowledge_unit: ["user-auth"],
-  scenario: "add-feature"
+  scenario: "add-feature",
+  knowledge_plan: [
+    {path: "user-auth/register/api", operation: "create"},
+    {path: "user-auth/login/api", operation: "create"},
+    {path: "user-auth/session/api", operation: "create"},
+    {path: "user-auth/session/model", operation: "create"},
+    {path: "user-auth/login/architecture", operation: "create"},
+    {path: "user-auth/register/architecture", operation: "create"}
+  ],
+  analysis_confidence: 0.88,
+  confidence_detail: {...}
+})
+```
+
+### 2.4 opc_task_analysis_complete 路由判定 → 直接路由 brief_generation
+
+```
+opc_task_analysis_complete 判定:
+  → 0.88 ≥ 0.8 → 跳过反思
+  → complexity = medium → 不走 quick_dispatch
+  → modify_unit_count = 1（6 个 subsection 全在 user-auth unit 下，按 unit 去重）
+  → 路由 brief_generation
+
+返回:
+{
+  step: "brief_generation",
+  step_instruction: "按 brief-generation.md 模板生成 brief markdown",
+  methodology: {
+    docs: ["prompts/brief-generation.md"],
+    ref: "§8.1 模板 + §8.2 生成规则",
+    summary: "8 个固定段落"
+  },
+  schema: { brief_content: "string (markdown)" },
+  next: { tool: "opc_brief_complete" }
 }
-```
 
-### 2.4 判断是否拆分
-
-```
-需修改 unit 数 = 1（只有 user-auth，且是新 unit）
-→ 不读 task-decomposition.md
-→ 单管线
+Claude 通知用户:
+  "任务分析完成（置信度 0.88）:
+   描述：实现用户认证系统（邮箱注册登录 + 会话管理）
+   复杂度：medium | 阶段：04→05→06 | 知识点：user-auth | 场景：add-feature"
 ```
 
 ---
 
-## 第三步：Claude 生成 brief + opc_pipeline_create 创建管线
+## 第三步：Claude 生成 brief → opc_decomposition_complete 路由触发 opc_pipeline_create
 
-### 3.0 Claude 读 brief-generation.md → 生成 brief 内容
+### 3.0 Claude 生成 brief markdown
 
-Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本。
+Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本，然后调 opc_decomposition_complete：
+
+```
+Claude → opc_brief_complete({brief_content: "# 任务工作单\n..."})
+
+opc_decomposition_complete 返回（预填全部参数）:
+{
+  step: "brief_completed",
+  step_instruction: "下一步创建管线，参数已预填",
+  next: {
+    tool: "opc_pipeline_create",
+    args: {
+      description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
+      tags: ["backend", "auth", "database"],
+      complexity: "medium",
+      knowledge_unit: ["user-auth"],
+      suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
+      scenario: "add-feature",
+      brief_content: "<刚提交的 brief markdown>",
+      sub_pipelines: [{
+        id: "sub-1",
+        title: "用户认证系统",
+        knowledge_unit: ["user-auth"],
+        blocked_by: []
+      }],
+      execution_order: [{group: 1, parallel: ["sub-1"]}]
+    }
+  }
+}
+```
 
 ### 3.1 opc_pipeline_create
 
 ```
-opc_pipeline_create({
-  description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
-  tags: ["backend", "auth", "database"],
-  complexity: "medium",
-  knowledge_unit: ["user-auth"],
-  suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
-  scenario: "add-feature",
-  brief_content: "# 任务工作单\n\n...(Claude 生成的完整 markdown)",
-  sub_pipelines: [{
-    id: "sub-1",
-    title: "用户认证系统",
-    knowledge_unit: ["user-auth"],
-    blocked_by: []
-  }],
-  execution_order: [{ group: 1, parallel: ["sub-1"] }]
-})
+Claude → opc_pipeline_create({...预填参数...})
+
+返回:
+{
+  pipeline_id: "pipeline-20260606-001",
+  created_at: "...",
+  flow_next: {
+    tool: "opc_knowledge_open",
+    args: {units: ["user-auth"]},
+    why: "管线已创建，下一步初始化知识单元"
+  }
+}
 ```
 
 ### 3.2 创建目录结构
@@ -115,6 +237,9 @@ opc_pipeline_create({
         ├── state.json
         ├── brief.md
         └── phases/
+
+.opc/sessions/sess-abc/
+└── flow-state.json   ← 更新 step: pipeline_created
 ```
 
 ### 3.3 pipeline-plan.json
@@ -141,11 +266,30 @@ opc_pipeline_create({
 ### 3.4 opc_knowledge_open
 
 ```
+Claude 按 flow_next 调用:
 opc_knowledge_open(["user-auth"])
   → opc-knowledge/ 下无 user-auth/
   → 创建 user-auth/ 目录
   → 无 _refs 关联
-  → 返回: { units: { "user-auth": {} }, related: [] }
+  → 返回:
+  {
+    units: { "user-auth": {} },
+    related: [],
+    flow_next: {
+      tool: "opc_phase_start",
+      args: {
+        pipeline_id: "pipeline-20260606-001",
+        sub_pipeline_id: "sub-1",
+        phase: "04-implement-design"
+      },
+      why: "知识单元就绪，进入第一个阶段"
+    },
+    methodology: {
+      docs: ["prompts/phase-execution.md"],
+      ref: "§十一 阶段执行循环",
+      summary: "phase_start → 自省排序 → 反思 → confirm → node 执行 → complete"
+    }
+  }
 ```
 
 ### 3.5 brief.md（Claude 生成内容，state-server 写入）
@@ -272,16 +416,34 @@ Scenario 加权:
 }
 ```
 
-### 4.2 反思
+### 4.2 自省评估
+
+Claude 拿到排序结果后，自省打分：
 
 ```
-系统: "04-implement-design 推荐节点：
-       1. api-design (1.18) — 设计 API 端点
-       2. database-schema (1.02) — 设计数据库表结构
-       
-       是否需要调整？"
+Claude 自省评估:
+  ① 语义匹配强度: 0.85
+     api-design 0.88 + database-schema 0.72 → 平均 0.80，add-feature scenario 加成
+  ② Scenario 对齐度: 1.0
+     add-feature 推荐 [api-design, database-schema]，完全命中
+  ③ 覆盖完整性: 0.90
+     API 设计 + 数据库 schema → 覆盖了实现设计阶段的核心关注面
+  ④ 节点冗余度: 0.95
+     两个节点职责明确，无重叠
 
-用户: "可以，就这样"
+选择置信度 = 0.85×0.30 + 1.0×0.25 + 0.90×0.30 + 0.95×0.15 = 0.92
+
+04-implement-design 的 min_confidence_for_auto = 0.85
+0.92 ≥ 0.85 → 自动确认
+```
+
+```
+Claude 通知用户:
+  "04-implement-design 已自动确认 2 个节点（置信度 0.92）:
+   1. api-design (1.18) — 设计 API 端点
+   2. database-schema (1.02) — 设计数据库表结构
+   node-resolver 推导: database-schema 依赖 api-design → 串行执行。
+   如需调整，回复'调整节点'。"
 ```
 
 ### 4.3 opc_phase_confirm
@@ -345,13 +507,24 @@ knowledge 冲突检查:
 ### 4.4 执行 Node: api-design
 
 ```
-opc_node_start("pipeline-20260606-001", "sub-1", "api-design")
-  → state: in_progress, started_at: ...
-  → 加载 node input: []
+Claude 主进程 → opc_node_start("pipeline-20260606-001", "sub-1", "api-design")
+
+返回:
+{
+  node: "api-design",
+  status: "in_progress",
+  agent: "backend-engineer",
+  input_knowledge: [],   ← 该节点 input 为空
+  node_file_path: "phases/04-implement-design/nodes/api-design.md",
+  node_body: "## API 设计节点\n\n根据 brief 和已有架构，设计 RESTful 端点...",
+  dispatch_instruction: "use Task tool with subagent_type='backend-engineer'，传入 node_body 在隔离 context 执行"
+}
 ```
 
-Agent 执行：
+Claude 主进程 → Task spawn backend-engineer sub-agent，传入 node_body：
+
 ```
+sub-agent 执行:
 ① 读取 brief.md → 了解任务范围
 
 ② 设计 API:
@@ -375,7 +548,9 @@ Agent 执行：
    )
    → version: v1
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "api-design",
+sub-agent 完成 → 回报 evidence 给主进程
+
+主进程 → opc_node_complete("pipeline-20260606-001", "sub-1", "api-design",
   evidence: {
     summary: "设计完成：3 个 API 端点，4 条知识写入",
     knowledge_written: [
@@ -400,7 +575,10 @@ opc_node_complete("pipeline-20260606-001", "sub-1", "api-design",
     { "type": "knowledge", "path": "user-auth/login/api", "version": 1 },
     { "type": "knowledge", "path": "user-auth/session/api", "version": 1 }
   ],
-  "unblocked_nodes": ["database-schema"]
+  "unblocked_nodes": ["database-schema"],
+  "flow_next": {
+    "suggestion": "unblocked_nodes 非空 → 调 opc_node_start('database-schema')"
+  }
 }
 ```
 
@@ -523,30 +701,64 @@ tag 交集:
   4. security-review        0.98  ← 推荐（auth 任务保留）
 ```
 
-### 5.2 反思
+### 5.2 自省评估
+
+Claude 拿到排序结果后，自省打分：
 
 ```
-系统: "05-implement 推荐：
-       1. auth-integration (1.22)
-       2. tdd-implementation (1.15)
-       3. backend-endpoint (1.08)
-       4. security-review (0.98)"
+Claude 自省评估:
+  ① 语义匹配强度: 0.81
+     auth-integration 0.92 + tdd 0.85 + backend-endpoint 0.78 + security 0.68
+  ② Scenario 对齐度: 0.75
+     add-feature 推荐 tdd-implementation，auth-integration 吻合，但推荐里只有 3 个节点
+  ③ 覆盖完整性: 0.90
+     auth → tdd → backend → security，覆盖完整
+  ④ 节点冗余度: 0.60  ← 低！
+     auth-integration 和 backend-endpoint 职责有重叠（都涉及 API 端点实现）
 
-用户: "auth-integration 和 backend-endpoint 是不是重复了？选 tdd-implementation + auth-integration + security-review"
+选择置信度 = 0.81×0.30 + 0.75×0.25 + 0.90×0.30 + 0.60×0.15 = 0.78
+
+05-implement 的 min_confidence_for_auto = 0.80
+0.78 < 0.80 且 ≥ 0.60 (threshold×0.75) → 快速确认，但 Claude 标注冗余警告
 ```
 
 ```
-opc_phase_adjust("pipeline-20260606-001", "sub-1", "05-implement",
-  nodes: ["tdd-implementation", "auth-integration", "security-review"])
+Claude 自省发现冗余 → 进入 1 轮反思调整:
+
+  "检测到 auth-integration 和 backend-endpoint 可能重叠。
+   auth-integration 已涵盖认证相关端点实现，backend-endpoint 侧重通用 CRUD。
+   由于本任务是纯认证场景，移除 backend-endpoint 可减少冗余。
+   
+   调整后方案（3 个节点）:
+   1. auth-integration (1.22)
+   2. tdd-implementation (1.15)
+   3. security-review (0.98)"
+
+重新自省:
+  ④ 节点冗余度: 0.60 → 0.95（消除冗余）
+  选择置信度: 0.81×0.30 + 0.75×0.25 + 0.90×0.30 + 0.95×0.15 = 0.83
+
+0.83 ≥ 0.80 → 自动确认！
+
+Claude 通知用户:
+  "05-implement 经自省调整已确认 3 个节点（置信度 0.83）:
+   已自动移除 backend-endpoint（与 auth-integration 重叠），
+   保留 auth-integration + tdd-implementation + security-review。
+   如需调整，回复'调整节点'。"
+```
+
+```
+opc_phase_confirm("pipeline-20260606-001", "sub-1", "05-implement",
+  nodes: ["auth-integration", "tdd-implementation", "security-review"])
 ```
 
 node-resolver 重新解析：
 ```
-tdd-implementation.input:  [knowledge: user-auth/login/api,
-                             knowledge: user-auth/session/api]
+auth-integration.input:    [knowledge: user-auth/session/model]
                            → 已在 04-implement-design 产出 → 无 phase 内依赖
 
-auth-integration.input:    [knowledge: user-auth/session/model]
+tdd-implementation.input:  [knowledge: user-auth/login/api,
+                             knowledge: user-auth/session/api]
                            → 已在 04-implement-design 产出 → 无 phase 内依赖
 
 security-review.input:     [knowledge: user-auth/login/api,
@@ -564,9 +776,9 @@ knowledge 冲突检查:
   → knowledge 重叠 user-auth/session/api → 不能并行
 
 拓扑排序:
-  Group 1: [tdd-implementation]
-  Group 2: [auth-integration]     ← artifacts + knowledge 双重冲突，降级串行
-  Group 3: [security-review]      ← 等 auth-integration 产出的完整认证模块
+  Group 1: [auth-integration]      ← 无 blocked_by，先执行
+  Group 2: [tdd-implementation]    ← artifacts + knowledge 双重冲突，降级串行
+  Group 3: [security-review]       ← 等前两个完成后审查完整模块
 ```
 
 返回新预览 → 用户确认 → `opc_phase_confirm`
@@ -812,12 +1024,17 @@ node: "auth-integration"
 | 步骤 | 工具调用 | 次数 |
 |------|---------|------|
 | 1 | — | 0 |
-| 2 | `opc_knowledge_list` | 1 |
-| 3 | `opc_pipeline_create`（内含 `opc_knowledge_open`） | 1+1 |
+| 2.0 | `opc_flow_query`（hook 引导，确认 active=false） | 1 |
+| 2.1 | `opc_flow_start` | 1 |
+| 2.2 | `opc_intent_complete` | 1 |
+| 2.3 | `opc_knowledge_list` + `opc_task_analysis_complete` | 2 |
+| 3.0 | `opc_brief_complete` | 1 |
+| 3.1 | `opc_pipeline_create` | 1 |
+| 3.4 | `opc_knowledge_open` | 1 |
 | 4.1 | `opc_phase_start` | 1 |
 | 4.3 | `opc_phase_confirm` | 1 |
-| 4.4 | `opc_node_start` → Claude 读 node .md 并执行 → `opc_node_complete` | 2 |
-| 4.5 | `opc_node_start` → Claude 读 node .md 并执行 → `opc_node_complete` | 2 |
+| 4.4 | `opc_node_start` → Task spawn sub-agent → `opc_node_complete` | 2 |
+| 4.5 | `opc_node_start` → Task spawn sub-agent → `opc_node_complete` | 2 |
 | 4.6 | `opc_phase_complete` | 1 |
 | 5.1 | `opc_phase_start` | 1 |
 | 5.2 | `opc_phase_adjust` + `opc_phase_confirm` | 2 |
@@ -826,17 +1043,19 @@ node: "auth-integration"
 | 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_complete` + `opc_phase_complete` | 5 |
 | 7 | `opc_pipeline_complete` | 1 |
 
-Claude 自行读取的 pipeline 文档（非 MCP 调用）：
+Claude 按需读取的 prompt 文档（非 MCP 调用，由 flow tools 返回的 methodology 指引）：
 
 | 步骤 | 文档 | 用途 |
 |------|------|------|
-| 1 | `pipeline/intent-analysis.md` | UserPromptSubmit hook 自动注入 |
-| 2 | `pipeline/task-analysis.md` | Claude 主动读取，分析任务 |
-| 2b | `pipeline/task-decomposition.md` | 如需要拆分则读取 |
-| 3 | `pipeline/brief-generation.md` | Claude 读取模板生成 brief |
-| 5 | `pipeline/phase-execution.md` | 进入阶段循环前读取 |
+| 2.0 | `prompts/intent-analysis.md` | active=false 时由 query 引用 |
+| 2.1 | `prompts/intent-analysis.md` | 复杂意图边界时读完整方法论 |
+| 2.3 | `prompts/task-analysis.md` | 自省评分细则查阅 |
+| 2.3 | `prompts/reflection-task-analysis.md` | 反思视角（如触发反思） |
+| 3.0 | `prompts/brief-generation.md` | 模板照搬 |
+| 4-6 | `prompts/phase-execution.md` | 阶段循环规范 |
+| 4-6 | `prompts/reflection-node-selection.md` | 节点选择反思视角 |
 
-Claude 执行 node 期间自主调用的知识工具：
+Claude 执行 node 期间 sub-agent 自主调用的知识工具：
 
 | Agent | 工具调用 |
 |-------|---------|
@@ -847,4 +1066,4 @@ Claude 执行 node 期间自主调用的知识工具：
 | security-review | `opc_knowledge_get`×N + `opc_knowledge_write`×1 |
 | integration-test | `opc_knowledge_get`×N |
 
-**总计**：opc-state-server 23 次调用 + opc-knowledge-server ~15 次调用 = ~38 次 MCP 调用，加上 Claude 读取 3-5 篇 pipeline 文档，完成一个中等复杂度的功能实现。
+**总计**：opc-state-server ~31 次调用（含 流程工具）+ opc-knowledge-server ~15 次调用 = ~46 次 MCP 调用，加上 Claude 按需读取 3-5 篇 prompts 文档，完成一个中等复杂度的功能实现。

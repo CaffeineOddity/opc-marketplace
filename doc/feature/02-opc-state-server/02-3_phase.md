@@ -150,8 +150,16 @@ Scenario 也可作为快速启动模板：用户直接声明 "用 add-feature �
 ## 五、阶段生命周期
 
 ```
-opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase_confirm
+opc_phase_start → 扫描节点 → 匹配排序 → 自省评估 → opc_phase_confirm
     → 逐 node 执行 → opc_phase_complete → 推进/确认
+
+自省评估分叉:
+  高置信度 → 自动确认（跳过用户）
+  中置信度 → 快速确认（一键通过）
+  低置信度 → 反思循环（Claude 调 opc_flow_reflect 持久化 + max_reflection_rounds 兜底）
+
+每个阶段层工具返回里附带 flow_next 字段，告诉 Claude 下一步该调什么工具。
+反思循环统一走 opc_flow_reflect，与任务分析反思共享日志格式（flow-state.json）。
 ```
 
 ### 5.1 opc_phase_start — 扫描与返回
@@ -166,6 +174,10 @@ opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase
   → tag 交集过滤（纯规则）
   → 标记 recommend 节点（来自 scenario）
   → 标记 phase: in_progress
+  → 更新 flow-state.json:
+      · current_step = "phase_execution"
+      · current_pipeline_pointer = { sub_pipeline_id, phase, node: null }
+      · last_heartbeat_at 刷新
 
 返回:
 {
@@ -185,26 +197,114 @@ opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase
     },
     // ... 全部符合条件的节点
   ],
-  max_reflection_rounds: 2
+  max_reflection_rounds: 2,
+  min_confidence_for_auto: 0.85,
+  methodology: {
+    docs: ["prompts/phase-execution.md", "prompts/reflection-node-selection.md"],
+    ref: "§5.2 自省评估 4 维度 + §5.2 三种推进路径",
+    summary: "语义匹配×0.30 + Scenario对齐×0.25 + 覆盖完整×0.30 + 冗余×0.15"
+  },
+  flow_next: {
+    suggestion: "自行排序 + 自省打分；高置信度直接 opc_phase_confirm；低置信度先调 opc_flow_reflect"
+  }
 }
 ```
 
-Claude 拿到后自行语义匹配排序 + 展示给用户，不依赖 state-server 的 LLM。
+Claude 拿到后自行语义匹配排序 + 展示给用户，不依赖 state-server 的 LLM。反思循环走 opc_flow_reflect，与任务分析反思共用日志格式。
 
-### 5.2 反思调整
+### 5.2 自省评估与推进
 
-轮次由 `max_reflection_rounds` 控制：
+节点排序完成后，Claude **自省评估**选择质量，给出置信度分数。高置信度直接确认锁定，低置信度进入反思循环或询问用户。
 
-- **缺漏**：是否有该做但未选中的节点？
-- **多余**：是否有不必要或重复的节点？
-- **合并/拆分**：相似节点合并？过大节点拆分？
-- 达到上限后强制确认
+**评估维度（Claude 自省打分）：**
+
+| 维度 | 权重 | 0-0.4 (低) | 0.5-0.7 (中) | 0.8-1.0 (高) |
+|------|------|-----------|-------------|------------|
+| 语义匹配强度 | 0.30 | 多数节点语义相似度 < 0.6 | 多数节点在 0.6-0.8 | 多数节点 > 0.8，高度匹配 |
+| Scenario 对齐度 | 0.25 | 选中节点与 scenario 推荐偏差大 | 覆盖大部分推荐，少量偏离 | 完全对齐 scenario 推荐 |
+| 覆盖完整性 | 0.30 | 明显遗漏关键关注面 | 覆盖主要关注面，个别可补充 | 全部关注面有对应节点 |
+| 节点冗余度 | 0.15 | 多个节点职责重叠严重 | 少量重叠但可接受 | 无冗余，职责分明 |
 
 ```
-初始方案 → 预览执行计划 → 反思调整 → 重新预览 → ... → 确认
+选择置信度 = 语义匹配强度×0.30 + Scenario对齐度×0.25
+            + 覆盖完整性×0.30 + 节点冗余度×0.15
 ```
 
-调整通过 `opc_phase_adjust(pipeline_id, sub_id, phase, nodes: [...])` 重新生成预览。
+**推进决策（结合 phase 的 min_confidence_for_auto，反思通过 opc_flow_reflect 持久化）：**
+
+```
+if 选择置信度 ≥ min_confidence_for_auto:
+    → 自动确认锁定（auto_confirm），通知用户节点方案，不等确认
+    → 直接调 opc_phase_confirm
+
+elif 选择置信度 ≥ min_confidence_for_auto × 0.75:
+    → 快速确认：展示方案 + 置信度分数 + 简要理由，用户可一键确认
+    → 调 opc_phase_confirm
+
+else:
+    → 进入反思循环：调 opc_flow_reflect(step_id: "node_selection", round: 1, ...)
+      opc_flow_reflect 持久化到 state.json.phases[].reflection_log + flow-state.json 留指针，返回下一轮反思指令
+      Claude 逐项自查（缺漏/多余/合并拆分），每轮重新打分 + opc_flow_reflect 上报
+      opc_brief_complete 判定:
+        new_confidence ≥ threshold → 跳出，调 opc_phase_confirm
+        round 达 max_reflection_rounds → 强制确认（ask_user）
+```
+
+**三种推进路径：**
+
+```
+路径 A — 自动确认（置信度 ≥ threshold）:
+  初始方案 → Claude 自省打分 → ≥ 0.85 → 直接 opc_phase_confirm
+  例: add-feature + 语义相似度 > 0.9 → "已自动确认 4 个节点（置信度 0.91）"
+
+路径 B — 快速确认（threshold × 0.75 ≤ 置信度 < threshold）:
+  初始方案 → Claude 自省打分 → 0.65-0.84 → 展示方案 + 分数 → 用户一键确认/调整
+
+路径 C — 反思循环（置信度 < threshold × 0.75）:
+  初始方案 → Claude 自省打分 → < 0.65 → 进入反思循环
+  反思内容:
+    - 缺漏：是否有该做但未选中的节点？
+    - 多余：是否有不必要或重复的节点？
+    - 合并/拆分：相似节点合并？过大节点拆分？
+  每轮反思后重新自省打分
+  达到 max_reflection_rounds 后强制确认
+```
+
+**自省报告格式（Claude 在 opc_phase_confirm 前内部生成）：**
+
+```json
+{
+  "selected_nodes": ["api-design", "database-schema", "tdd-implementation"],
+  "selection_confidence": 0.88,
+  "auto_confirm": true,
+  "confidence_detail": {
+    "semantic_match_strength": 0.85,
+    "scenario_alignment": 0.95,
+    "coverage_completeness": 0.80,
+    "redundancy": 0.95
+  },
+  "self_check_summary": "add-feature 场景完美命中，API+DB+实现三个关注面完整覆盖，无冗余节点",
+  "warnings": ["未选中 security-review（置信度 0.68 低于阈值），如需安全审查请手动添加"]
+}
+```
+
+**反思循环中的自省迭代：**
+
+```
+第 1 轮: 初始方案 → 置信度 0.58 → 缺 database-schema（覆盖完整性低）
+          → 补选 database-schema → 置信度 0.72 → 仍低于 0.85
+
+第 2 轮: 方案调整 → 置信度 0.72 → 检查是否有多余节点
+          → 无冗余 → 置信度 0.78（scenario 对齐度提升）→ 仍低于 0.85
+
+第 3 轮: 方案确认 → 置信度 0.82 → 接近但未达阈值
+          → max_reflection_rounds=4 → 继续
+
+第 4 轮: 最终检查 → 置信度 0.82 → 达到上限
+          → 强制确认："以下方案经 4 轮优化，置信度 0.82，请确认"
+```
+
+调整仍通过 `opc_phase_adjust(pipeline_id, sub_id, phase, nodes: [...])` 重新生成预览。与旧设计不同的是，**大部分常规任务的调整由 Claude 在自省循环中自行完成**，用户只在低置信度或达到上限时介入。
 
 ### 5.3 opc_phase_confirm — 锁定执行计划
 
@@ -217,8 +317,19 @@ Claude 拿到后自行语义匹配排序 + 展示给用户，不依赖 state-ser
   → 写入 state.json phases[].nodes[] + blocked_by
   → 快照当前 phase 节点的 output.knowledge 路径 → .opc/snapshots/
   → 锁定后不可再 opc_phase_adjust
+  → 更新 flow-state.json:
+      · current_step = "phase_confirmed"
+      · current_pipeline_pointer = { sub_pipeline_id, phase, node: null }
+      · last_heartbeat_at 刷新
 
-返回: 执行分组 [{group: 1, nodes: [...], parallel: true}, ...]
+返回: {
+  groups: [{group: 1, nodes: [...], parallel: true}, ...],
+  flow_next: {
+    tool: "opc_node_start",
+    args: {pipeline_id, sub_pipeline_id, node_name: <第一组首个节点>},
+    why: "按 group 顺序依次启动 node；同组 parallel:true 的节点可并行 opc_node_start"
+  }
+}
 ```
 
 ### 5.4 执行节点
@@ -234,17 +345,54 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 ```
 参数: pipeline_id, sub_pipeline_id, phase
 
+行为:
+  → 校验该 phase 全部 node completed
+  → 写入 state.json phases[].status = completed
+  → 计算下一 phase + 是否 auto_advance
+  → 计算 pipeline_progress（含 ready_sub_pipelines、failed downstream 等）
+  → 更新 flow-state.json:
+      · 若 next_phase 存在 + auto_advance → current_pipeline_pointer = { sub_pipeline_id, phase: next_phase, node: null }
+      · 若 next_phase 为 null + ready_sub_pipelines 非空 → current_pipeline_pointer = { sub_pipeline_id: ready_sub_pipelines[0], phase: null, node: null }
+      · 若全部完成 → current_pipeline_pointer 保留为最后位置，等待 opc_pipeline_complete
+      · last_heartbeat_at 刷新
+
 返回:
 {
   phase: "04-implement-design",
   status: "completed",
   next_phase: "05-implement",
   auto_advance: true,
-  next_phase_message: "进入 05-implement 编码阶段"
+  next_phase_message: "进入 05-implement 编码阶段",
+  pipeline_progress: {
+    current_sub: "sub-1",
+    current_sub_status: "in_progress",
+    ready_sub_pipelines: [],          ← blocked_by 全满足且非 failed downstream 的子管线
+    pending_sub_pipelines: ["sub-3"]
+  },
+  flow_next: {
+    tool: "opc_phase_start",
+    args: {pipeline_id, sub_pipeline_id, phase: "05-implement"},
+    why: "auto_advance=true → 直接进入下一 phase"
+  }
 }
 ```
 
-调用方根据 `auto_advance` 决定自动推进或提示确认。
+调用方根据 `auto_advance` + `pipeline_progress` 决定下一步：
+- `next_phase != null` 且 `auto_advance: true` → 直接调 `opc_phase_start` 推进当前子管线
+- `next_phase != null` 且 `auto_advance: false` → 提示用户确认后推进
+- `next_phase == null` 且 `ready_sub_pipelines` 非空 → 启动下一条子管线
+- `next_phase == null` 且 `ready_sub_pipelines` 为空 + 全部 sub completed → 调 `opc_pipeline_complete`
+
+**auto_advance 计算规则：**
+
+```
+auto_advance = (
+    task.complexity != "high"
+    AND 当前 phase 所有 node 100% completed（无 retry 兜底完成）
+    AND 当前 phase 的 selection_confidence ≥ min_confidence_for_auto × 0.9
+    AND 下一 phase 在 suggested_phases 中
+)
+```
 
 ### 5.6 opc_phase_reset — 阶段重置
 
@@ -257,6 +405,7 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
     └── 无 → 报错
   → 该 phase → pending（node 全部重置）
   → 下游 phase → pending
+  → reset 完成后立即对当前 phase 重新生成快照（覆盖旧快照），保证幂等可重复 reset
 
 限制:
   - 仅恢复 opc-knowledge/ 下的 .md 文件，不碰 src/
@@ -352,9 +501,25 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 
 ## 十、自动机制
 
-**阶段自动推进** — `opc_phase_complete` 后检查下一 phase 置信度：
-- ≥ `min_confidence_for_auto` → 自动 `opc_phase_start` 进入下一 phase
-- < `min_confidence_for_auto` → 提示用户确认后推进
+**阶段自动推进** — `opc_phase_complete` 后按 auto_advance 计算规则决定推进策略：
+
+```
+auto_advance = (
+    task.complexity != "high"
+    AND 当前 phase 所有 node 100% completed（无 retry 兜底完成）
+    AND 当前 phase 的 selection_confidence ≥ min_confidence_for_auto × 0.9
+    AND 下一 phase 在 suggested_phases 中
+)
+```
+
+- `auto_advance: true` → Claude 直接调 `opc_phase_start` 进入下一 phase
+- `auto_advance: false` → 提示用户确认后推进
+- `next_phase == null` + `ready_sub_pipelines` 非空 → Claude 启动下一条子管线
+- `next_phase == null` + `ready_sub_pipelines` 为空 + 全部 sub completed → 调 `opc_pipeline_complete`
+
+**节点选择反思持久化** — 每轮反思通过 `opc_flow_reflect`写入 `state.json.phases[].reflection_log`，同时在 `flow-state.json` 留指针，crash 后 `opc_flow_recover` 可续传从指定 round 继续。
+
+**跨子管线 ready 检测** — `opc_phase_complete` 返回 `pipeline_progress.ready_sub_pipelines`，state-manager 聚合规则：blocked_by 全部 completed 且 upstream 无 failed 才纳入。
 
 ---
 

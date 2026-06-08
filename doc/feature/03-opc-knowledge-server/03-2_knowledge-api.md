@@ -126,28 +126,36 @@ opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全
 
 ## 三、初始化时序
 
-管线启动时，Claude 按 pipeline 文档链执行，MCP 工具穿插调用：
+管线启动时，Claude 按 MCP 流程状态机推进（详见 [02-1 §三 流程工具速览](../02-opc-state-server/02-1_intent-analysis.md#三流程工具速览8-个)），知识工具穿插调用：
 
 ```
-① Hook 注入 intent-analysis.md → Claude 判断意图
-  → intent = task → Claude 读 task-analysis.md
+① Hook 注入"调 opc_flow_start"指令 → Claude → opc_flow_start
+  → opc_flow_query 返回 intent_analysis 指令 + methodology(prompts/intent-analysis.md)
+  → Claude 判断 intent → opc_intent_complete
 
-② opc_knowledge_list → readdir 扫描 opc-knowledge/ 下所有 unit/section/subsection
-  → 返回已有 unit 列表 + 结构
-  → Claude 以知识上下文做分析
+② opc_flow_start 路由 task 分支 → 返回 task_analysis 指令 + prerequisites:[opc_knowledge_list]
+  → Claude → opc_knowledge_list
+    → readdir 扫描 opc-knowledge/ 下所有 unit/section/subsection
+    → 返回已有 unit 列表 + 结构
 
-③ Claude 分析（无需 MCP 工具）→ 输出 complexity + knowledge_unit
+③ Claude 按方法论做 7 步分析 + 自省 → opc_task_analysis_complete
+  → opc_intent_complete 按 confidence + modify_count 路由
 
-③b (需修改的 unit ≥ 2 时) Claude 读 task-decomposition.md → 拆分分析
+③b 修改 unit ≥ 2 时 opc_intent_complete 路由 task_decomposition → Claude 拆分 → opc_decomposition_complete
 
-④ opc_knowledge_open → 按子管线加载对应 unit
+④ opc_intent_complete/opc_task_analysis_complete 路由 brief_generation → Claude 生成 brief → opc_brief_complete
+  → opc_decomposition_complete 返回 next:opc_pipeline_create（预填全部参数）
+
+⑤ Claude → opc_pipeline_create → state-server 写入文件
+  → 返回 flow_next: opc_knowledge_open
+
+⑥ Claude 按 flow_next → opc_knowledge_open → 按子管线加载对应 unit
   → 已存在 → 复用，读 .md frontmatter 获取已有条目 + version
   → 不存在 → 创建 unit 目录
   → 自动加载 _refs 关联的 unit 作为可读上下文
+  → 返回 flow_next: opc_phase_start
 
-⑤ Claude 读 brief-generation.md → 生成工作单内容
-
-⑥ opc_pipeline_create({...完整参数...}) → state-server 写入文件
+⑦ 进入阶段执行循环
 ```
 
 ---
@@ -156,8 +164,9 @@ opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全
 
 | 场景 | knowledge-server 角色 | state-server 角色 |
 |------|----------------------|-------------------|
-| 管线启动 | knowledge_list → knowledge_open | 接收 knowledge_unit，写入 brief.md |
-| node 执行 | get_batch 加载 input，write 产出 output | node_complete 校验 knowledge 文件存在性（L1） |
+| 流程启动 | 被 prerequisites 驱动调用 knowledge_list | flow tools 路由判定 |
+| 管线创建 | knowledge_open 接收 flow_next 指令 | pipeline_create 返回 flow_next:knowledge_open |
+| node 执行 | get_batch 加载 input，write 产出 output | node_start 返回 node_body + dispatch；node_complete 校验 knowledge 文件存在性（L1） |
 | 阶段回退 | 无感知（文件被快照覆盖） | phase_reset 从快照恢复 knowledge 文件 |
 | 搜索 | search / list / reindex | 无感知 |
 
@@ -166,5 +175,6 @@ opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全
 ## 五、相关文档
 
 - [03-1 知识模型](03-1_knowledge-model.md) — 概念模型、存储结构、版本管理
-- [02-4 节点](02-4_node.md) — 节点定义中的 knowledge input/output 声明
-- [02-2 管线](02-2_pipeline.md) — 管线创建与状态管理
+- [02-1 意图分析](../02-opc-state-server/02-1_intent-analysis.md) — 流程状态机 + 方法论文档协作
+- [02-4 节点](../02-opc-state-server/02-4_node.md) — 节点定义中的 knowledge input/output 声明
+- [02-2 管线](../02-opc-state-server/02-2_pipeline.md) — 管线创建与状态管理

@@ -11,7 +11,7 @@
 | 管线控制节点 | `used_by: [orchestrator, ...]` | 意图识别、任务分析、阶段执行 | engine |
 | 任务执行节点 | `phase: 05-implement` | 编码、测试、设计 | Agent |
 
-两类格式完全相同。控制节点在 `platform/opc-orchestrator/pipeline/`（不可项目覆盖），任务节点在 `phases/<phase>/nodes/`（可项目覆盖）。
+两类格式完全相同。控制节点在 `platform/mcp/opc-state-server/prompts/`（不可项目覆盖，由 flow tools 在工具返回里引用），任务节点在 `phases/<phase>/nodes/`（可项目覆盖）。
 
 ---
 
@@ -202,30 +202,36 @@ output → input 匹配:
 opc_node_start(pipeline_id, sub_id, node_name)
   → 检查 blocked_by 是否全部 completed
   → 扫描已安装 kit → 校验 primary Agent 可用性
+  → 解析 node 路径（项目覆盖优先）→ 读取 body 注入返回
   → 写入 input + status: in_progress + agent + started_at
-  → 返回 input 知识列表
+  → 返回 input 知识列表 + node_file_path + node_body + dispatch_instruction
 
-Claude (Agent) 执行:
-  → 读取 node .md 文件 → 获取 body 指令
-  → opc_knowledge_get_batch([...]) 加载 input 知识
-  → 按 node body 指令逐步执行（如 TDD: RED → GREEN → REFACTOR）
-  → 产出知识时调用 opc_knowledge_write
-  → 产出代码时直接写入 src/、tests/ 等目录
+Claude (主进程) 收到 dispatch_instruction 后:
+  → 按方案 A：Task 工具 spawn sub-agent（subagent_type=agents.primary[0]）
+    传入 node_body + 已加载的 input_knowledge
+  → sub-agent 在隔离 context 执行:
+    → 按 node body 指令逐步执行（如 TDD: RED → GREEN → REFACTOR）
+    → 产出知识时调用 opc_knowledge_write
+    → 产出代码时直接写入 src/、tests/ 等目录
+    → 执行完毕后回报 evidence
+  → 主进程据 evidence 调 opc_node_complete
 
 opc_node_complete(pipeline_id, sub_id, node_name, evidence)
   → L1: 检查 output.knowledge 和 output.artifacts 存在
   → L2: 检查 quality_gates（如有声明）
   → 写入 output + evidence + status: completed
-  → 自动解锁 blocked_by 下游节点
+  → 严格扫描 pending 节点：仅当某节点 blocked_by 全部 completed 才纳入 unblocked_nodes
+  → 返回 { unblocked_nodes, flow_next }
 
 opc_node_fail(pipeline_id, sub_id, node_name, error)
   → retry_count += 1
   → retry_count < max_retries → auto retry（不级联）
   → retry_count ≥ max_retries → failed
 
-opc_node_retry(pipeline_id, sub_id, node_name)
+opc_node_retry(pipeline_id, sub_id, node_name, reset_retry_count?: boolean)
   → 手动重跑 completed/failed node
   → 计算影响面 → 自动级联重置下游
+  → reset_retry_count 默认 true（用户手动 retry 视为新一轮）；超时自动 retry 不重置
 ```
 
 ### 三种重试的区别
@@ -302,12 +308,44 @@ my-project/
 参数: pipeline_id, sub_pipeline_id, node_name
 
 行为:
-  ① 读取 node 定义，提取 agents.primary[]
+  ① 读取 node 定义（按"项目覆盖优先"解析最终路径），提取 agents.primary[]
   ② 扫描已安装 kit → 构建可用 Agent 集合
   ③ 逐一校验 primary Agent 是否可用 → 不可用立即报错
   ④ 校验 input.knowledge 的 min_version 是否满足（L0）
   ⑤ 全部可用 → 写入 input + status: in_progress + agent + started_at
+  ⑥ 读取 node .md body（已剥离 frontmatter），随返回值注入
+  ⑦ 更新 flow-state.json:
+      · current_pipeline_pointer = { sub_pipeline_id, phase, node: node_name }
+      · last_heartbeat_at 刷新
+
+返回:
+{
+  node: "tdd-implementation",
+  status: "in_progress",
+  agent: "backend-engineer",
+  input_knowledge: [{path, version, content}, ...],   ← 已加载的 input 知识
+  node_file_path: "phases/05-implement/nodes/tdd-implementation.md",  ← 已解析覆盖优先级
+  node_body: "<node body 全文，不含 frontmatter>",     ← 直接注入，省一次 Read
+  dispatch_instruction: "use Task tool with subagent_type='backend-engineer', 在隔离 context 中执行 node_body 指令；执行完毕后回报 evidence",
+  dispatch_context: {
+    pipeline_id: "pipeline-xxx",
+    sub_pipeline_id: "sub-1",
+    node_name: "tdd-implementation",
+    instruction_template: "你是 backend-engineer，正在执行节点 tdd-implementation。执行以下指令并产出 evidence JSON。所有 opc_knowledge_write 调用必须带 metadata: {pipeline_id, node}。\n\n--- node_body ---\n<node_body>\n--- 已加载知识 ---\n<input_knowledge JSON>"
+  },
+  unblocked_nodes_check: "本节点完成后才会触发；当前不返回"
+}
 ```
+
+**Agent 委派模式（方案 A：Task 隔离）：**
+
+`dispatch_instruction` 告知 Claude 主进程使用 Task 工具 spawn sub-agent：
+- subagent_type 来自 agents.primary[0]
+- sub-agent 在隔离 context 中执行 node_body
+- 主进程必须把 `dispatch_context` 完整传入 Task 工具的 prompt，确保 sub-agent 在调用 `opc_knowledge_write` 时带 metadata
+- sub-agent 完成后回报 evidence 给主进程，主进程据此调 opc_node_complete
+
+这种模式带来 context 隔离 + Skill 按需加载，避免主进程被 node body 污染。
 
 ### opc_node_complete
 
@@ -318,7 +356,23 @@ my-project/
   ① L1 — 产出物存在性校验（始终执行）
   ② L2 — 质量门校验（仅当 node 声明了 quality_gates）
   ③ 全部通过 → 写入 output + evidence 摘要，标记 completed
-  ④ 自动解锁 blocked_by 下游节点
+  ④ 严格解锁: 扫描 pending 节点，仅当 blocked_by 全部 completed 才纳入 unblocked_nodes
+     （并行场景下：A 先完成不会解锁 blocked_by:[A,B] 的下游 C；必须等 B 也 completed）
+  ⑤ 更新 flow-state.json:
+      · current_pipeline_pointer.node = unblocked_nodes[0]（若非空，便于 resume 接续）
+      · 若 phase 内全部 completed → pointer.node 置 null（等待 opc_phase_complete）
+      · last_heartbeat_at 刷新
+
+返回:
+{
+  status: "completed",
+  output: [...],
+  evidence: {...},
+  unblocked_nodes: ["next-node-a", ...],   ← 严格语义：blocked_by 全满足才返回
+  flow_next: {
+    suggestion: "若 unblocked_nodes 非空 → 启动下一个 opc_node_start；若 phase 内全部 completed → 调 opc_phase_complete"
+  }
+}
 
 evidence 结构:
 {
@@ -346,7 +400,7 @@ evidence 结构:
 ### opc_node_retry
 
 ```
-参数: pipeline_id, sub_pipeline_id, node_name
+参数: pipeline_id, sub_pipeline_id, node_name, reset_retry_count?: boolean (默认 true)
 
 行为:
   → 检查 node.status ∈ [failed, completed]，否则拒绝
@@ -354,6 +408,8 @@ evidence 结构:
       同 phase: blocked_by 包含当前 node 的已完成 node
       下游 phase: 所有已完成 node
   → 自动级联重置下游 → 当前 node → in_progress
+  → reset_retry_count=true → retry_count 清零（用户手动 retry 视为新一轮）
+    reset_retry_count=false → retry_count 保留（用于超时自动 retry）
 ```
 
 ---
@@ -383,8 +439,18 @@ evidence 结构:
 - `cascade_reset_after_retry()` — 计算下游影响面，自动重置受影响 node/phase
 - `check_node_timeout()` — 惰性检测 in_progress node 超时
 - `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
+- `compute_unblocked_nodes()` — 严格语义：blocked_by 全部 completed 才纳入
+- `compute_ready_sub_pipelines()` — 聚合规则：blocked_by 全 completed 且 upstream 无 failed
 
-> 注意：原 `task-analyzer` 引擎已移除。意图识别、任务分析、语义匹配等 LLM 工作由 Claude Code 承担，通过 `platform/opc-orchestrator/pipeline/*.md` 中的 prompt 模板驱动。
+### flow-router（state-server 内部，新增）
+
+- `route(step, payload)` — 按 step + confidence + intent 决定下一步指令
+- `persist_step(step, input, output)` — 写入 `.opc/sessions/<id>/flow-state.json`
+- `persist_reflection(step_id, round, scores, notes)` — 反思日志追加
+- `resume(session_id)` — 读取 flow-state.json 返回断点续传指令
+- 纯 TypeScript 路由表，无 LLM
+
+> 注意：原 `task-analyzer` 引擎已移除。意图识别、任务分析、语义匹配等 LLM 工作由 Claude Code 承担，通过 `prompts/*.md`（被 flow-router 工具返回引用，按需 Read）驱动。
 
 ---
 
