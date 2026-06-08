@@ -100,9 +100,7 @@ flowchart TD
 |------|------|
 | [01_concept-and-storage.md](01_concept-and-storage.md) | 三层概念模型 + opc-knowledge/ 目录布局 |
 | [02_metadata-files.md](02_metadata-files.md) | `.md frontmatter` / `.opc-knowledge.json` / `.opc-knowledge.idx` |
-| [03_versioning.md](03_versioning.md) | version 字段 + `min_version` 校验 |
-| [04_node-driven.md](04_node-driven.md) | node frontmatter 的 input/output 声明 + 执行流程 |
-| [05_smart-reuse.md](05_smart-reuse.md) | 创建 vs 更新的判定 |
+| [03_node-driven-and-versioning.md](03_node-driven-and-versioning.md) | node frontmatter 的 input/output 声明、min_version 校验、创建 vs 更新策略 |
 
 ---
 

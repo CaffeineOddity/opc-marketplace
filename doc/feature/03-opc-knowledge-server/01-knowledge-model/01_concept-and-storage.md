@@ -1,7 +1,7 @@
 # 01 概念模型与存储结构
 
 > 本文档是 [知识模型总览](00_overview.md) 的子文档。其他子文档：
-> [元数据文件](02_metadata-files.md) · [版本管理](03_versioning.md) · [Node 声明与驱动](04_node-driven.md) · [智能复用](05_smart-reuse.md)
+> [元数据文件](02_metadata-files.md) · [Node 声明、版本与写入策略](03_node-driven-and-versioning.md)
 
 ---
 
@@ -49,4 +49,4 @@ opc-knowledge/
 ## 相关文档
 
 - [02_metadata-files.md](02_metadata-files.md) — `.opc-knowledge.json` / `.opc-knowledge.idx` 的设计
-- [03_versioning.md](03_versioning.md) — version 字段语义
+- [03_node-driven-and-versioning.md](03_node-driven-and-versioning.md) — version 字段语义
