@@ -1,7 +1,7 @@
 # 02 核心 API
 
 > 本文档是 [知识 API 总览](00_overview.md) 的子文档。其他子文档：
-> [工具速览](01_tools-overview.md) · [初始化时序](03_initialization-flow.md) · [与 state-server 协作](04_collaboration.md)
+> [初始化时序](03_initialization-flow.md)
 
 ---
 
@@ -124,6 +124,6 @@
 
 ## 相关文档
 
-- [01_tools-overview.md](01_tools-overview.md) — 工具速览
+- [00_overview.md](00_overview.md#8-个工具速览) — 工具速览
 - [03_initialization-flow.md](03_initialization-flow.md) — 流程启动中的工具时序
-- [04_collaboration.md](04_collaboration.md) — 与 state-server 的协作分工
+- [00_overview.md](00_overview.md#与-state-server-协作矩阵) — 与 state-server 的协作分工

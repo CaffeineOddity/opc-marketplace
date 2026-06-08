@@ -1,7 +1,7 @@
 # 03 初始化时序
 
 > 本文档是 [知识 API 总览](00_overview.md) 的子文档。其他子文档：
-> [工具速览](01_tools-overview.md) · [核心工具](02_core-tools.md) · [与 state-server 协作](04_collaboration.md)
+> [核心工具](02_core-tools.md)
 
 ---
 

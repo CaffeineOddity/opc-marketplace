@@ -105,14 +105,43 @@ flowchart TD
 
 ---
 
+## 8 个工具速览
+
+| # | 工具 | 说明 |
+|---|------|------|
+| 1 | `opc_knowledge_open` | 打开知识点：已有则返回结构树+version，没有则创建 |
+| 2 | `opc_knowledge_get` | 读单条知识（支持指定 version） |
+| 3 | `opc_knowledge_get_batch` | 批量读取多条知识 |
+| 4 | `opc_knowledge_write` | 写入 .md，自动判断创建/更新，version 写入 frontmatter |
+| 5 | `opc_knowledge_delete` | 删除 subsection，自动清理空目录 |
+| 6 | `opc_knowledge_list` | readdir 扫描目录结构 |
+| 7 | `opc_knowledge_search` | 全文搜索，走 .opc-knowledge.idx |
+| 8 | `opc_knowledge_reindex` | 全量重建搜索索引 |
+
+完整参数 / 行为 / 返回详见 [02_core-tools.md](02_core-tools.md)。
+
+---
+
+## 与 state-server 协作矩阵
+
+| 场景 | knowledge-server 角色 | state-server 角色 |
+|------|----------------------|-------------------|
+| 流程启动 | 被 prerequisites 驱动调用 knowledge_list | flow tools 路由判定 |
+| 管线创建 | knowledge_open 接收 flow_next 指令 | pipeline_create 返回 flow_next:knowledge_open |
+| node 执行 | get_batch 加载 input，write 产出 output | node_start 返回 node_body + dispatch；node_complete 校验 knowledge 文件存在性（L1） |
+| 阶段回退 | 无感知（文件被快照覆盖） | phase_reset 从快照恢复 knowledge 文件 |
+| 搜索 | search / list / reindex | 无感知 |
+
+完整启动时序详见 [03_initialization-flow.md](03_initialization-flow.md)。
+
+---
+
 ## 子文档导航
 
 | 子文档 | 内容 |
 |------|------|
-| [01_tools-overview.md](01_tools-overview.md) | 8 个工具速览表 |
 | [02_core-tools.md](02_core-tools.md) | 8 个工具完整规范（参数、行为、返回） |
 | [03_initialization-flow.md](03_initialization-flow.md) | 管线启动中的知识工具时序文本版 |
-| [04_collaboration.md](04_collaboration.md) | 与 state-server 的协作矩阵 |
 
 ---
 
