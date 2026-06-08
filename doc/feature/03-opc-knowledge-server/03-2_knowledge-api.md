@@ -126,7 +126,7 @@ opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全
 
 ## 三、初始化时序
 
-管线启动时，Claude 按 MCP 流程状态机推进（详见 [02-1 §三 流程工具速览](../02-opc-state-server/02-1_intent-analysis.md#三流程工具速览8-个)），知识工具穿插调用：
+管线启动时，Claude 按 MCP 流程状态机推进（详见 [02-1 §三 流程工具速览](../02-opc-state-server/02-1-intent-analysis/02_flow-tools.md)），知识工具穿插调用：
 
 ```
 ① Hook 注入"调 opc_flow_start"指令 → Claude → opc_flow_start
