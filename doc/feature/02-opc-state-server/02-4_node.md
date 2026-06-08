@@ -142,7 +142,7 @@ output:
 
 ```
 任务: "搞一下登录功能"
-task-analyzer: { description: "实现用户登录认证功能", tags: [backend, auth] }
+Claude 分析: { description: "实现用户登录认证功能", tags: [backend, auth] }
 
 tag 过滤:
   tdd-implementation:  tags [backend, database]  → 交集 [backend]  → 候选
@@ -205,10 +205,12 @@ opc_node_start(pipeline_id, sub_id, node_name)
   → 写入 input + status: in_progress + agent + started_at
   → 返回 input 知识列表
 
-Agent 执行:
+Claude (Agent) 执行:
+  → 读取 node .md 文件 → 获取 body 指令
   → opc_knowledge_get_batch([...]) 加载 input 知识
-  → 执行 node body 指令
-  → 调用 opc_knowledge_write 产出知识
+  → 按 node body 指令逐步执行（如 TDD: RED → GREEN → REFACTOR）
+  → 产出知识时调用 opc_knowledge_write
+  → 产出代码时直接写入 src/、tests/ 等目录
 
 opc_node_complete(pipeline_id, sub_id, node_name, evidence)
   → L1: 检查 output.knowledge 和 output.artifacts 存在
@@ -364,23 +366,25 @@ evidence 结构:
 
 ---
 
-## 十二、内部引擎
+## 十二、内部引擎（全部零 LLM 依赖）
 
-### node-resolver
+### node-resolver（state-server 内部）
 
-对选中节点做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组冲突：
+对选中节点做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组冲突。纯 TypeScript 确定性逻辑。
 
 - `resolve(phase, nodes)`: opc_phase_confirm 时解析依赖 + 冲突检测 + 拓扑排序
 - `adjust(phase, nodes)`: opc_phase_adjust 时重新生成预览（不锁定）
-- 输入: 选中节点列表
+- 输入: 选中节点列表（来自 Claude）
 - 输出: `[{ group: 1, nodes: [...], parallel: true }, { group: 2, nodes: [...], parallel: false }]`
 
-### state-manager（节点部分）
+### state-manager（state-server 内部，节点部分）
 
 - `validate_node_completion()` — L1（产出物存在性）+ L2（quality_gates）校验
 - `cascade_reset_after_retry()` — 计算下游影响面，自动重置受影响 node/phase
 - `check_node_timeout()` — 惰性检测 in_progress node 超时
 - `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
+
+> 注意：原 `task-analyzer` 引擎已移除。意图识别、任务分析、语义匹配等 LLM 工作由 Claude Code 承担，通过 `platform/opc-orchestrator/pipeline/*.md` 中的 prompt 模板驱动。
 
 ---
 

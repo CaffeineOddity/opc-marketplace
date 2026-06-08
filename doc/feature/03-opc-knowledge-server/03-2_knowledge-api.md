@@ -126,25 +126,28 @@ opc-knowledge-server 提供 8 个工具用于知识的 CRUD、版本管理和全
 
 ## 三、初始化时序
 
-管线启动时，`opc_pipeline_start` 内部串行执行：
+管线启动时，Claude 按 pipeline 文档链执行，MCP 工具穿插调用：
 
 ```
-① knowledge_list → readdir 扫描 opc-knowledge/ 下所有 unit/section/subsection
+① Hook 注入 intent-analysis.md → Claude 判断意图
+  → intent = task → Claude 读 task-analysis.md
+
+② opc_knowledge_list → readdir 扫描 opc-knowledge/ 下所有 unit/section/subsection
   → 返回已有 unit 列表 + 结构
-  → 注入 task-analyzer 作为知识上下文
+  → Claude 以知识上下文做分析
 
-② task-analyzer（带知识上下文）→ 输出 complexity + knowledge_unit
+③ Claude 分析（无需 MCP 工具）→ 输出 complexity + knowledge_unit
 
-②b (需修改的 unit ≥ 2 时) task-decomposition → 拆分分析
+③b (需修改的 unit ≥ 2 时) Claude 读 task-decomposition.md → 拆分分析
 
-③ knowledge_open → 按子管线加载对应 unit
+④ opc_knowledge_open → 按子管线加载对应 unit
   → 已存在 → 复用，读 .md frontmatter 获取已有条目 + version
   → 不存在 → 创建 unit 目录
   → 自动加载 _refs 关联的 unit 作为可读上下文
 
-④ brief-generation → 生成工作单
+⑤ Claude 读 brief-generation.md → 生成工作单内容
 
-⑤ 创建 state.json
+⑥ opc_pipeline_create({...完整参数...}) → state-server 写入文件
 ```
 
 ---

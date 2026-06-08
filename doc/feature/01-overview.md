@@ -15,13 +15,12 @@ opc-marketplace/
 │   │   ├── opc-state-server/
 │   │   │   ├── server.ts
 │   │   │   ├── tools/
-│   │   │   ├── pipeline.ts      # pipeline_start, pipeline_status
+│   │   │   ├── pipeline.ts      # pipeline_create, pipeline_status
 │   │   │   ├── phase.ts         # phase_start, phase_confirm, phase_complete, phase_reset
 │   │   │   └── node.ts          # node_start, node_complete, node_fail
 │   │   │   └── engine/
 │   │   │       ├── state-manager.ts
 │   │   │       ├── phase-validator.ts
-│   │   │       ├── task-analyzer.ts
 │   │   │       └── node-resolver.ts
 │   │   └── opc-knowledge-server/
 │   │       ├── server.ts
@@ -33,16 +32,16 @@ opc-marketplace/
 │   │           ├── list.ts
 │   │           └── search.ts
 │   │
-│   └── opc-orchestrator/
-│       ├── .claude-plugin/plugin.json
-│       ├── pipeline/
-│       │   ├── intent-analysis.md
-│       │   ├── task-analysis.md
-│       │   ├── task-decomposition.md
-│       │   ├── brief-generation.md
-│       │   ├── knowledge-operation.md
-│       │   └── phase-execution.md
-│       ├── scenarios/
+│   └── opc-orchestrator/                  # Claude 的操作手册（不是独立进程）
+│       ├── .claude-plugin/plugin.json      #   声明入口 + 加载流程
+│       ├── pipeline/                       #   Claude 按序读取的 prompt 模板
+│       │   ├── intent-analysis.md          #     步骤①：意图识别
+│       │   ├── task-analysis.md            #     步骤②：任务分析
+│       │   ├── task-decomposition.md       #     步骤②b：拆分判断
+│       │   ├── brief-generation.md         #     步骤③：工作单生成
+│       │   ├── knowledge-operation.md      #     步骤④：知识初始化
+│       │   └── phase-execution.md          #     步骤⑤：阶段执行循环
+│       ├── scenarios/                      #   场景配方（Claude 直接读取）
 │       │   ├── add-feature.md
 │       │   ├── fix-bug.md
 │       │   └── ...
@@ -209,20 +208,26 @@ my-project/                              # 用户工程目录（claude 执行目
 
 ```
 ┌──────────────────────────────────────────────────┐
+│  Claude Code (MCP Host / 编排器)                   │
+│  加载 pipeline/*.md 作为操作手册，按序执行            │
+│  意图识别 → 任务分析 → 拆分判断 → 简报生成             │
+│  阶段节点匹配排序 → 反思调整 → 执行 node body          │
+│  所有需要 LLM 的工作都在这一层完成                     │
+├──────────────────────────────────────────────────┤
 │  kits/ (业务层)                                    │
 │  领域 Agent + Skill，通过 plugin.json 暴露能力      │
 │  Node + Template 按阶段组织在 phases/                │
 ├──────────────────────────────────────────────────┤
-│  platform/opc-orchestrator (编排层)                 │
-│  pipeline + scenarios                              │
-│  意图识别 -> 任务分析 -> 阶段推荐 -> 节点解析 -> 调度    │
-├──────────────────────────────────────────────────┤
 │  platform/mcp (基础设施层)                           │
 │  opc-state-server:     任务跟进 MCP 服务             │
 │  opc-knowledge-server: 知识库 MCP 服务               │
-│  所有引擎都是 TypeScript 代码，不是 prompt           │
+│  所有引擎都是纯 TypeScript 代码，零 LLM 依赖          │
+│  - state-manager:    状态校验、级联、超时检测         │
+│  - node-resolver:    output→input 匹配、拓扑排序    │
+│  - phase-validator:  推进规则、置信度阈值             │
 └──────────────────────────────────────────────────┘
 ```
+
 
 ---
 
@@ -231,150 +236,152 @@ my-project/                              # 用户工程目录（claude 执行目
 ```mermaid
 sequenceDiagram
     actor U as 用户
-    participant O as Orchestrator
-    participant TA as TaskAnalyzer
+    participant C as Claude (Host)
     participant KS as KnowledgeServer
     participant SS as StateServer
     participant NR as NodeResolver
     participant A as Agent
 
-    U->>SS: opc_pipeline_start("用户输入")
-    SS->>SS: ① intent-analysis
+    U->>C: "实现用户认证系统"
+    C->>C: ① 读 pipeline/intent-analysis.md → intent=task
+    C->>C: ② 读 pipeline/task-analysis.md → Claude 自行分析
 
     alt intent = general_question / chat
-        SS-->>U: 零 OPC 介入，直接回复
+        C-->>U: 零 OPC 介入，直接回复
     else intent = project_question
-        SS->>KS: opc_knowledge_search (关键词)
-        KS-->>SS: 匹配的知识条目 + snippet
-        SS-->>U: 注入知识上下文后回答（不创建管线）
+        C->>KS: opc_knowledge_search (关键词)
+        KS-->>C: 匹配的知识条目 + snippet
+        C-->>U: 注入知识上下文后回答（不创建管线）
     else intent = task
-        SS->>KS: ② knowledge_list
-        KS-->>SS: 已有 unit 列表 + 结构
-        SS->>TA: ③ task-analysis (带知识上下文)
-        TA-->>SS: tags, complexity, phases, knowledge_unit, scenario_hints
+        C->>KS: opc_knowledge_list
+        KS-->>C: 已有 unit 列表 + 结构
+        C->>C: Claude 分析: tags, complexity, phases, knowledge_unit, scenario
+
         alt complexity = low
-            SS-->>A: 快速通道: Agent 直接执行（无管线/无 state）
+            C-->>A: 快速通道: Agent 直接执行（无管线/无 state）
         else complexity = medium / high
             alt 需修改的 unit ≥ 2
-                SS->>SS: ③b task-decomposition -> 拆分分析
-                SS-->>U: 展示拆分方案，等待确认
-                U-->>SS: 确认拆分
+                C->>C: 读 pipeline/task-decomposition.md → Claude 拆分分析
+                C-->>U: 展示拆分方案，等待确认
+                U-->>C: 确认拆分
             end
-            SS->>KS: ④ knowledge_open (每条子管线)
-            KS-->>SS: 知识库就绪
-            SS->>SS: ⑤ 每条子管线 brief.md + state.json
-            SS->>SS: ⑥ state-manager 写入管线编排计划 pipeline-plan.json
-            SS-->>O: pipeline(s) created
+            C->>KS: opc_knowledge_open (每条子管线)
+            KS-->>C: 知识库就绪
+            C->>C: 读 pipeline/brief-generation.md → Claude 生成 brief
+            C->>SS: opc_pipeline_create({...完整结构化参数})
+            SS->>SS: 写入 pipeline-plan.json + brief.md + state.json
+            SS-->>C: pipeline(s) created
         end
     end
 
-    SS->>SS: 04-implement-design -> in_progress
+    C->>C: 读 pipeline/phase-execution.md → 进入阶段循环
 
-    Note over SS,NR: ── Phase: 04-implement-design ──
-    SS->>NR: 候选 nodes (api-design, database-schema, scaffold)
-    NR->>NR: tag 交集 -> 语义匹配 -> scenario 加权
-    NR-->>U: 排序后的候选列表
-    U-->>NR: 确认选择
-    NR->>NR: output -> input 推导依赖
-    NR-->>SS: opc_phase_confirm -> 写入阶段节点计划
+    C->>SS: opc_phase_start("04-implement-design")
+    SS-->>C: 候选 nodes（原始数据，无排序）
+
+    Note over C,NR: ── Phase: 04-implement-design ──
+    C->>C: tag 交集过滤 → 语义匹配 → scenario 加权 → 排序
+    C-->>U: 排序后的候选列表
+    U-->>C: 确认选择
+    C->>SS: opc_phase_confirm(nodes: [...])
+    SS->>NR: output→input 匹配推导依赖
+    NR->>NR: 文件域冲突检测 → 拓扑排序
+    NR-->>SS: 执行分组
+    SS-->>C: 分组计划
 
     loop 每个 Node（按依赖顺序）
-        A->>KS: opc_knowledge_get
-        A->>A: 执行 node 指令
+        C->>KS: opc_knowledge_get_batch
+        C->>C: Claude 读 node .md → 执行指令
         alt 成功
-            A->>KS: opc_knowledge_write
-            A->>SS: opc_node_complete
+            C->>KS: opc_knowledge_write
+            C->>SS: opc_node_complete
         else 失败
-            A->>SS: opc_node_fail -> 修复 -> retry / abort
+            C->>SS: opc_node_fail → 修复 → retry / abort
         end
     end
-    SS->>SS: 04-implement-design -> completed
-    SS->>SS: 自动推进到 05-implement
+    C->>SS: opc_phase_complete
+    SS-->>C: next_phase=05-implement, auto_advance=true
 
-    Note over SS,NR: ── Phase: 05-implement ──
-    SS->>NR: 候选 nodes (tdd-implementation, backend-endpoint, ...)
-    NR-->>U: 排序后的候选列表
-    U-->>NR: 确认选择
-    NR-->>SS: opc_phase_confirm -> 写入阶段节点计划
+    Note over C,NR: ── Phase: 05-implement ──
+    C->>SS: opc_phase_start("05-implement")
+    SS-->>C: 候选 nodes
+    C->>C: 排序 → 反思 → 确认
+    C->>SS: opc_phase_confirm
 
     loop 每个 Node
-        A->>KS: opc_knowledge_get
-        A->>A: 执行 node 指令
+        C->>KS: opc_knowledge_get_batch
+        C->>C: 执行 node 指令
         alt 成功
-            A->>KS: opc_knowledge_write
-            A->>SS: opc_node_complete
+            C->>KS: opc_knowledge_write
+            C->>SS: opc_node_complete
         else 失败
-            A->>SS: opc_node_fail -> 修复 -> retry / abort
+            C->>SS: opc_node_fail
         end
     end
-    SS->>SS: 05-implement -> completed
+    C->>SS: opc_phase_complete
 
-    alt 下一 phase 高置信度
-        SS->>SS: 自动推进到 06-testing
-    else 需确认
-        SS-->>U: 提示进入 06-testing
-    end
+    Note over C,NR: ── Phase: 06-testing ──
+    C->>SS: 类似流程（高置信度场景自动推进）
 
-    Note over SS,NR: ── Phase: 06-testing ──
-    SS->>SS: 类似流程（高置信度场景自动推进）
-
-    SS-->>U: pipeline completed
+    C->>SS: opc_pipeline_complete
+    SS-->>C: manifest.md
+    C-->>U: pipeline completed
 ```
 
 ## 五、流程图
 
 ```mermaid
 flowchart TD
-    A[用户输入自然语言] --> B[opc_pipeline_start<br/>MCP 原子入口]
-    B --> B1{意图识别<br/>intent-analysis}
-    B1 -->|task| B3[knowledge_list<br/>扫描已有 unit]
-    B1 -->|project_question| PQ[opc_knowledge_search<br/>轻量查询项目知识]
+    A[用户输入自然语言] --> HOOK[UserPromptSubmit hook 触发<br/>注入 pipeline/intent-analysis.md]
+    HOOK --> C1{Claude 意图识别}
+    C1 -->|task| C2[Claude 读取 task-analysis.md<br/>调用 opc_knowledge_list 获取上下文]
+    C1 -->|project_question| PQ[opc_knowledge_search<br/>轻量查询项目知识]
     PQ --> PQ1[注入知识上下文后回答<br/>不创建管线/state]
-    B1 -->|general_question / chat| NC[零 OPC 介入<br/>直接回复]
-    B3 --> B4[task-analyzer<br/>带知识上下文分析]
-    B4 --> B4a{complexity?}
-    B4a -->|low| FAST[快速通道: Agent 直接执行<br/>无管线 / 无 phases / 无 state]
-    B4a -->|medium / high| DEC{需修改的 unit ≥ 2?}
-    DEC -->|是| DEC1[task-decomposition<br/>拆分子管线 + 推导依赖]
+    C1 -->|general_question / chat| NC[零 OPC 介入<br/>直接回复]
+    C2 --> C2a{Claude 判定 complexity?}
+    C2a -->|low| FAST[快速通道: Agent 直接执行<br/>无管线 / 无 phases / 无 state]
+    C2a -->|medium / high| DEC{需修改的 unit ≥ 2?}
+    DEC -->|是| DEC1[Claude 读 task-decomposition.md<br/>拆分子管线 + 推导依赖]
     DEC1 --> DEC2[用户确认拆分方案]
     DEC2 --> B5[knowledge_open<br/>每条子管线独立加载 unit]
     DEC -->|否| B5
-    B5 --> B6[每条子管线: brief.md + state.json<br/>state-manager 写入管线编排计划 pipeline-plan.json]
-    B6 --> G[进入第一个 phase<br/>Agent 读取 brief.md]
+    B5 --> B6[Claude 读 brief-generation.md<br/>生成 brief 内容]
+    B6 --> B7[opc_pipeline_create<br/>Claude 传入完整结构化参数]
+    B7 --> G[进入第一个 phase<br/>Claude 读 phase-execution.md]
 
-    G --> H[capability-discovery<br/>扫描内置 + 项目 node]
-    H --> I[tag 交集过滤]
-    I --> J[语义匹配排序]
-    J --> K[scenario 加权]
+    G --> H[opc_phase_start<br/>扫描内置 + 项目 node<br/>返回原始候选列表]
+    H --> I[Claude: tag 交集过滤]
+    I --> J[Claude: 语义匹配排序]
+    J --> K[Claude: scenario 加权]
     K --> L[生成初始 node 方案]
 
     L --> M{自动通过?}
-    M -->|高置信度无需确认| R[node-resolver<br/>解析依赖 -> 阶段节点计划]
+    M -->|高置信度无需确认| R[opc_phase_confirm<br/>node-resolver 解析依赖<br/>→ 阶段节点计划]
     M -->|需审核| N[展示阶段节点计划预览]
 
     N --> O[反思调整<br/>检查: 是否缺 node / 是否多余]
-    O -->|增删 node| P[调整 node 列表]
+    O -->|增删 node| P[opc_phase_adjust]
     P --> Q[重新预览]
     Q -->|继续反思| O
     O -->|确认| R
 
     R --> S[按 blocked_by 顺序执行 node]
-    S --> T[Agent 加载前置知识<br/>opc_knowledge_get]
-    T --> U[Agent 执行]
+    S --> T[Claude 加载前置知识<br/>opc_knowledge_get_batch]
+    T --> U[Claude 读 node .md 并执行指令]
     U --> V{执行结果}
     V -->|成功| W[opc_knowledge_write<br/>opc_node_complete]
     W --> X{当前 phase<br/>全部 node 完成?}
     X -->|否| S
-    X -->|是| Y[phase -> completed]
+    X -->|是| Y[opc_phase_complete<br/>phase → completed]
     Y --> Z{还有下一 phase?}
     Z -->|是, 高置信度| G
     Z -->|是, 需确认| ZA[提示用户推进] --> G
-    Z -->|否| ZB[pipeline -> completed]
+    Z -->|否| ZB[opc_pipeline_complete<br/>pipeline → completed]
 
-    V -->|失败| ZC[node -> failed<br/>写入 error]
-    ZC --> ZD[尝试修复]
+    V -->|失败| ZC[opc_node_fail<br/>写入 error]
+    ZC --> ZD[尝试修复 / retry]
     ZD -->|修复完成| S
-    ZD -->|无法修复| ZE[pipeline -> aborted]
+    ZD -->|无法修复| ZE[pipeline → aborted]
 ```
 
 ### 节点来源
@@ -406,7 +413,7 @@ flowchart TD
 ## 六、设计原则
 
 1. **意图触发，置信度兜底** —— 用户直接说话；低置信度时主动确认
-2. **代码引擎 > Prompt 引擎** —— 核心逻辑用 TypeScript 实现；意图分析和语义匹配用 LLM
+2. **MCP 服务器零 LLM 依赖** —— state-server / knowledge-server 都是纯 TypeScript 确定性逻辑；所有 LLM 工作由 Claude Code（MCP Host）承担
 3. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 4. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
 5. **知识属于项目** —— 切换目录 = 切换知识上下文
@@ -414,6 +421,7 @@ flowchart TD
 7. **知识先于状态** —— 知识库在 state.json 创建前初始化，供所有 phase 参考
 8. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
 9. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
-10. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛
+10. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛（由 Claude 完成）
 11. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
 12. **阶段自包含** —— 节点、模板、阶段定义同目录（`phases/<phase>/`），一目了然
+13. **Pipeline 文档即操作手册** —— `platform/opc-orchestrator/pipeline/*.md` 是 Claude 的 prompt 模板，按序读取执行，不是独立进程

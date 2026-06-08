@@ -1,34 +1,68 @@
 # 02-1 意图识别与任务分析
 
-不设 `/opc` 入口命令。自然语言就是入口。`opc_pipeline_start` 中串行执行：意图识别 → 知识列表 → 任务分析 →（拆分判断）→ 工作单生成。
+不设 `/opc` 入口命令。自然语言就是入口。UserPromptSubmit hook 将 `pipeline/intent-analysis.md` 注入 Claude 上下文，Claude 自行判断意图后按序执行后续分析。
 
 ---
 
-## 一、自然语言入口
+## 一、触发机制
 
+opc-orchestrator 插件通过 `UserPromptSubmit` hook 接管用户输入：
+
+```json
+// opc-orchestrator/.claude-plugin/plugin.json
+{
+  "name": "opc-orchestrator",
+  "depends": ["mcp"],
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [{
+          "type": "command",
+          "command": "cat ${CLAUDE_PLUGIN_ROOT}/pipeline/intent-analysis.md"
+        }]
+      }
+    ]
+  }
+}
 ```
-用户: 实现用户认证系统      → 识别为任务，启动管线
-用户: 修复登录页样式错乱    → 识别为任务，启动管线
-用户: 这个变量命名怎么样    → 识别为问答，直接回答
-用户: 今天天气怎么样        → 静默，不介入
-```
+
+每次用户发消息时，hook 自动将 `pipeline/intent-analysis.md` 注入 Claude 的上下文。Claude 读取后按指令执行意图识别。
 
 ---
 
-## 二、意图识别（intent-analysis）
+## 二、Pipeline 文档链（Claude 的操作手册）
 
-驱动引擎: task-analyzer（唯一调用 LLM 的引擎，用 haiku）
+```
+platform/opc-orchestrator/pipeline/
+├── intent-analysis.md        ← 步骤①：UserPromptSubmit hook 自动注入
+├── task-analysis.md          ← 步骤②：Claude 判断 intent=task 后主动读取
+├── task-decomposition.md     ← 步骤②b：修改 unit ≥ 2 时读取
+├── brief-generation.md       ← 步骤③：生成工作单内容
+├── knowledge-operation.md    ← 步骤④：知识初始化
+└── phase-execution.md        ← 步骤⑤：进入阶段执行循环
+```
 
-### 2.1 四种意图
+每篇文档是一个自包含的 prompt 模板，告诉 Claude：
+- 前置条件（什么时候读这篇）
+- 当前任务（做什么判断/分析）
+- 输出格式（结构化 JSON，后续用于 MCP 工具参数）
+- 下一步（读哪篇文档或调哪个 MCP 工具）
+
+---
+
+## 三、步骤①：意图识别（Claude 读 intent-analysis.md）
+
+Claude 自行判断用户输入的意图。四种意图：
 
 | 意图 | 说明 | 行为 |
 |------|------|------|
-| `task` | 用户想完成具体的开发任务 | 触发完整管线 |
-| `project_question` | 针对当前项目提问 | 触发知识搜索，不启动管线 |
-| `general_question` | 与项目无关的纯知识问答 | 零 OPC 介入 |
+| `task` | 用户想完成具体的开发任务 | 继续步骤② |
+| `project_question` | 针对当前项目提问 | 调用 `opc_knowledge_search`，注入上下文回答，不创建管线 |
+| `general_question` | 与项目无关的纯知识问答 | 零 OPC 介入，Claude 直接回答 |
 | `chat` | 闲聊 / 无技术内容 | 零 OPC 介入 |
 
-### 2.2 task 信号
+### 3.1 task 信号
 
 | 信号 | 加权 |
 |------|------|
@@ -38,7 +72,7 @@
 | 疑问词（怎么样、为什么、如何） | -0.3 |
 | 简短无动词（"这个"、"帮忙"） | -0.2 |
 
-### 2.3 project_question vs general_question
+### 3.2 project_question vs general_question
 
 | 信号 | 偏向 |
 |------|------|
@@ -50,9 +84,9 @@
 
 ---
 
-## 三、置信度与纠错
+## 四、置信度与纠错
 
-### 3.1 置信度阈值
+### 4.1 置信度阈值
 
 | 置信度 | 行为 |
 |--------|------|
@@ -62,11 +96,11 @@
 
 ```
 用户: 这个函数的性能怎么样
-分类器: task(0.45) / question(0.55)  → 追问: "需要我启动性能优化流程，还是先帮你分析？"
+Claude: task(0.45) / question(0.55)  → 追问: "需要我启动性能优化流程，还是先帮你分析？"
 用户: 先分析一下               → 识别为问答，不启动管线
 ```
 
-### 3.2 纠错指令
+### 4.2 纠错指令
 
 | 纠错指令 | 效果 |
 |----------|------|
@@ -74,7 +108,7 @@
 | "先不做了" / "cancel" | 取消管线，标记为 aborted |
 | "这不是任务" / "not a task" | 取消并学习：标记为问答样本 |
 
-### 3.3 显式声明
+### 4.3 显式声明
 
 | 前缀 | 效果 |
 |------|------|
@@ -83,15 +117,17 @@
 
 ---
 
-## 四、任务分析（task-analysis）
+## 五、步骤②：任务分析（Claude 读 task-analysis.md）
 
-仅 intent = task 时触发。用 haiku 分析任务，输出复杂度、阶段、知识点、场景。
+仅 intent = task 时触发。Claude 主动读取 `pipeline/task-analysis.md`，按其中的 prompt 模板执行分析。
 
-**输入：** user_message + knowledge_context（来自 knowledge_list 的已有 unit 列表）
+**Claude 首先调用:** `opc_knowledge_list` → 获取已有 unit 列表及结构
 
-**输出：** `{ description, tags, complexity, suggested_phases, knowledge_unit, scenario_hints, knowledge_plan }`
+**然后 Claude 分析，输出结构化 JSON:**
 
-### 4.1 分析步骤
+`{ description, tags, complexity, suggested_phases, knowledge_unit, scenario, knowledge_plan }`
+
+### 5.1 分析步骤（Claude 执行）
 
 **① 提炼描述** — 将用户原始输入提炼为一句精确的任务描述。补全隐含信息，去掉无关修饰。
 
@@ -135,15 +171,13 @@
 "修复角色权限检查"                           → ["authorization"]
 ```
 
-**⑥ 匹配 Scenario** — 从以下选择最匹配的 1-2 个：
+**⑥ 匹配 Scenario** — Claude 扫描 `scenarios/` 目录，选择最匹配的 1-2 个：
 
 `add-feature` / `fix-bug` / `redesign-product` / `performance-optimize` / `security-audit` / `launch-product` / `incident-response`
 
-**⑦ 生成知识操作计划** — 逐条知识路径标注操作类型（read / update / create）和当前状态，写入 brief.md 的"关联知识"表。
+**⑦ 生成知识操作计划** — 逐条知识路径标注操作类型（read / update / create）和当前状态。
 
-### 4.2 complexity 分叉
-
-complexity 决定后续执行策略：
+### 5.2 complexity 分叉
 
 | 维度 | low | medium | high |
 |------|-----|--------|------|
@@ -157,11 +191,11 @@ complexity 决定后续执行策略：
 
 ---
 
-## 五、任务拆分（task-decomposition）
+## 六、步骤②b：任务拆分（Claude 读 task-decomposition.md）
 
-### 5.1 触发条件
+### 6.1 触发条件
 
-当 task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时触发。只读 unit 不计入拆分判断。
+当 task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，Claude 读取 `pipeline/task-decomposition.md` 执行拆分分析。只读 unit 不计入拆分判断。
 
 ```
 修改数 = 1：跳过拆分
@@ -175,7 +209,7 @@ complexity 决定后续执行策略：
   → 两者无 _refs → 两条子管线
 ```
 
-### 5.2 拆分原则
+### 6.2 拆分原则
 
 **按领域边界拆分** — 每个 knowledge_unit 对应一个领域，一条子管线负责 1-2 个紧密耦合的 unit：
 
@@ -202,7 +236,7 @@ order._refs → [cart, user-center]
   → order+payment 子管线 blocked_by: [cart 子管线, user-center 子管线]
 ```
 
-### 5.3 输出格式
+### 6.3 输出格式（Claude 生成）
 
 ```json
 {
@@ -219,13 +253,15 @@ order._refs → [cart, user-center]
 }
 ```
 
+拆分方案展示给用户确认后，进入下一步。
+
 ---
 
-## 六、工作单生成（brief-generation）
+## 七、步骤③：工作单生成（Claude 读 brief-generation.md）
 
-仅 medium / high 时生成。写入 `.opc/pipelines/<id>/sub-pipelines/sub-N/brief.md`。
+仅 medium / high 时生成。Claude 读取 `pipeline/brief-generation.md`，按模板生成 brief 内容。
 
-### 6.1 模板
+### 7.1 模板
 
 ```markdown
 # 任务工作单
@@ -271,7 +307,7 @@ order._refs → [cart, user-center]
 - [ ] 用户约束已确认
 ```
 
-### 6.2 生成规则
+### 7.2 生成规则
 
 - **问题描述**：从 task_analysis_result.description 取，一句话，不扩展
 - **范围**：根据 tags 和 description 推导 in-scope；out-of-scope 宁可多列不遗漏
@@ -283,38 +319,66 @@ order._refs → [cart, user-center]
 
 ---
 
-## 七、MCP 工具
+## 八、步骤④：管线创建（opc_pipeline_create）
 
-### opc_pipeline_start
+Claude 完成上述所有分析后，调用一个 MCP 工具将结果持久化：
 
 ```
-参数: user_message: string
-
-内部串行步骤:
-  ① intent-analysis → 判断意图
-  ② knowledge_list（仅 task 意图）→ 扫描已有 unit 结构
-  ③ task-analysis（仅 task 意图）→ 带知识上下文的 LLM 分析
-  ④ task-decomposition（仅 task + unit ≥ 2）
-
-返回统一 schema: { intent, complexity }，额外字段按意图分发:
-  - chat/general_question: { intent, confidence }
-  - project_question:      { intent, results: [...] }
-  - task/low:              { intent, complexity: "low", description, tags, knowledge_unit }
-  - task/medium-high:      { intent, complexity, description, tags, knowledge_unit,
-                             suggested_phases, scenario_hints, sub_pipelines? }
+opc_pipeline_create({
+  description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
+  tags: ["backend", "auth", "database"],
+  complexity: "medium",
+  knowledge_unit: ["user-auth"],
+  suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
+  scenario: "add-feature",
+  brief_content: "# 任务工作单\n\n...(Claude 生成)",
+  sub_pipelines: [{
+    id: "sub-1",
+    title: "用户认证系统",
+    knowledge_unit: ["user-auth"],
+    blocked_by: []
+  }],
+  execution_order: [{ group: 1, parallel: ["sub-1"] }]
+})
 ```
 
-### task-analyzer 引擎
-
-唯一调用 LLM 的引擎。加载 `task-analysis` 节点，用 haiku 分析意图。
-
-- 输入: 用户原始消息 + knowledge_list 返回的已有 unit 列表及结构
-- 输出: `{ intent, confidence, description, tags, complexity, suggested_phases, knowledge_unit, scenario_hints, knowledge_plan }`
-- 知识上下文让 task-analyzer 基于项目真实状态判断，而非盲猜 knowledge_unit
+state-server 做的事（纯确定性）：
+- 生成 pipeline ID，创建 `.opc/pipelines/<id>/` 目录结构
+- 写入 `pipeline-plan.json`
+- 写入 `brief.md`（内容由 Claude 提供）
+- 写入 `state.json`（初始空 phases）
+- 返回 `{ pipeline_id: "pipeline-xxx" }`
 
 ---
 
-## 八、精确命令
+## 九、完整分析流程
+
+```
+用户: "实现用户认证系统"
+  │
+  ▼ UserPromptSubmit hook 触发
+[注入 pipeline/intent-analysis.md]
+  │
+  ▼ Claude 判断
+intent = task
+  │
+  ▼ Claude 主动读取 pipeline/task-analysis.md
+  ├── 调用 opc_knowledge_list → units: []
+  └── Claude 分析 → medium, [user-auth], add-feature
+  │
+  ▼ 修改 unit 数 = 1，跳过 task-decomposition.md
+  │
+  ▼ Claude 读 pipeline/brief-generation.md → 生成 brief 内容
+  │
+  ▼ Claude 调 opc_pipeline_create({...完整参数...})
+  → state-server 写入文件，返回 pipeline_id
+  │
+  ▼ Claude 读 pipeline/phase-execution.md → 进入阶段执行循环
+```
+
+---
+
+## 十、精确命令
 
 | 命令 | 用途 |
 |------|------|
@@ -324,7 +388,7 @@ order._refs → [cart, user-center]
 
 ---
 
-## 九、相关文档
+## 十一、相关文档
 
 - [02-2 管线](02-2_pipeline.md) — 管线创建与生命周期
 - [02-3 阶段](02-3_phase.md) — 阶段执行与节点选择

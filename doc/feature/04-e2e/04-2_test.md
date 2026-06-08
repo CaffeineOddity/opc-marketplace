@@ -9,13 +9,12 @@
 **输入**："你好，今天天气怎么样"
 
 ```
-opc_pipeline_start("你好，今天天气怎么样")
-  → intent-analysis → intent: chat, confidence: 0.95
-  → 返回 { intent: chat }
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: chat, confidence: 0.95
   → 零 OPC 介入，Claude 直接回答
 ```
 
-**调用次数**：1（opc_pipeline_start）
+**调用次数**：0（无 MCP 调用）
 
 **结论**：✓ 无缺口
 
@@ -26,17 +25,16 @@ opc_pipeline_start("你好，今天天气怎么样")
 **输入**："我们的用户认证是怎么设计的？"
 
 ```
-opc_pipeline_start("我们的用户认证是怎么设计的？")
-  → intent-analysis → intent: project_question, confidence: 0.9
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: project_question, confidence: 0.9
   → opc_knowledge_search("用户认证设计")
     → 匹配: user-auth/login/architecture, user-auth/session/api
-  → 返回 { intent: project_question, results: [...] }
   → Claude 注入知识上下文 → 回答用户
 ```
 
-**调用次数**：1（opc_pipeline_start，内含 knowledge_search）
+**调用次数**：1（opc_knowledge_search）
 
-**结论**：✓ 无缺口。注意 `opc_pipeline_start` 内部跨服务调了 `opc_knowledge_search`，需确认 MCP server 间调用无障碍。
+**结论**：✓ 无缺口。
 
 ---
 
@@ -45,21 +43,20 @@ opc_pipeline_start("我们的用户认证是怎么设计的？")
 **输入**："修复登录页按钮颜色不对"
 
 ```
-opc_pipeline_start("修复登录页按钮颜色不对")
-  → intent-analysis → intent: task
-  → knowledge_list → user-auth 有 login, register, session
-  → task-analysis(haiku)
-    → complexity: low（不需要规划，简单修改）
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: task
+  → Claude 读 task-analysis.md + 调用 opc_knowledge_list
+    → user-auth 有 login, register, session
+  → Claude 分析 → complexity: low（不需要规划，简单修改）
     → knowledge_unit: [user-auth]
-  → 返回 { intent: task, complexity: low, description: "修复登录按钮颜色", ... }
-  → Agent 直接执行改动，不创建管线
+  → Claude 直接执行改动，不创建管线
 ```
 
-**调用次数**：1（opc_pipeline_start），Agent 执行时可能自行调 `opc_knowledge_get`
+**调用次数**：1（opc_knowledge_list），Claude 执行时可能自行调 `opc_knowledge_get`
 
 **问题发现**：Agent 怎么知道要改哪个文件？当前设计是"Agent 自行决定是否需要 opc_knowledge_get"，但如果项目知识库里已有 `user-auth/login/ui.md`，Agent 应该被引导去读它。
 
-**优化建议**：`opc_pipeline_start` 在 complexity=low 时仍可附带 knowledge_context（已有 unit 结构），不做 knowledge_open 但给 Agent 一个"你可以参考这些"的提示。
+**优化建议**：Claude 在 complexity=low 时可附带 knowledge_context（已有 unit 结构），不做 knowledge_open 但自行参考已有知识决定改哪里。
 
 ---
 
@@ -68,20 +65,25 @@ opc_pipeline_start("修复登录页按钮颜色不对")
 **输入**："给用户认证系统加个短信验证码登录"
 
 ```
-opc_pipeline_start("给用户认证系统加个短信验证码登录")
-  → intent-analysis → task
-  → knowledge_list → user-auth/login(v2), user-auth/session(v3)
-  → task-analysis(haiku)
-    → complexity: medium
-    → knowledge_unit: [user-auth]  ← 只改 1 个 unit
-    → suggested_phases: [04-implement-design, 05-implement, 06-testing]
-    → scenario_hints: [add-feature]
-  → 修改 unit 数 = 1，不触发 task-decomposition
-  → 返回分析结果
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: task
+  → Claude 读 task-analysis.md
+
+opc_knowledge_list → user-auth/login(v2), user-auth/session(v3)
+
+Claude 分析:
+  → complexity: medium
+  → knowledge_unit: [user-auth]  ← 只改 1 个 unit
+  → suggested_phases: [04-implement-design, 05-implement, 06-testing]
+  → scenario: add-feature
+  → 修改 unit 数 = 1，不读 task-decomposition.md
+
+Claude 读 brief-generation.md → 生成 brief 内容
 
 opc_pipeline_create(sub_pipelines: [{id: sub-1, knowledge_unit: [user-auth], ...}])
   → 创建 pipeline-plan.json
-  → init_sub(sub-1): knowledge_open("user-auth") → brief → state
+  → 写入 brief.md
+  → 写入 state.json
 
 opc_phase_start("04-implement-design")
   → 候选: [api-design(0.92), database-schema(0.78)]
@@ -135,13 +137,17 @@ opc_pipeline_complete → manifest.md
 **输入**："重构 user 模块，把 session 管理从 cookie 改成 JWT"
 
 ```
-opc_pipeline_start(...)
-  → complexity: high（改协议，影响面大）
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: task
+  → Claude 读 task-analysis.md + opc_knowledge_list
+  → Claude 分析: complexity: high（改协议，影响面大）
   → knowledge_unit: [user-auth]  ← 只改 1 个 unit
   → suggested_phases: [04-implement-design, 05-implement, 06-testing]
   → 单管线
 
-opc_pipeline_create → init_sub
+Claude 读 brief-generation.md → 生成 brief
+
+opc_pipeline_create → state-server 写入文件
 
 opc_phase_start("04-implement-design")
   → 高复杂度：不可跳过任何匹配节点，候选全进
@@ -170,22 +176,22 @@ opc_pipeline_complete
 **输入**："实现商品管理 + 购物车功能"
 
 ```
-opc_pipeline_start(...)
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: task
+  → Claude 读 task-analysis.md + opc_knowledge_list
   → knowledge_unit: [product, cart]
-  → 需修改 unit 数 = 2 → 触发 task-decomposition
+  → 需修改 unit 数 = 2 → Claude 读 task-decomposition.md
 
-task-decomposition 分析:
+Claude 拆分分析:
   → cart 引用 product 的数据模型 → cart._refs: [product]
   → sub-1: product（无依赖）
   → sub-2: cart（blocked_by: [sub-1]）
   → execution_order: Group1[sub-1] → Group2[sub-2]
 
-返回 { needs_decomposition: true, sub_pipelines: [...], execution_order: [...] }
-
 [用户确认拆分]
 
 opc_pipeline_create(...)
-  → pipeline-plan.json + init_sub(sub-1) + init_sub(sub-2)
+  → state-server 写入 pipeline-plan.json
 
 opc_phase_start(sub-1, "04-implement-design") → ... → opc_phase_complete
   → sub-1 的各 phase 跑完
@@ -207,16 +213,18 @@ opc_phase_start(sub-2, "04-implement-design") → ... → opc_pipeline_complete
 **输入**："实现完整电商系统：商品管理 + 用户中心 + 购物车 + 下单支付"
 
 ```
-opc_pipeline_start(...)
+UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 → intent: task
+  → Claude 读 task-analysis.md + opc_knowledge_list
   → knowledge_unit: [product, user-center, cart, order, payment]
-  → task-decomposition:
+  → Claude 读 task-decomposition.md → 拆分:
     sub-1: product（无依赖）
     sub-2: user-center（无依赖）
     sub-3: cart（blocked_by: [sub-1, sub-2]）
     sub-4: order+payment（blocked_by: [sub-3, sub-2]）
   → execution_order: Group1[sub-1 ∥ sub-2] → Group2[sub-3] → Group3[sub-4]
 
-opc_pipeline_create → pipeline-plan.json + 4×init_sub
+opc_pipeline_create → state-server 写入 pipeline-plan.json
 
 执行顺序:
   Group1: sub-1 phases... | sub-2 phases... （单 session 内顺序执行）
@@ -330,7 +338,7 @@ SessionStart 扫描跳过 aborted 管线（不提示恢复）
 
 | # | 测试 | 问题 | 解决方案 |
 |---|------|------|---------|
-| 1 | #3 | low 复杂度时 Agent 缺知识引导 | `opc_pipeline_start` 附带 knowledge_context 提示 |
+| 1 | #3 | low 复杂度时 Agent 缺知识引导 | Claude 在 low 复杂度时可附带 knowledge_context 提示 |
 | 2 | #6 | 跨子管线的 ready 检测无通知 | `opc_pipeline_status` / `opc_phase_complete` 返回 `ready_sub_pipelines` |
 | 3 | #7 | 子管线失败对 downstream 的影响 | state-manager 聚合：下游不 ready 直到 upstream 修复 |
 | 4 | #8 | crash 导致的脏 in_progress 状态 | `opc_pipeline_recover` 自动 timeout 检测，标记 failed |

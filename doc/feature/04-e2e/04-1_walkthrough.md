@@ -22,55 +22,49 @@ opc-knowledge/
 
 ---
 
-## 第二步：opc_pipeline_start — 分析任务
+## 第二步：Claude 分析任务
+
+UserPromptSubmit hook 已将 `pipeline/intent-analysis.md` 注入 Claude 上下文。
+
+### 2.1 Claude 读 intent-analysis.md → 意图识别
 
 ```
-opc_pipeline_start("实现用户认证系统，支持邮箱注册登录和会话管理")
-```
-
-### 2.1 intent-analysis
-
-```
-输入: "实现用户认证系统，支持邮箱注册登录和会话管理"
+Claude 判断:
+  输入: "实现用户认证系统，支持邮箱注册登录和会话管理"
   → 包含动作动词"实现" +0.3
   → 包含明确交付物"系统" +0.2
   → 无否定/疑问信号
   → intent: task, confidence: 0.85
 ```
 
-### 2.2 knowledge_list
+### 2.2 Claude 读 task-analysis.md → 调用 opc_knowledge_list
 
 ```
-扫描 opc-knowledge/
-  → readdir 遍历目录结构，无 unit 子目录
+opc_knowledge_list()
+  → readdir 遍历 opc-knowledge/ → 无 unit 子目录
   → 返回: units: []
 ```
 
-### 2.3 task-analysis（haiku）
+### 2.3 Claude 分析任务
 
 ```
-输入:
-  user_message: "实现用户认证系统，支持邮箱注册登录和会话管理"
-  knowledge_context: { units: [] }    ← 空项目，从零开始
+Claude 基于 task-analysis.md 的 prompt 自行分析:
 
-分析:
   ① 提炼描述 → "实现用户认证系统（邮箱注册登录 + 会话管理）"
   ② 打标签 → [backend, auth, database]
   ③ 复杂度 → medium（需要规划，能一轮完成）
   ④ 推荐阶段 → [04-implement-design, 05-implement, 06-testing]
   ⑤ 知识点 → [user-auth]（新 unit）
-  ⑥ Scenario → [add-feature]
+  ⑥ 扫描 scenarios/ 目录 → add-feature
 
-返回:
+结果（Claude 内部持有，不经过 state-server）:
 {
-  intent: "task",
-  confidence: 0.85,
   description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
   tags: ["backend", "auth", "database"],
   complexity: "medium",
   suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
   knowledge_unit: ["user-auth"],
-  scenario_hints: ["add-feature"]
+  scenario: "add-feature"
 }
 ```
 
@@ -78,30 +72,40 @@ opc_pipeline_start("实现用户认证系统，支持邮箱注册登录和会话
 
 ```
 需修改 unit 数 = 1（只有 user-auth，且是新 unit）
-→ 不触发 task-decomposition
+→ 不读 task-decomposition.md
 → 单管线
 ```
 
 ---
 
-## 第三步：opc_pipeline_create — 创建管线
+## 第三步：Claude 生成 brief + opc_pipeline_create 创建管线
+
+### 3.0 Claude 读 brief-generation.md → 生成 brief 内容
+
+Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本。
+
+### 3.1 opc_pipeline_create
 
 ```
 opc_pipeline_create({
   description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
+  tags: ["backend", "auth", "database"],
   complexity: "medium",
+  knowledge_unit: ["user-auth"],
+  suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
+  scenario: "add-feature",
+  brief_content: "# 任务工作单\n\n...(Claude 生成的完整 markdown)",
   sub_pipelines: [{
     id: "sub-1",
     title: "用户认证系统",
     knowledge_unit: ["user-auth"],
-    suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
     blocked_by: []
   }],
   execution_order: [{ group: 1, parallel: ["sub-1"] }]
 })
 ```
 
-### 3.1 创建目录结构
+### 3.2 创建目录结构
 
 ```
 .opc/pipelines/pipeline-20260606-001/
@@ -113,7 +117,7 @@ opc_pipeline_create({
         └── phases/
 ```
 
-### 3.2 pipeline-plan.json
+### 3.3 pipeline-plan.json
 
 ```json
 {
@@ -134,7 +138,7 @@ opc_pipeline_create({
 }
 ```
 
-### 3.3 init_sub — knowledge_open
+### 3.4 opc_knowledge_open
 
 ```
 opc_knowledge_open(["user-auth"])
@@ -144,9 +148,7 @@ opc_knowledge_open(["user-auth"])
   → 返回: { units: { "user-auth": {} }, related: [] }
 ```
 
-### 3.4 init_sub — brief-generation
-
-生成 `sub-pipelines/sub-1/brief.md`：
+### 3.5 brief.md（Claude 生成内容，state-server 写入）
 
 ```markdown
 # 任务工作单
@@ -201,7 +203,7 @@ opc_knowledge_open(["user-auth"])
 - [x] 用户约束已确认
 ```
 
-### 3.5 init_sub — state.json
+### 3.6 state.json（state-server 写入）
 
 ```json
 {
@@ -810,12 +812,12 @@ node: "auth-integration"
 | 步骤 | 工具调用 | 次数 |
 |------|---------|------|
 | 1 | — | 0 |
-| 2 | `opc_pipeline_start` | 1 |
+| 2 | `opc_knowledge_list` | 1 |
 | 3 | `opc_pipeline_create`（内含 `opc_knowledge_open`） | 1+1 |
 | 4.1 | `opc_phase_start` | 1 |
 | 4.3 | `opc_phase_confirm` | 1 |
-| 4.4 | `opc_node_start` → Agent → `opc_node_complete` | 2 |
-| 4.5 | `opc_node_start` → Agent → `opc_node_complete` | 2 |
+| 4.4 | `opc_node_start` → Claude 读 node .md 并执行 → `opc_node_complete` | 2 |
+| 4.5 | `opc_node_start` → Claude 读 node .md 并执行 → `opc_node_complete` | 2 |
 | 4.6 | `opc_phase_complete` | 1 |
 | 5.1 | `opc_phase_start` | 1 |
 | 5.2 | `opc_phase_adjust` + `opc_phase_confirm` | 2 |
@@ -824,7 +826,17 @@ node: "auth-integration"
 | 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_complete` + `opc_phase_complete` | 5 |
 | 7 | `opc_pipeline_complete` | 1 |
 
-Agent 执行期间自主调用的知识工具：
+Claude 自行读取的 pipeline 文档（非 MCP 调用）：
+
+| 步骤 | 文档 | 用途 |
+|------|------|------|
+| 1 | `pipeline/intent-analysis.md` | UserPromptSubmit hook 自动注入 |
+| 2 | `pipeline/task-analysis.md` | Claude 主动读取，分析任务 |
+| 2b | `pipeline/task-decomposition.md` | 如需要拆分则读取 |
+| 3 | `pipeline/brief-generation.md` | Claude 读取模板生成 brief |
+| 5 | `pipeline/phase-execution.md` | 进入阶段循环前读取 |
+
+Claude 执行 node 期间自主调用的知识工具：
 
 | Agent | 工具调用 |
 |-------|---------|
@@ -835,4 +847,4 @@ Agent 执行期间自主调用的知识工具：
 | security-review | `opc_knowledge_get`×N + `opc_knowledge_write`×1 |
 | integration-test | `opc_knowledge_get`×N |
 
-**总计**：opc-state-server 24 次调用 + opc-knowledge-server ~15 次调用 = ~40 次 MCP 调用完成一个中等复杂度的功能实现。
+**总计**：opc-state-server 23 次调用 + opc-knowledge-server ~15 次调用 = ~38 次 MCP 调用，加上 Claude 读取 3-5 篇 pipeline 文档，完成一个中等复杂度的功能实现。

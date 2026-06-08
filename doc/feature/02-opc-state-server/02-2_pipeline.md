@@ -246,10 +246,13 @@ task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，触发 task-d
 
 ```
 用户消息
-  → opc_pipeline_start: intent-analysis → knowledge_list → task-analysis
-    → (需修改 unit ≥ 2: task-decomposition → 用户确认拆分)
-  → opc_pipeline_create: 写入 pipeline-plan.json + 逐条 init_sub
-    → init_sub: knowledge_open → brief-generation → state.json
+  → UserPromptSubmit hook 注入 intent-analysis.md
+  → Claude 判断 intent=task
+  → Claude 读 task-analysis.md → 调用 opc_knowledge_list → 分析
+  → (需修改 unit ≥ 2: Claude 读 task-decomposition.md → 拆分 → 用户确认)
+  → Claude 读 brief-generation.md → 生成 brief 内容
+  → opc_pipeline_create({...完整结构化参数})
+    → state-server: 写入 pipeline-plan.json + brief.md + state.json
 ```
 
 ### 7.2 执行
@@ -358,29 +361,29 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 
 ## 十一、MCP 工具
 
-### 管线级工具（9 个）
+### 管线级工具（8 个）
 
 | # | 工具 | 说明 |
 |---|------|------|
-| 1 | `opc_pipeline_start` | 分析任务（详见 [02-1 意图分析](02-1_intent-analysis.md)） |
-| 2 | `opc_pipeline_create` | 创建管线：写入 pipeline-plan.json + 逐条 init_sub |
-| 3 | `opc_pipeline_init_sub` | 初始化子管线：knowledge_open→brief→state.json |
-| 4 | `opc_pipeline_status` | 读取管线状态（支持子管线筛选） |
-| 5 | `opc_session_init` | Session 初始化：扫描孤儿管线，返回待恢复列表 |
-| 6 | `opc_pipeline_recover` | 手动恢复指定孤儿管线 |
-| 7 | `opc_pipeline_complete` | 管线完成：校验 + manifest.md |
-| 8 | `opc_pipeline_abort` | 管线取消：级联终止 |
-| 9 | `opc_pipeline_replan` | 管线修改：调整子管线列表和执行顺序 |
+| 1 | `opc_pipeline_create` | 创建管线：Claude 传入完整结构化参数，state-server 写入文件 |
+| 2 | `opc_pipeline_status` | 读取管线状态（支持子管线筛选） |
+| 3 | `opc_session_init` | Session 初始化：扫描孤儿管线，返回待恢复列表 |
+| 4 | `opc_pipeline_recover` | 手动恢复指定孤儿管线 |
+| 5 | `opc_pipeline_complete` | 管线完成：校验 + manifest.md |
+| 6 | `opc_pipeline_abort` | 管线取消：级联终止 |
+| 7 | `opc_pipeline_replan` | 管线修改：调整子管线列表和执行顺序 |
 
 ### opc_pipeline_create
 
 ```
-参数: description, complexity, sub_pipelines[], execution_order[]
+参数: description, tags, complexity, knowledge_unit, suggested_phases, scenario,
+      brief_content, sub_pipelines[], execution_order[]
 
 行为:
-  → 创建 .opc/pipelines/<id>/
+  → 生成 pipeline ID，创建 .opc/pipelines/<id>/
   → 写入 pipeline-plan.json（含 sub_pipelines + execution_order + owner）
-  → 逐条 init_sub（knowledge_open → brief → state.json）
+  → 写入 brief.md（内容由 Claude 提供）
+  → 写入 state.json（初始空 phases）
   → 校验 execution_order 与 blocked_by 的拓扑一致性
 ```
 
@@ -415,14 +418,16 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 ```
 用户: "实现用户认证系统"
 
-① opc_pipeline_start → intent=task, complexity=medium
-② opc_pipeline_create → 创建 pipeline-plan.json + init_sub
-③ opc_phase_start("04-implement-design") → 候选节点
-④ opc_phase_adjust / opc_phase_confirm → 锁定
-⑤ 逐 node: opc_node_start → Agent → opc_node_complete
-⑥ opc_phase_complete → auto_advance
-⑦ 回到 ③ → 进入 05-implement → 重复
-⑧ opc_pipeline_complete → manifest.md
+① Claude 读 intent-analysis.md → intent=task
+② Claude 读 task-analysis.md + opc_knowledge_list → medium, user-auth, add-feature
+③ Claude 读 brief-generation.md → 生成 brief 内容
+④ opc_pipeline_create({...}) → state-server 写入文件
+⑤ opc_phase_start("04-implement-design") → 候选节点
+⑥ opc_phase_adjust / opc_phase_confirm → 锁定
+⑦ 逐 node: opc_node_start → Claude 读 node .md 并执行 → opc_node_complete
+⑧ opc_phase_complete → auto_advance
+⑨ 回到 ⑤ → 进入 05-implement → 重复
+⑩ opc_pipeline_complete → manifest.md
 ```
 
 ### 拆分管线
@@ -430,11 +435,12 @@ sub-3 声明 `blocked_by: ["sub-1", "sub-2"]`，则 sub-3 必须等 sub-1 和 su
 ```
 用户: "实现电商系统：商品+购物车+支付+用户中心"
 
-① opc_pipeline_start → 拆分 → sub-1(product) ∥ sub-2(user-center)
-                                       → sub-3(cart) → sub-4(order+payment)
-② opc_pipeline_create → 写入 4 条子管线 + execution_order
-③ 按 execution_order 执行: Group 1(sub-1∥sub-2) → sub-3 → sub-4
-④ 全部 completed → opc_pipeline_complete
+① Claude 读 intent-analysis.md → intent=task
+② Claude 读 task-analysis.md + opc_knowledge_list → high, 5 units
+③ Claude 读 task-decomposition.md → 拆分 4 条子管线 → 用户确认
+④ opc_pipeline_create({...}) → 写入 pipeline-plan.json
+⑤ 按 execution_order 执行: Group1(sub-1∥sub-2) → sub-3 → sub-4
+⑥ 全部 completed → opc_pipeline_complete
 ```
 
 ### 其他意图

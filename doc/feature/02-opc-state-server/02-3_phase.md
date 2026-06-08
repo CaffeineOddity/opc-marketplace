@@ -45,17 +45,28 @@ order:
 
 ---
 
-## 三、节点选择策略（nodes.md）
+## 三、节点选择策略（Claude 负责匹配排序）
 
-`opc_phase_start` 扫描 `phases/<phase>/nodes/` 和项目 `opc-nodes/`，自动填充节点列表。
+`opc_phase_start` 扫描 `phases/<phase>/nodes/` 和项目 `opc-nodes/`，返回**原始候选列表**（不做语义匹配）。Claude 拿到列表后自行完成匹配排序。
 
-### 3.1 两层匹配
+### 3.1 opc_phase_start 返回
 
-**① tag 交集过滤** — 任务 tags 与节点 tags 求交集，交集为 0 的排除（`always_show: true` 除外）。
+```
+state-server 职责（纯确定性）:
+  ① 扫描 phases/<phase>/nodes/*.md + opc-nodes/<phase>/nodes/*.md
+  ② 解析每个节点的 frontmatter（name, tags, description, agents, input, output, quality_gates）
+  ③ tag 交集过滤 → 排除与任务 tags 无交集的节点（always_show: true 除外）
+  ④ 标记 scenario 推荐的节点
+  ⑤ 返回原始列表（无 LLM 排序）
+```
 
-**② 语义匹配排序** — 任务 description 与节点 description 语义相似度降序排列。
+### 3.2 Claude 的匹配排序
 
-**③ Scenario 加权** — 命中 scenario 推荐的节点 +0.3 权重加成。
+Claude 拿到 `available_nodes` 后执行：
+
+**① 语义匹配** — 任务 description 与每个节点 description 的语义相似度。Claude 本身是 LLM，无需额外引擎。
+
+**② Scenario 加权** — 命中 scenario 推荐的节点 +0.3 权重加成。
 
 ```
 节点匹配得分 = 语义相似度 × 0.7 + scenario 加权 × 0.3
@@ -143,26 +154,42 @@ opc_phase_start → 扫描节点 → 匹配排序 → 反思调整 → opc_phase
     → 逐 node 执行 → opc_phase_complete → 推进/确认
 ```
 
-### 5.1 opc_phase_start — 扫描与匹配
+### 5.1 opc_phase_start — 扫描与返回
 
 ```
 参数: pipeline_id, sub_pipeline_id, phase
 
-行为:
-  → 扫描 phases/<phase>/nodes/ + opc-nodes/
-  → tag 交集过滤 → 语义匹配排序 → scenario 加权
+行为（纯确定性，零 LLM）:
+  → 校验: pipeline 存在、sub 存在、prev phase completed
+  → 扫描 phases/<phase>/nodes/*.md + opc-nodes/<phase>/nodes/*.md
+  → 解析每个 node 的 frontmatter
+  → tag 交集过滤（纯规则）
+  → 标记 recommend 节点（来自 scenario）
+  → 标记 phase: in_progress
 
 返回:
 {
   phase: "04-implement-design",
-  candidates: [
-    {name: "api-design", score: 0.92, tags: ["api", "design"], recommended: true},
-    {name: "database-schema", score: 0.78, tags: ["database"], recommended: true},
-    {name: "scaffold", score: 0.65, tags: ["scaffold"], recommended: false}
+  task_tags: ["backend", "auth", "database"],
+  scenario: "add-feature",
+  available_nodes: [
+    {
+      name: "api-design",
+      tags: ["api", "backend"],
+      description: "设计 API 端点、请求/响应格式、错误码",
+      agents: { primary: ["backend-engineer"] },
+      input: [...],
+      output: [...],
+      quality_gates: null,
+      recommended: true
+    },
+    // ... 全部符合条件的节点
   ],
   max_reflection_rounds: 2
 }
 ```
+
+Claude 拿到后自行语义匹配排序 + 展示给用户，不依赖 state-server 的 LLM。
 
 ### 5.2 反思调整
 
