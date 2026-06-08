@@ -13,22 +13,33 @@
 │  按 MCP 工具返回的 next 字段逐步推进                  │
 │  必读 step_instruction + schema                    │
 │  选读 methodology.docs 中的方法论文档                │
-│  所有需要 LLM 的工作都在这一层完成                     │
+│  所有需要 LLM 的工作（含反思 sub-agent）都在这一层完成   │
 ├──────────────────────────────────────────────────┤
 │  kits/ (业务层)                                    │
 │  领域 Agent + Skill，通过 plugin.json 暴露能力      │
 │  Node + Template 按阶段组织在 phases/                │
 ├──────────────────────────────────────────────────┤
 │  opc-state-server (流程状态机 + 任务跟进)            │
-│  ├── flow/    流程路由：流程工具按 confidence/intent 路由 │
+│  ├── flow/    流程路由：流程工具按 intent + evidence 路由 │
 │  ├── prompts/ 方法论文档（被工具返回引用，按需 Read）       │
 │  ├── tools/   pipeline/phase/node 工具（含 flow_next 字段） │
 │  └── engine/  state-manager / phase-validator / node-resolver │
 │  纯 TypeScript 确定性逻辑，零 LLM 依赖                 │
 ├──────────────────────────────────────────────────┤
+│  opc-reflection-server (反思方法学 + 用户纠正归档)     │
+│  ├── methods/   5 种反思方法标准库（CoVe/Critique/Debate/Reflexion/ToT) │
+│  ├── validators/ V1-V5 deterministic validator + meta-validator │
+│  ├── tools/     17 个反思 / 纠正 / 元工具                │
+│  └── corrections/ L1→L2→L3 三层归档 + seed 冷启动        │
+│  纯 TypeScript，sub-agent 由 Host 派发，永不阻塞主流程    │
+├──────────────────────────────────────────────────┤
 │  opc-knowledge-server (基础设施层)                   │
 │  知识库 CRUD + 版本管理 + 全文搜索                     │
 │  纯 TypeScript 确定性逻辑，零 LLM 依赖                 │
+├──────────────────────────────────────────────────┤
+│  shared/memory-store (共享存储引擎)                  │
+│  三层模型（unit→section→sub）+ 原子写 + 索引            │
+│  被 knowledge / corrections / lessons 共用            │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -284,3 +295,4 @@ flowchart TD
 - [02_user-project.md](02_user-project.md) — 用户项目目录
 - [../02-opc-state-server/01-intent-analysis/00_overview.md](../02-opc-state-server/01-intent-analysis/00_overview.md) — 意图识别完整方法论
 - [../02-opc-state-server/03-phase/02_node-selection.md](../02-opc-state-server/03-phase/02_node-selection.md) — 节点选择详细算法
+- [../05-opc-reflection-server/00_index.md](../05-opc-reflection-server/00_index.md) — 反思方法学 + 用户纠正归档（state-server 所有判断点的反思链路在此）
