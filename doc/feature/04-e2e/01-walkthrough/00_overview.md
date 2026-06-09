@@ -30,12 +30,12 @@ sequenceDiagram
     F-->>C: intent_analysis 指令
 
     Note over U,A: ② 意图判定 + 任务分析
-    C->>F: opc_intent_complete(intent=task)
+    C->>F: opc_intent_complete(intent=task, intent_evidence)
     F-->>C: task_analysis 指令<br/>+ prerequisites:[knowledge_list]
     C->>KS: opc_knowledge_list()
     KS-->>C: units:[]
-    C->>C: 7 步分析 + 自省
-    C->>F: opc_task_analysis_complete<br/>(0.88, medium, knowledge_unit:[user-auth])
+    C->>C: 7 步分析 + 收集 task_analysis_evidence
+    C->>F: opc_task_analysis_complete<br/>(P2 evidence 通过 V1-V5, medium, knowledge_unit:[user-auth])
     F-->>C: brief_generation 指令
 
     Note over U,A: ③ 生成 brief + 创建管线
@@ -50,11 +50,11 @@ sequenceDiagram
     Note over U,A: ④ 阶段执行循环（04→05→06）
     loop 每个 phase
         C->>P: opc_phase_start(phase)
-        P-->>C: candidates + 排序
-        C->>C: 自省评估
-        opt 置信度不足
-            C->>F: opc_flow_reflect
-            F-->>C: 反思指令
+        P-->>C: candidates + reflection_budget_hint
+        C->>C: 收集 selection_evidence
+        opt V1-V5 fail 或 严重 objection
+            C->>F: opc_flow_reflect<br/>(step_id=node_selection, evidence_diff)
+            F-->>C: 反思指令（M4/M5）
         end
         C->>P: opc_phase_confirm(nodes)
         loop 每个 node
@@ -89,13 +89,13 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Start([opc_phase_start]) --> Score[候选排序<br/>tag+语义+scenario]
-    Score --> Reflect[Claude 自省<br/>4 维度评分]
-    Reflect --> Conf{置信度 ≥ min_auto?}
+    Score --> Evidence[收集 selection_evidence<br/>matched_tags / scenario_hits<br/>file_domain_conflicts / coverage_gaps]
+    Evidence --> V[reflection-server P5<br/>V1-V5 + meta-validator]
 
-    Conf -->|是<br/>≥ 0.85| AutoConfirm[自动 opc_phase_confirm]
-    Conf -->|否<br/>≥ 0.75×min| QuickConf[快速确认<br/>标注警告]
-    Conf -->|否<br/>≥ 0.5×min| Adjust[1 轮反思调整<br/>opc_flow_reflect]
-    Conf -->|否<br/>< 0.5×min| Manual[用户介入]
+    V -->|全 pass + 无严重 objection| AutoConfirm[路径 A 自动确认]
+    V -->|pass + 中等 objection| QuickConf[路径 B 快速确认<br/>展示 reasoning_trace]
+    V -->|fail 或 严重 objection| Adjust[路径 C 反思循环<br/>opc_flow_reflect<br/>primary M4 / secondary M5]
+    V -->|budget-guard 耗尽| Manual[强制确认 ask_user]
 
     Adjust --> Score
     QuickConf --> Confirm[opc_phase_confirm]
@@ -118,7 +118,7 @@ flowchart TD
     Retry --> Sub
 
     Exec -->|否| Done[opc_phase_complete]
-    Done --> Auto{auto_advance?<br/>complexity≠high<br/>+ confidence 高}
+    Done --> Auto{auto_advance?<br/>complexity≠high<br/>+ P5 evidence 通过 V1-V5<br/>+ next_phase ∈ phase_plan.selected}
     Auto -->|是| Next([进入 next_phase])
     Auto -->|否| Wait([等待用户确认])
 ```

@@ -55,12 +55,18 @@
 auto_advance = (
     task.complexity != "high"
     AND 当前 phase 所有 node 100% completed（无 retry 兜底完成）
-    AND 当前 phase 的 selection_confidence ≥ min_confidence_for_auto × 0.9
-    AND 下一 phase 在 suggested_phases 中
+    AND 当前 phase 的 P5 selection_evidence 通过 V1-V5 validator
+        + meta-validator 未保留严重 objections
+    AND 下一 phase 在 state.json.phase_plan.selected 中（按 selected 顺序查找，
+        不是 available 全集——确保跳过的 phase 不会被拉回来）
 )
 ```
 
 任一条件不满足即 `auto_advance: false`，由用户确认。
+
+> selection_evidence + V1-V5 的契约见 [05-opc-reflection-server/02-server-design §三 Deterministic Validator](../../05-opc-reflection-server/02-server-design/00_overview.md#三deterministic-validatorv1v5--三个工程兜底)；
+> phase_plan.selected 顺序由 `opc_pipeline_create` 写入时跑偏序校验，详见
+> [02-pipeline/04_state-json.md §六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)。
 
 ---
 

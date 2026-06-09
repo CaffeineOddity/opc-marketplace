@@ -22,6 +22,14 @@
 - [知识模型与存储](../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — unit→section→subsection 三层结构、.md frontmatter、.opc-knowledge.json（_refs）、版本管理、智能复用
 - [知识 MCP API](../03-opc-knowledge-server/02-knowledge-api/00_overview.md) — 8 个工具完整规范、初始化时序、与 state-server 协作
 
+
+
+### 04 e2e — 验证与测试
+
+- [端到端演练](../04-e2e/01-walkthrough/00_overview.md) — 从 0 到 1：medium 单管线完整示例
+- [链路测试](../04-e2e/02-test/00_overview.md) — 10 个测试用例逐条追踪 MCP 调用链，检查工具覆盖和流程完整性
+
+
 ### 05 opc-reflection-server — 反思方法学
 
 - [反思总览](../05-opc-reflection-server/00_index.md) — 8 核心原则 + 12 个关键设计点 + 端到端反思链路时序
@@ -29,12 +37,6 @@
 - [server 设计](../05-opc-reflection-server/02-server-design/00_overview.md) — 13 个工具 + Evidence schema + V1-V5 validator + sub-agent 权限 + meta-validator
 - [corrections 存储](../05-opc-reflection-server/03-corrections-store/00_overview.md) — L1/L2/L3 三层存储 + 三层模型 + 4 个膨胀控制 + seed 冷启动
 - [反思流程](../05-opc-reflection-server/04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户自治 + meta-reflection + phase_reset 交互
-
-### 04 e2e — 验证与测试
-
-- [端到端演练](../04-e2e/01-walkthrough/00_overview.md) — 从 0 到 1：medium 单管线完整示例
-- [链路测试](../04-e2e/02-test/00_overview.md) — 10 个测试用例逐条追踪 MCP 调用链，检查工具覆盖和流程完整性
-
 
 
 ### 阅读顺序

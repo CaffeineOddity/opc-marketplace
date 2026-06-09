@@ -81,15 +81,15 @@ sequenceDiagram
         FL-->>C: { step: task_analysis, prerequisites: [opc_knowledge_list], next: opc_task_analysis_complete }
         C->>KS: opc_knowledge_list
         KS-->>C: 已有 unit 列表
-        C->>C: 7 步分析 + 自省打分（可选读 prompts/task-analysis.md）
-        C->>FL: opc_task_analysis_complete({analysis_result, confidence, knowledge_plan})
+        C->>C: 7 步分析 + 收集 task_analysis_evidence<br/>(可选读 prompts/task-analysis.md)
+        C->>FL: opc_task_analysis_complete({analysis_result, evidence_artifact, knowledge_plan})
 
-        alt confidence < 0.8
-            FL-->>C: { step: task_analysis_reflection, round, prompt 引用, next: opc_flow_reflect }
-            loop 反思循环（最多 2-3 轮）
-                C->>C: 按反思视角重新审视
-                C->>FL: opc_flow_reflect({round, new_confidence})
-                FL->>FL: 持久化 reflection_log
+        alt V1-V5 validator 或 meta-validator 发现 objection
+            FL-->>C: { step: task_analysis_reflection, round, method: M3-CoVe, next: opc_flow_reflect }
+            loop 反思循环（受 budget-guard 约束）
+                C->>C: 按 reflection_plan 重新审视
+                C->>FL: opc_flow_reflect({round, evidence_diff})
+                FL->>FL: 持久化 reflection_log + meta-validator
                 FL-->>C: 继续反思 / 跳出 / ask_user
             end
         end
@@ -123,10 +123,10 @@ sequenceDiagram
 
     Note over C,NR: ── Phase: 04-implement-design ──
     C->>C: tag 交集过滤 → 语义匹配 → scenario 加权 → 排序
-    C->>C: 自省评估节点选择质量（4维度打分）
-    alt 选择置信度 < threshold×0.75
-        loop 反思循环（max_reflection_rounds 上限）
-            C->>FL: opc_flow_reflect({step: node_selection, round, new_confidence})
+    C->>C: 收集 selection_evidence<br/>(matched_tags / scenario_hits /<br/>file_domain_conflicts / blocked_by_graph)
+    alt V1-V5 validator 或 meta-validator 发现 objection
+        loop 反思循环（受 budget-guard 约束）
+            C->>FL: opc_flow_reflect({step: node_selection, round, evidence_diff})
             FL-->>C: 继续反思 / 跳出
         end
     end
@@ -173,7 +173,8 @@ flowchart TD
     FQDEC -->|active=false| opc_flow_query[Claude 调 opc_flow_start<br/>opc_flow_start 返回 intent_analysis 指令]
     FQDEC -->|active=true + 延续| CONT[按已有 flow_next 推进]
     FQDEC -->|active=true + 纠正| REVISE[opc_flow_revise / opc_flow_restart]
-    FQDEC -->|active=true + 管线内调整| REPLAN[opc_pipeline_replan / opc_phase_reset]
+    FQDEC -->|active=true + 流程内调整| REPLAN[opc_pipeline_replan / opc_phase_reset]
+    FQDEC -->|active=true + 题外话/无关问答| OUTSIDE[respond_outside_flow<br/>不动 flow-state / pipeline<br/>必要时只读 opc_knowledge_search]
     FQDEC -->|active=true + 放弃| ABORT[opc_flow_abort 后 opc_flow_start]
     FQDEC -->|active=true + orphan| RECOVER[opc_flow_recover]
     FQDEC -->|流程外问答/暂停| NOOP[直接回答 / 等待]
@@ -183,26 +184,23 @@ flowchart TD
     F2P --> PQ1[Claude 调 opc_knowledge_search<br/>注入知识上下文后回答<br/>不创建管线/state]
     C1 -->|general_question / chat| F2C[Claude 调 opc_intent_complete<br/>opc_intent_complete 返回 done: true<br/>+ 自动标记 status=completed]
     F2C --> NC[零 OPC 介入，直接回复]
-    F2T --> C2[Claude 调 opc_knowledge_list 后<br/>7 步分析 + 自省打分]
-    C2 --> opc_intent_complete[Claude 调 opc_task_analysis_complete<br/>opc_task_analysis_complete 按 confidence + complexity + modify_count 路由]
+    F2T --> C2[Claude 调 opc_knowledge_list 后<br/>7 步分析 + 收集 task_analysis_evidence]
+    C2 --> opc_intent_complete[Claude 调 opc_task_analysis_complete<br/>opc_task_analysis_complete 按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
     opc_intent_complete --> C2_SR_DEC{opc_task_analysis_complete 路由判定}
-    C2_SR_DEC -->|≥ 0.8| C2a
-    C2_SR_DEC -->|< 0.8| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 reflection_log<br/>0.5-0.8: 最多2轮<br/><0.5: 最多3轮]
-    C2_SR_LOOP --> C2_SR_RECHECK{反思后置信度?}
-    C2_SR_RECHECK -->|≥ 0.8| C2a
-    C2_SR_RECHECK -->|≥ 0.5| C2_QC[快速确认<br/>opc_flow_reflect 路由 ask_user]
-    C2_SR_RECHECK -->|< 0.5| C2_DC[详细确认<br/>opc_flow_reflect 路由 ask_user 附低分原因]
+    C2_SR_DEC -->|validator pass + 无严重 objection| C2a
+    C2_SR_DEC -->|validator fail 或 objection 严重| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 evidence_diff<br/>受 budget-guard 约束]
+    C2_SR_LOOP --> C2_SR_RECHECK{反思后 evidence 状态?}
+    C2_SR_RECHECK -->|validator pass| C2a
+    C2_SR_RECHECK -->|budget 耗尽 / 仍有 objection| C2_QC[ask_user<br/>opc_flow_reflect 路由 ask_user<br/>附 reasoning_trace]
     C2_QC -->|用户确认/修正| C2a
-    C2_DC -->|用户逐项确认/修正| C2a
     C2a{opc_task_analysis_complete 复杂度路由}
     C2a -->|low| FAST[opc_task_analysis_complete 路由 opc_quick_dispatch opc_quick_dispatch<br/>Agent 直接执行<br/>+ 自动标记 status=completed]
     C2a -->|medium / high| DEC{需修改的 unit ≥ 2?}
-    DEC -->|是| DEC1[opc_task_analysis_complete 路由 task_decomposition<br/>Claude 拆分分析 + 自省]
+    DEC -->|是| DEC1[opc_task_analysis_complete 路由 task_decomposition<br/>Claude 拆分分析 + 收集 decomposition_evidence]
     DEC1 --> DEC2[Claude 调 opc_decomposition_complete]
     DEC2 --> DEC3{opc_decomposition_complete 路由判定}
-    DEC3 -->|≥ 0.8| DEC5[opc_decomposition_complete 路由 brief_generation]
-    DEC3 -->|0.5-0.8| DEC4[opc_decomposition_complete 路由 brief_generation<br/>step_instruction 提示快速确认]
-    DEC3 -->|< 0.5| DEC4
+    DEC3 -->|validator pass + 无严重 objection| DEC5[opc_decomposition_complete 路由 brief_generation]
+    DEC3 -->|否| DEC4[opc_decomposition_complete 路由 brief_generation<br/>step_instruction 提示确认 + 附 reasoning_trace]
     DEC4 -->|用户确认| DEC5
     DEC5 --> B6[Claude 生成 brief markdown]
     DEC -->|否| B6
@@ -216,15 +214,15 @@ flowchart TD
     H --> I[Claude: tag 交集过滤]
     I --> J[Claude: 语义匹配排序]
     J --> K[Claude: scenario 加权]
-    K --> L[生成初始 node 方案 + 自省打分]
+    K --> L[生成初始 node 方案 + 收集 selection_evidence]
 
-    L --> M{选择置信度 vs<br/>min_confidence_for_auto?}
-    M -->|≥ threshold 高| R[opc_phase_confirm<br/>node-resolver 解析依赖<br/>→ 阶段节点计划]
-    M -->|≥ threshold×0.75 中| L2[快速确认<br/>展示方案 + 分数]
+    L --> M{selection_evidence<br/>V1-V5 validator?}
+    M -->|pass + 无严重 objection| R[opc_phase_confirm<br/>node-resolver 解析依赖<br/>→ 阶段节点计划]
+    M -->|pass + 中等 objection| L2[快速确认<br/>展示方案 + reasoning_trace]
     L2 -->|用户确认| R
-    M -->|< threshold×0.75 低| L3[Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 + 路由]
-    L3 --> L4[每轮重新自省打分]
-    L4 --> L5{opc_brief_complete 判定:达上限或达标?}
+    M -->|fail 或 严重 objection| L3[Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 + 路由 M4 Critique]
+    L3 --> L4[每轮重新收集 evidence + meta-validator]
+    L4 --> L5{opc_flow_reflect 判定:budget 耗尽或 validator 通过?}
     L5 -->|继续| L3
     L5 -->|确认| R
 
@@ -263,29 +261,107 @@ flowchart TD
 | 内置节点 | `phases/<phase>/nodes/` | 插件开发者 | 随 marketplace 分发 |
 | 项目节点 | `opc-nodes/` | 项目用户 | 同目录结构，同名覆盖 |
 
-### 节点选择：自省评估 + 置信度推进
+### 节点选择：evidence + V1-V5 validator + 反思
 
-节点选择不是一次性确认，而是 Claude **自省评估**后按置信度推进的过程。核心理念与意图识别一致：**高置信度直接推进，低置信度才需要用户介入**。反思循环通过 `opc_flow_reflect`（opc_brief_complete）持久化每轮日志，crash 可恢复。
+节点选择不是一次性确认，而是 Claude **收集 selection_evidence**后由 reflection-server 的 V1-V5 validator + meta-validator 判定的过程。核心理念与意图识别一致：**evidence 通过即推进，validator 失败或保留严重 objection 才反思 / 用户介入**。反思循环通过 `opc_flow_reflect`（持久化 evidence_diff + meta-validator 结果），受 budget-guard 约束。
 
-评估维度：语义匹配强度(0.30)、Scenario对齐度(0.25)、覆盖完整性(0.30)、节点冗余度(0.15)。
+`selection_evidence` 字段：`matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`。完整 schema 与 V1-V5 规则见 [05-opc-reflection-server/02-server-design/00_overview.md §二/§三](../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 
 ```
-初始方案 → 自省打分 → 分叉:
-  ├── 高置信度(≥ threshold)          → 自动确认，通知用户
-  ├── 中置信度(≥ threshold×0.75)     → 快速确认，展示方案 + 分数
-  └── 低置信度(< threshold×0.75)     → Claude 调 opc_flow_reflect 进入反思循环
-                                      opc_flow_reflect 持久化每轮 reflection_log，max_reflection_rounds 上限兜底
+初始方案 → 收集 selection_evidence → 分叉:
+  ├── V1-V5 pass + 无严重 objection      → 自动确认，通知用户
+  ├── V1-V5 pass + 中等 objection        → 快速确认，展示方案 + reasoning_trace
+  └── V1-V5 fail 或 严重 objection       → Claude 调 opc_flow_reflect 进入反思循环
+                                          primary=M4 Critique，secondary=M5 Debate（medium+）
+                                          受 budget-guard 约束，超限降级 ask_user
 ```
 
 | 概念 | 说明 |
 |------|------|
-| 自省维度 | 4 维度加权打分：语义匹配(0.30) + Scenario对齐(0.25) + 覆盖完整(0.30) + 冗余度(0.15) |
-| 反思轮次 | 由 phase 的 `max_reflection_rounds` 配置，仅低置信度时触发，达到上限后强制确认 |
-| 反思内容 | Claude 自行检查 node 是否缺漏、是否多余、是否可以合并/拆分 |
-| 调整方式 | Claude 自行增删 node、调整顺序，每轮重新自省打分 + opc_flow_reflect 上报 |
-| 最终 | 高/中置信度自动确认；低置信度由用户确认，resolver 锁定执行计划 |
+| Evidence 字段 | `matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`（详见 reflection-server §二） |
+| Validator | V1 schema / V2 referential / V3 evidence-presence / V4 coverage / V5 discrimination + 3 兜底 |
+| 反思方法 | primary M4 Critique（critic sub-agent，只读）；secondary M5 Debate（complexity ≥ medium） |
+| 反思预算 | budget-guard 约束每 step token 上限；超限 → 终止 secondary，仅 primary |
+| 调整方式 | Claude 自行增删 node、调整顺序，每轮重新收集 evidence + opc_flow_reflect 上报 |
+| 最终 | validator pass + 无严重 objection → 自动确认；否则由用户确认，resolver 锁定执行计划 |
 
-高置信度场景（如 `fix-bug` scenario 命中 + 语义相似度 > 0.9 + 覆盖完整性高）可跳过用户审核直接执行，减少人工介入。
+高 evidence 场景（如 `fix-bug` scenario 命中 + matched_tags ≥ N + 无 file_domain_conflicts）可跳过用户审核直接执行，减少人工介入。
+
+---
+
+## 五、流程外问答（`respond_outside_flow`）
+
+Hook 极简化的代价：用户每次输入都会被注入"先调 `opc_flow_query`"。当管线正在跑（`active=true`），但用户随口问"现在几点了 / 刚才设计了几个端点 / 当前在哪一步"，需要一条**不动流程**的出口。
+
+`opc_flow_query` 形态 B 的第 9 个 suggested_action 就是为此设计：
+
+| 字段 | 值 |
+|---|---|
+| `intent` | 流程外问答 |
+| `signals` | 时间/天气/进度查询 / "顺便问一下" / 与 `current_step` 无语义关联的新话题 |
+| `next.action` | `respond_outside_flow` |
+| `preserve_state` | `true`（明确禁止动 flow-state.json / pipeline-plan.json） |
+
+**Claude 的判定流程**：
+
+```
+opc_flow_query 返回 active=true
+  → 把新消息与 snapshot.user_message_history / current_step 做语义关联
+      ├── 关联度高（延续 / 纠正 / 补充 / 回退）   → 走对应推进 / 纠错 action
+      ├── 关联度低（题外话 / 打断 / 无关问答）    → respond_outside_flow
+      └── 完全无法判断                          → "暂停等待"，反问用户
+```
+
+**`respond_outside_flow` 内允许的工具**：
+
+| 工具 | 允许？ | 说明 |
+|---|---|---|
+| `opc_knowledge_search` / `opc_knowledge_get` / `opc_knowledge_list` | ✅ | 只读，回答项目相关问题 |
+| `Read` / `Grep` / `Bash`（只读命令） | ✅ | 回答代码相关问题 |
+| `opc_flow_*` 推进类 / `opc_pipeline_*` 写类 / `opc_node_*` | ❌ | 任何会改 state 的工具一律禁止 |
+| `opc_knowledge_write` / `opc_corrections_record` | ❌ | 写类禁止 |
+
+完整 schema 与设计原则详见 [02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md §opc_flow_query](../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md#opc_flow_query)。
+
+---
+
+## 六、拆分管线并发执行
+
+`opc_pipeline_create` 一次创建 N 个 `sub_pipelines`，每个 sub 都要跑完整的 9 阶段循环。执行策略：**并发优先，依赖串行**。
+
+### 调度规则
+
+| 条件 | 策略 |
+|---|---|
+| `sub.blocked_by = []` | **默认并发**——Host 在同一响应里同时发起多个 `opc_phase_start` |
+| `sub.blocked_by = [...]` 非空 | **严格串行**——前置 sub 全部 `completed` 才进入 ready |
+
+### 时序
+
+```
+Host → opc_pipeline_status()
+       ← ready_sub_pipelines: [sub-A, sub-B]
+            + concurrency_hint: { ready_count: 2, recommended_action: "parallel" }
+
+Host → 同一响应内并发:
+       opc_phase_start(sub-A)  |  opc_phase_start(sub-B)
+
+Host → 各 sub 的 phase/node 循环并行推进
+       任一 sub 完成 opc_phase_complete → 重检 ready
+```
+
+### 并发安全
+
+| 资源 | 并发保障 |
+|---|---|
+| `state.json` | 按 `sub_pipeline_id` 分片存储，互不冲突 |
+| `pipeline-plan.json` 聚合状态 | owner.pid + 原子写保护 |
+| knowledge 同 unit 跨 sub 写 | 单文件原子写 + `version+1`，冲突时后写者 `version_conflict` 错误，sub-agent 重试合并 |
+| 跨 sub 依赖未在 `blocked_by` 表达 | 由 `_refs + min_version` 在 `opc_node_start` 时拦截 |
+
+### MCP 协议支持
+
+MCP 协议本身是请求-响应的，**并发能力靠 Host (Claude) 行为约定**——`concurrency_hint.recommended_action=parallel` 时 Claude 应在同一响应里发起多个工具调用，state-server 通过分片存储和原子写保证并发安全。完整规约详见 [02-opc-state-server/02-pipeline/07_dependency-parallel.md](../02-opc-state-server/02-pipeline/07_dependency-parallel.md)。
 
 ---
 

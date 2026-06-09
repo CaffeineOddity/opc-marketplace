@@ -45,24 +45,32 @@ Claude → opc_flow_start({user_message: "实现用户认证系统，支持邮�
 返回:
 {
   step: "intent_analysis",
-  step_instruction: "判断意图，输出 {intent, confidence, reasoning}",
+  step_instruction: "判断意图，收集 intent_evidence（task_criteria_hits / chat_signals / user_quotes）后输出 {intent, intent_evidence, reasoning}",
   methodology: {
     docs: ["prompts/01_intent-analysis-overview.md"],
-    ref: "§三 意图分类 + §3.1 task 信号",
-    summary: "动作动词+0.3，明确交付物+0.2，!task+1.0，疑问词-0.3"
+    ref: "§三 意图分类 + §3.1 task 信号 + 05-opc-reflection-server §二 intent_evidence schema",
+    summary: "动作动词、明确交付物、!task 前缀计入 task_criteria_hits；疑问词、闲聊语气计入 chat_signals"
   },
-  schema: { intent: [...], confidence: "0-1", reasoning: "string" },
+  schema: { intent: [...], intent_evidence: {task_criteria_hits[], chat_signals[], user_quotes[]}, reasoning: "string" },
   next: { tool: "opc_intent_complete" }
 }
 
 Claude 按 step_instruction（必读）判断:
   输入: "实现用户认证系统，支持邮箱注册登录和会话管理"
-  → 包含动作动词"实现" +0.3
-  → 包含明确交付物"系统" +0.2
-  → 无否定/疑问信号
-  → intent: task, confidence: 0.85
+  → 命中 task 信号: 动作动词"实现"、明确交付物"系统"
+  → 无 chat/question 反向信号
+  → intent: task
+  → intent_evidence: {
+      task_criteria_hits: ["action_verb:实现", "deliverable:系统"],
+      chat_signals: [],
+      user_quotes: ["实现用户认证系统，支持邮箱注册登录和会话管理"]
+    }
 
-Claude → opc_intent_complete({intent: "task", confidence: 0.85, reasoning: "..."})
+Claude → opc_intent_complete({
+  intent: "task",
+  intent_evidence: {...},
+  reasoning: "动作动词+明确交付物，无反向信号"
+})
 ```
 
 ---
@@ -70,18 +78,21 @@ Claude → opc_intent_complete({intent: "task", confidence: 0.85, reasoning: "..
 ## 2.2 opc_intent_complete 路由 task 分支 → 收到 task_analysis 指令
 
 ```
+opc_intent_complete 经 reflection-server P1 V1-V5 + meta-validator:
+  → V1-V5 全 pass + 无严重 objection → 直接路由 task 分支
+
 返回:
 {
   step: "task_analysis",
-  step_instruction: "先调 opc_knowledge_list() 获取已有 unit，然后做 7 步分析 + 自省",
+  step_instruction: "先调 opc_knowledge_list() 获取已有 unit，然后做 7 步分析 + 收集 task_analysis_evidence",
   methodology: {
     docs: ["prompts/task-analysis.md"],
-    ref: "§6.2 分析步骤 + §6.4 自省评估 5 维度",
+    ref: "§6.2 分析步骤 + 05-opc-reflection-server §二 task_analysis_evidence schema",
     summary: "提炼描述→打标签→判复杂度→推荐阶段→提取知识→匹配 scenario→知识操作计划"
   },
   prerequisites: [{tool: "opc_knowledge_list", why: "获取已有 unit 上下文"}],
-  schema: { description, tags, complexity, suggested_phases, knowledge_unit,
-            scenario, knowledge_plan, analysis_confidence, confidence_detail },
+  schema: { description, tags, complexity, suggested_phases, phase_selection_rationale,
+            knowledge_unit, scenario, knowledge_plan, task_analysis_evidence },
   next: { tool: "opc_task_analysis_complete" }
 }
 
@@ -92,7 +103,7 @@ Claude → opc_knowledge_list()
 
 ---
 
-## 2.3 Claude 按方法论做 7 步分析
+## 2.3 Claude 按方法论做 7 步分析 + 收集 P2 evidence
 
 ```
 Claude 自行分析:
@@ -100,23 +111,24 @@ Claude 自行分析:
   ② 打标签 → [backend, auth, database]
   ③ 复杂度 → medium（需要规划，能一轮完成）
   ④ 推荐阶段 → [04-implement-design, 05-implement, 06-testing]
+        phase_selection_rationale: "add-feature + medium：跳过 00/01/03，从实现设计起步至测试"
   ⑤ 知识点 → [user-auth]（新 unit）
   ⑥ 扫描 scenarios/ → add-feature
   ⑦ 知识操作计划 → 6 个 subsection 全部 create
 
-自省打分:
-  ① 描述精确度: 0.9
-  ② 复杂度确信度: 0.85
-  ③ 知识单元完整度: 0.9
-  ④ 阶段推荐合理度: 0.85
-  ⑤ 场景匹配度: 0.9
-  → 分析置信度 = 0.88
+收集 task_analysis_evidence:
+  requirements: [{text:"邮箱注册登录", source_quote:"..."}, {text:"会话管理", source_quote:"..."}]
+  dependencies: ["database", "session-store"]
+  risks: [{text:"若需 SSO 集成则升级 high", trigger:"user_mentions=oauth|sso"}]
+  complexity_signals: {needs_design:true, one_round_solvable:true, verdict:"medium"}
+  phase_selection_rationale: "（同上）"
 
 Claude → opc_task_analysis_complete({
   description: "实现用户认证系统（邮箱注册登录 + 会话管理）",
   tags: ["backend", "auth", "database"],
   complexity: "medium",
   suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
+  phase_selection_rationale: "add-feature + medium：跳过 00/01/03，从实现设计起步至测试",
   knowledge_unit: ["user-auth"],
   scenario: "add-feature",
   knowledge_plan: [
@@ -127,8 +139,7 @@ Claude → opc_task_analysis_complete({
     {path: "user-auth/login/architecture", operation: "create"},
     {path: "user-auth/register/architecture", operation: "create"}
   ],
-  analysis_confidence: 0.88,
-  confidence_detail: {...}
+  task_analysis_evidence: {...}
 })
 ```
 
@@ -138,10 +149,12 @@ Claude → opc_task_analysis_complete({
 
 ```
 opc_task_analysis_complete 判定:
-  → 0.88 ≥ 0.8 → 跳过反思
+  → P2 evidence 经 V1-V5 + meta-validator → 全 pass + 无严重 objection → 跳过反思
   → complexity = medium → 不走 quick_dispatch
   → modify_unit_count = 1（6 个 subsection 全在 user-auth unit 下，按 unit 去重）
   → 路由 brief_generation
+  → 同步写入 flow-state.accumulated.analysis_evidence_ref = "opc-logs/reflection/<pid>/P2.jsonl#L<n>"
+    + accumulated.analysis_result.phase_selection_rationale
 
 返回:
 {
@@ -149,17 +162,18 @@ opc_task_analysis_complete 判定:
   step_instruction: "按 brief-generation.md 模板生成 brief markdown",
   methodology: {
     docs: ["prompts/brief-generation.md"],
-    ref: "§8.1 模板 + §8.2 生成规则",
-    summary: "8 个固定段落"
+    ref: "§8.1 模板 + §8.2 生成规则 + 05-opc-reflection-server §二 brief_evidence schema",
+    summary: "8 个固定段落，阶段计划顶部追加 phase_selection_rationale"
   },
-  schema: { brief_content: "string (markdown)" },
+  schema: { brief_content: "string (markdown)", brief_evidence?: "..." },
   next: { tool: "opc_brief_complete" }
 }
 
 Claude 通知用户:
-  "任务分析完成（置信度 0.88）:
+  "任务分析完成（P2 evidence 通过 V1-V5）:
    描述：实现用户认证系统（邮箱注册登录 + 会话管理）
-   复杂度：medium | 阶段：04→05→06 | 知识点：user-auth | 场景：add-feature"
+   复杂度：medium | 阶段：04→05→06 | 知识点：user-auth | 场景：add-feature
+   阶段选择理由：add-feature + medium：跳过 00/01/03，从实现设计起步至测试"
 ```
 
 ---

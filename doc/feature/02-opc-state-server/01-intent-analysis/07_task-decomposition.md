@@ -9,30 +9,32 @@
 
 ### 7.1 触发条件
 
-opc_intent_complete `opc_task_analysis_complete` 检测到 analysis_result 中需要**修改**的 unit 数量 ≥ 2 时，路由返回拆分指令：
+`opc_task_analysis_complete` 检测到 analysis_result 中需要**修改**的 unit 数量 ≥ 2 时，路由返回拆分指令：
 
 ```json
 {
   "step": "task_decomposition",
-  "step_instruction": "按方法论执行拆分分析 + 自省评估，提交给 opc_decomposition_complete。",
+  "step_instruction": "按方法论执行拆分分析，收集 decomposition_evidence，提交给 opc_decomposition_complete。",
   "methodology": {
     "docs": ["prompts/task-decomposition.md"],
-    "ref": "§7.2 拆分原则 + §7.4 自省评估 4 维度",
+    "ref": "§7.2 拆分原则 + 05-opc-reflection-server §二 decomposition_evidence schema",
     "summary": "按领域边界拆，独立的拆开，紧密耦合的合并，通过 _refs 推导依赖"
   },
-  "schema": { sub_pipelines, execution_order, decomposition_confidence, confidence_detail },
+  "schema": { sub_pipelines, execution_order, decomposition_evidence },
   "next": {"tool": "opc_decomposition_complete"}
 }
 ```
 
-修改数 = 1 时跳过：opc_intent_complete 直接路由到 brief_generation。
+> 本步骤走 reflection-server **P3 反思位点**，提交 `decomposition_evidence`（schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等，详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。路由由 V1-V5 验证器 + meta-validator 输出，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 启用），详见 [05-opc-reflection-server/01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+
+修改数 = 1 时跳过：opc_task_analysis_complete 直接路由到 brief_generation。
 
 ```
 修改数 = 1：跳过拆分
   → 例："给用户认证加个短信验证" → user-auth(update) + notification(read)
   → notification 只读 → 单管线
 
-修改数 ≥ 2：opc_intent_complete 路由到 task_decomposition
+修改数 ≥ 2：opc_task_analysis_complete 路由到 task_decomposition
   → 修改的 unit 之间互相 _refs → 合并为一条子管线
   → 修改的 unit 之间独立 → 拆分
 ```
@@ -79,46 +81,37 @@ order._refs → [cart, user-center]
     {"group": 2, "sequential": ["sub-3"]},
     {"group": 3, "sequential": ["sub-4"]}
   ],
-  "decomposition_confidence": 0.87,
-  "confidence_detail": {
-    "boundary_clarity": 0.9,
-    "coupling_clarity": 0.85,
-    "intent_clarity": 0.8,
-    "granularity": 0.9
+  "decomposition_evidence": {
+    "boundary_rationale": [
+      {"sub_id": "sub-1", "rationale": "product 是独立领域，无外部 _refs"},
+      {"sub_id": "sub-4", "rationale": "order/payment 紧密耦合，合并为一条 sub"}
+    ],
+    "dependency_graph": [
+      {"from": "sub-3", "to": ["sub-1", "sub-2"], "source": "cart._refs"},
+      {"from": "sub-4", "to": ["sub-3", "sub-2"], "source": "order._refs"}
+    ],
+    "unit_isolation_check": [
+      {"unit": "product", "shared_with": [], "isolated": true},
+      {"unit": "user-center", "shared_with": [], "isolated": true}
+    ]
   }
 }
 ```
 
-### 7.4 自省评估与推进
+### 7.4 路由（由 opc_decomposition_complete 按 V1-V5 + meta-validator 结果分流）
 
-opc_task_analysis_complete `opc_decomposition_complete` 收到拆分方案 + 自省置信度后路由：
+详见 [03_flow-tools-step-routing.md §opc_decomposition_complete](03_flow-tools-step-routing.md#opc_decomposition_complete)。
 
-**评估维度（Claude 自省打分）：**
-
-| 维度 | 权重 | 0-0.4 (低) | 0.5-0.7 (中) | 0.8-1.0 (高) |
-|------|------|-----------|-------------|------------|
-| 领域边界清晰度 | 0.35 | unit 边界模糊，多个概念混杂 | 边界基本清晰，少量重叠 | 每个 unit 职责单一，边界明确 |
-| 耦合关系明确度 | 0.30 | _refs 关系不确定，依赖方向存疑 | _refs 可推导但存在歧义 | _refs 关系清晰，依赖方向无争议 |
-| 任务意图明确度 | 0.20 | 用户描述模糊，需猜测范围 | 意图基本清楚，个别细节待澄清 | 用户明确指定了全部范围和边界 |
-| 拆分粒度合理性 | 0.15 | 子管线过大或过碎 | 粒度基本合理 | 每条子管线 1-2 个紧密耦合的 unit |
-
-```
-拆分置信度 = 领域边界清晰度×0.35 + 耦合关系明确度×0.30
-            + 任务意图明确度×0.20 + 拆分粒度合理性×0.15
-```
-
-**opc_task_analysis_complete 推进决策：**
-
-| 置信度 | opc_task_analysis_complete 路由行为 | 典型场景 |
-|--------|------------|---------|
-| ≥ 0.8 | 路由到 brief_generation，附带 step_instruction "通知用户拆分结果后继续" | _refs 完整 + 边界清晰 |
-| 0.5-0.8 | 路由到 brief_generation，附带 step_instruction "快速确认拆分方案后继续" | 大部分常规任务 |
-| < 0.5 | 路由到 ask_user（详细确认）或 reflection（深度审视） | 全新领域、边界模糊 |
+| validator 结果 | 路由行为 | 典型场景 |
+|----------------|---------|---------|
+| V1-V5 pass + 无严重 objection | 路由到 brief_generation，附 step_instruction "拆分方案 evidence 通过验证，开始生成 brief" | _refs 完整 + 边界清晰 |
+| V1-V5 pass + 中等 objection | 路由到 brief_generation，附 step_instruction "展示方案 + reasoning_trace 后开始生成 brief" | 大部分常规任务 |
+| V1-V5 fail 或 严重 objection | 路由到 P3 反思（primary=M6 ToT，secondary=M5 Debate），受 budget-guard 约束；budget 耗尽 → ask_user | 全新领域、边界模糊 |
 
 **自动推进时 Claude 主动告知：**
 
 ```
-"已自动拆分为 4 条子管线（置信度 0.87）:
+"已自动拆分为 4 条子管线（P3 evidence 通过 V1-V5）:
   sub-1: 商品管理      (独立，无依赖)
   sub-2: 用户中心      (独立，无依赖)
   sub-3: 购物车        (依赖 sub-1, sub-2)

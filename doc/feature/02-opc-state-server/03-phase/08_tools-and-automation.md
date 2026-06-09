@@ -44,8 +44,9 @@
 auto_advance = (
     task.complexity != "high"
     AND 当前 phase 所有 node 100% completed（无 retry 兜底完成）
-    AND 当前 phase 的 selection_confidence ≥ min_confidence_for_auto × 0.9
-    AND 下一 phase 在 suggested_phases 中
+    AND 当前 phase 的 P5 selection_evidence 通过 V1-V5 validator
+        + meta-validator 未保留严重 objections
+    AND 下一 phase 在 state.json.phase_plan.selected 中
 )
 ```
 

@@ -26,11 +26,11 @@ sequenceDiagram
     PH->>PH: 扫描可用节点<br/>(tag 过滤 + scenario 标记)
     PH-->>C: 节点候选集<br/>+ phase.md 元信息<br/>+ methodology
 
-    Note over C,K: ② 节点选择 + 自省
-    C->>C: 语义匹配 + 置信度打分<br/>(4 维度自省评估)
-    alt 置信度 < 阈值
+    Note over C,K: ② 节点选择 + 反思
+    C->>C: 语义匹配 + 收集 selection_evidence<br/>(matched_tags / scenario_hits /<br/>file_domain_conflicts / blocked_by_graph)
+    alt V1-V5 validator 或 meta-validator 发现 objection
         C->>PH: opc_flow_reflect()
-        PH-->>C: 反思指令
+        PH-->>C: 反思指令 (primary=M4 Critique)
         C->>C: 重新选择
     end
 
@@ -83,7 +83,7 @@ flowchart TD
     Check -->|否| Err[拒绝 + 报错]
     Check -->|是| Auto{auto_advance<br/>4 条件}
 
-    Auto -->|complexity ≤ medium<br/>+ confidence ≥ 0.8<br/>+ 节点完成率 100%<br/>+ suggested_phases 单一| AA[自动推进]
+    Auto -->|complexity ≤ medium<br/>+ selection_evidence 通过 V1-V5<br/>+ 节点完成率 100%<br/>+ next ∈ phase_plan.selected| AA[自动推进]
     Auto -->|任一不满足| Ask[询问 Claude]
 
     AA --> Next{order.next?}
@@ -123,14 +123,14 @@ flowchart TD
 | 子文档 | 内容 |
 |------|------|
 | [01_nine-phases.md](01_nine-phases.md) | 9 阶段总览 + `phase.md` 元信息文件 |
-| [02_node-selection.md](02_node-selection.md) | 节点选择策略、反思轮次表、置信度阈值表 |
+| [02_node-selection.md](02_node-selection.md) | 节点选择策略、selection_evidence schema、validator 路由 |
 | [03_scenarios.md](03_scenarios.md) | Scenario 场景配方与加权机制 |
 
 ### 阶段生命周期（按执行顺序）
 
 | 子文档 | 内容 | 涉及工具 |
 |------|------|------|
-| [04_phase-start.md](04_phase-start.md) | `opc_phase_start` + 自省评估 4 维度 + 三种推进路径 + 反思循环 | `opc_phase_start` / `opc_flow_reflect` |
+| [04_phase-start.md](04_phase-start.md) | `opc_phase_start` + P5 selection_evidence 收集 + V1-V5 validator 路由 + 反思循环 | `opc_phase_start` / `opc_flow_reflect` |
 | [05_phase-confirm-execute.md](05_phase-confirm-execute.md) | `opc_phase_confirm` 锁定执行 + 逐 node 执行 | `opc_phase_confirm` / `opc_node_start` |
 | [06_phase-complete-reset.md](06_phase-complete-reset.md) | `opc_phase_complete` + auto_advance 规则 + `opc_phase_reset` + 分层回退 L0–L3 | `opc_phase_complete` / `opc_phase_reset` |
 
@@ -146,17 +146,17 @@ flowchart TD
 ## 快速入口
 
 - **进入阶段**：[`opc_phase_start`](04_phase-start.md#二opc_phase_start--扫描与返回) — 由 `opc_pipeline_create` / 上一 phase 的 `opc_phase_complete` 路由触发
-- **锁定执行**：[`opc_phase_confirm`](05_phase-confirm-execute.md#一opc_phase_confirm--锁定执行计划) — 自省置信度 ≥ 阈值后调用
+- **锁定执行**：[`opc_phase_confirm`](05_phase-confirm-execute.md#一opc_phase_confirm--锁定执行计划) — selection_evidence 通过 V1-V5 后调用
 - **回退**：[`opc_phase_reset`](06_phase-complete-reset.md#三opc_phase_reset--阶段重置) — 快照恢复，下游级联 pending
 
 ---
 
 ## 核心设计原则
 
-- **节点选择由 Claude 完成**：state-server 只做 tag 过滤和 scenario 标记，**不调 LLM**；语义匹配和置信度打分由 Claude 在主循环承担
-- **自省驱动确认**：高置信度自动确认、中置信度快速确认、低置信度反思循环，max_reflection_rounds 兜底
+- **节点选择由 Claude 完成**：state-server 只做 tag 过滤和 scenario 标记，**不调 LLM**；语义匹配和 selection_evidence 收集由 Claude 在主循环承担
+- **Evidence 驱动确认**：V1-V5 validator + meta-validator 通过即自动确认；validator 失败或保留严重 objections → reflection 循环 → ask_user 兜底
 - **快照保证可回退**：每次 `opc_phase_confirm` 生成 knowledge 快照，`opc_phase_reset` 可幂等恢复
-- **auto_advance 严格判定**：复杂度 + 置信度 + 节点完成率 + suggested_phases 4 条件全满足才自动推进
+- **auto_advance 严格判定**：complexity + selection_evidence + 节点完成率 + phase_plan.selected 4 条件全满足才自动推进
 
 ---
 

@@ -14,9 +14,9 @@ UserPromptSubmit hook 注入"先调 opc_flow_query"
   → Claude 判断: 闲聊 → 选 suggested_actions[chat] → 直接走 opc_flow_start
   → Claude → opc_flow_start({user_message: "你好，今天天气怎么样"})
   → opc_flow_start 返回 intent_analysis 指令
-  → Claude 判断 → intent: chat, confidence: 0.95
-  → Claude → opc_intent_complete({intent: "chat", confidence: 0.95})
-  → opc_intent_complete 路由: { done: true, action: respond_normally, status: completed }
+  → Claude 判断 → intent: chat, intent_evidence: {task_criteria_hits: [], chat_signals: ["greeting:你好", "smalltalk:天气"], user_quotes: ["你好，今天天气怎么样"]}
+  → Claude → opc_intent_complete({intent: "chat", intent_evidence: {...}, reasoning: "纯问候+闲聊话题，无动作动词/交付物"})
+  → opc_intent_complete 经 P1 V1-V5 全 pass → 路由: { done: true, action: respond_normally, status: completed }
   → Claude 直接回答（flow-state.status 已自动标记 completed）
 ```
 

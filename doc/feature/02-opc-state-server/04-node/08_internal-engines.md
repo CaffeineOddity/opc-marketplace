@@ -38,7 +38,7 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 
 ### 2.3 flow-router（state-server 内部，新增）
 
-- `route(step, payload)` — 按 step + confidence + intent 决定下一步指令
+- `route(step, payload)` — 按 step + evidence_validator_result + intent 决定下一步指令
 - `persist_step(step, input, output)` — 写入 `.opc/sessions/<id>/flow-state.json`
 - `persist_reflection(step_id, round, scores, notes)` — 反思日志追加
 - `resume(session_id)` — 读取 `flow-state.json` 返回断点续传指令

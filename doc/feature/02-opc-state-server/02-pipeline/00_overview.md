@@ -142,6 +142,7 @@ flowchart TD
 - **状态机驱动**：所有状态迁移仅通过 MCP 工具完成，禁止手工编辑 JSON
 - **owner 并发隔离**：基于 pid 存活检测识别孤儿管线，支持跨 session 恢复
 - **拓扑一致性**：`execution_order` 必须与 `blocked_by` 推导的拓扑排序一致，`opc_pipeline_create` 时强制校验
+- **并发优先，依赖串行**：拆分管线默认尽量并发，`blocked_by` 是唯一串行依据。`opc_pipeline_status` 返回所有 ready 子管线，Host 在一次响应里并发拉起多个 `opc_phase_start`（详见 [07_dependency-parallel.md](07_dependency-parallel.md)）
 
 ---
 

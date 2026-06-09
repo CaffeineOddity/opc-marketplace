@@ -22,6 +22,7 @@ opc_decomposition_complete `opc_brief_complete` 收到 brief 内容后，**不�
       "complexity": "medium",
       "knowledge_unit": ["user-auth"],
       "suggested_phases": ["04-implement-design", "05-implement", "06-testing"],
+      "phase_selection_rationale": "add-feature + medium：跳过 00/01/03，从实现设计起步至测试",
       "scenario": "add-feature",
       "brief_content": "<刚提交的 brief markdown>",
       "sub_pipelines": [{
@@ -35,6 +36,8 @@ opc_decomposition_complete `opc_brief_complete` 收到 brief 内容后，**不�
   }
 }
 ```
+
+> `suggested_phases` + `phase_selection_rationale` 由 state-server 落盘成每条子管线 `state.json` 的 `phase_plan` 块：`available` 由 state-server 扫描 `phases/` 目录得出；`selected = suggested_phases`；`selected_by = "task_analysis"`（若是 decomposition 拆出的子管线则为 `"task_decomposition"`）；`selection_rationale = phase_selection_rationale`。写入前必须通过偏序与一致性校验（详见 [04_state-json.md §六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)），任意一条 fail 则 reject 并要求重新分析。
 
 `opc_pipeline_create` 完成后返回里也带 `flow_next` 字段，指引 Claude 调 `opc_knowledge_open`：
 
@@ -55,7 +58,7 @@ state-server 内部行为（纯确定性）：
 - 生成 pipeline ID，创建 `.opc/pipelines/<id>/` 目录结构
 - 写入 `pipeline-plan.json`
 - 写入 `brief.md`（内容由 Claude 提供）
-- 写入 `state.json`（初始空 phases）
+- 写入 `state.json`（初始空 phases；同时落盘 `phase_plan` 块并跑偏序+一致性校验）
 - 更新 `.opc/sessions/<id>/flow-state.json`，标记 step: pipeline_created
 - 返回 `{ pipeline_id, flow_next }`
 

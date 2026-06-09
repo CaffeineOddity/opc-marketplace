@@ -30,10 +30,16 @@ opc_flow_revise({field, value})
   → 校验 active=true 且 current_step ∈ [可修订步骤]
   → 修改 flow-state.json.accumulated[field] = value
   → 判定是否需要回溯：
-      · complexity / suggested_phases 改动 → 自动重新进入 brief_generation 步骤
+      · complexity / suggested_phases 改动 →
+          - 清空 analysis_result.phase_selection_rationale + analysis_evidence_ref
+            （强制 Claude 重新给出理由 + 重跑 P2 反思）
+          - 自动重新进入 task_analysis 步骤（不是 brief_generation——因为 phase_plan
+            重新校验失败时无法生成有效 brief）
       · scenario / tags 改动 → 仅记录，不回溯（影响后续 phase_start 的 scenario 推荐）
-      · knowledge_unit 改动 → 强制回到 task_analysis 重做（影响 unit modify_count）
-  → 返回 { revised_field, retroactive_step?: <要回到的步骤>, next: {...} }
+      · knowledge_unit 改动 → 强制回到 task_analysis 重做（影响 unit modify_count
+        + phase_plan 重算）
+  → 返回 { revised_field, retroactive_step?: <要回到的步骤>,
+           cleared_evidence_refs?: [...], next: {...} }
 ```
 
 ---

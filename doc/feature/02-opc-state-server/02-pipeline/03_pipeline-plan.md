@@ -76,6 +76,8 @@
 | `sub_pipelines[].blocked_by` | 依赖的其他子管线 ID |
 | `execution_order` | 执行分组。`parallel` 可并行；group 之间串行 |
 
+> **phase 选择不在本文件**：每条子管线实际跑哪些 phase 由 `sub-pipelines/<id>/state.json` 的 `phase_plan` 块声明（包含 `available` / `selected` / `selected_by` / `selection_rationale`，并由 state-server 做偏序与一致性校验）。详见 [04_state-json.md §六](04_state-json.md#六phase_plan-校验规则deterministic)。
+
 ---
 
 ## 四、状态聚合规则

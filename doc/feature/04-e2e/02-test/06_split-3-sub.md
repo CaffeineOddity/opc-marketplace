@@ -18,11 +18,15 @@ Claude 拆分:
   → sub-1: product（无依赖）
   → sub-2: cart（blocked_by: [sub-1]）
   → execution_order: Group1[sub-1] → Group2[sub-2]
-  → 自省: decomp_confidence: 0.87
+  → 收集 decomposition_evidence: {
+      boundary_rationale: [{sub:"sub-1", reason:"独立 product domain"},{sub:"sub-2", reason:"依赖 product unit"}],
+      dependency_graph: [{from:"sub-2", to:["sub-1"]}],
+      unit_isolation_check: {ok: true, overlapping_units: []}
+    }
 
-Claude → opc_decomposition_complete({...})
-  → opc_decomposition_complete 判定: 0.87 ≥ 0.8 → 自动推进 → 路由 brief_generation
-  → Claude 通知: "已自动拆分为 2 条子管线（置信度 0.87）"
+Claude → opc_decomposition_complete({sub_pipelines, execution_order, decomposition_evidence})
+  → opc_decomposition_complete 经 P3 V1-V5 全 pass + meta-validator 无严重 objection → 自动推进 → 路由 brief_generation
+  → Claude 通知: "已自动拆分为 2 条子管线（P3 evidence 通过 V1-V5）"
 
 Claude → opc_brief_complete → opc_pipeline_create({...sub_pipelines...})
   → state-server 写入 pipeline-plan.json

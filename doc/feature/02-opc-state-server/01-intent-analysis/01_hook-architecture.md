@@ -108,7 +108,7 @@ platform/mcp/opc-state-server/
 │   ├── reflection-task-analysis.md
 │   └── reflection-node-selection.md
 ├── flow/                           ← 流程状态机
-│   ├── flow-router.ts              ←   路由决策（按 confidence/intent/current_step 分支）
+│   ├── flow-router.ts              ←   路由决策（按 evidence + V1-V5 + meta-validator + intent + current_step 分支）
 │   ├── flow-state-store.ts         ←   .opc/sessions/<id>/flow-state.json 读写 + pid 校验
 │   └── owner-manager.ts            ←   owner pid 接管 + 心跳 + 孤儿检测
 └── tools/

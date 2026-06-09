@@ -13,8 +13,8 @@
   → Claude 判断任务消息 → opc_flow_start({user_message}) → 返回 intent_analysis 指令
   → Claude 判断 intent=task → opc_intent_complete
   → opc_intent_complete 路由 task 分支 → 返回 task_analysis 指令 + prerequisites:[opc_knowledge_list]
-  → Claude 调 opc_knowledge_list → 7 步分析 + 自省 → opc_task_analysis_complete
-  → opc_task_analysis_complete 按 confidence + complexity + modify_count 路由
+  → Claude 调 opc_knowledge_list → 7 步分析 + 收集 task_analysis_evidence → opc_task_analysis_complete
+  → opc_task_analysis_complete 按 P2 V1-V5 + complexity + modify_unit_count 路由
   → (需修改 unit ≥ 2: 路由 task_decomposition → Claude 拆分 → opc_decomposition_complete → 路由)
   → opc_task_analysis_complete / opc_decomposition_complete 路由 brief_generation → Claude 生成 brief → opc_brief_complete
   → opc_brief_complete 返回 next:opc_pipeline_create（预填全部参数）

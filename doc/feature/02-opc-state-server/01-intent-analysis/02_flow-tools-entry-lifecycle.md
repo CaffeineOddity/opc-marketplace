@@ -95,11 +95,37 @@
     {"intent": "废弃某阶段产出", "signals": ["api 设计有问题，回到 04 重新规划"], "next": {"tool": "opc_phase_reset"}},
     {"intent": "彻底放弃换任务", "signals": ["算了，先做别的"], "next": {"tools": ["opc_flow_abort", "opc_flow_start"]}},
     {"intent": "暂停等待", "signals": ["等一下", "先停一下"], "next": {"action": "不调任何工具，等用户进一步指令"}},
-    {"intent": "流程外问答", "signals": ["刚才设计了几个端点", "现在在哪一步"], "next": {"action": "直接回答，不动流程"}}
+    {"intent": "流程外问答", "signals": ["现在几点", "刚才设计了几个端点", "现在在哪一步", "顺便问一下…"], "next": {"action": "respond_outside_flow", "preserve_state": true}}
   ],
   "orphan_pipelines": []
 }
 ```
+
+#### `respond_outside_flow` 语义说明
+
+**触发场景**：管线正在执行（`active=true`），但用户随手问了一个与当前任务无关的问题（闲聊、问当前进度、问知识库内容、问时间等）。Hook 每次都注入"先调 `opc_flow_query`"，所以即便这种问题也会进入 `opc_flow_query`，需要一条明确的"什么都不做"出口。
+
+**Claude 行为**：
+- **不调任何 `opc_flow_*` / `opc_pipeline_*` 推进类工具**（不写 flow-state.json，不改 pipeline 状态）
+- 如果是项目知识问答 → 允许调 `opc_knowledge_search` / `opc_knowledge_get`（只读）后回答
+- 如果是纯闲聊或与项目无关 → 直接回复
+- 回复完即可，**`current_step` / `current_pipeline_pointer` 保持不变**，下次用户继续推进时仍能从原位接上
+
+**与其他 action 的区别**：
+
+| Action | 是否动 flow-state | 是否动 pipeline | 用途 |
+|---|---|---|---|
+| `respond_normally`（形态 A） | 否 | 否（无 active 流程） | **无活跃流程**下的闲聊/纯知识问答 |
+| `respond_outside_flow`（形态 B） | 否（preserve_state=true） | 否 | **有活跃流程**时的题外话，不打断流程 |
+| 暂停等待 | 否 | 否 | 用户明确要求停一下，下一次输入再决定 |
+| 修改累积参数 | 是（`opc_flow_revise`） | 视情况 | 用户在修正之前的分析结果 |
+
+**判定指引**：Claude 在 `opc_flow_query` 返回 `active=true` 后，**先把新消息与 `snapshot.user_message_history` / `current_step` 做语义关联**：
+- 关联度高（延续/纠正/补充/回退当前任务） → 走对应推进/纠错 action
+- 关联度低（题外话/打断/无关问答） → 走 `respond_outside_flow`
+- 完全无法判断 → 走"暂停等待"，不动状态，反问用户
+
+> **设计原则**：宁可让 Claude 在题外话时多花一次 `opc_flow_query` 调用，也不在 Hook 里做意图判断。`respond_outside_flow` 是 Hook 极简化的必要补丁。
 
 **形态 C：有孤儿流程（owner.pid 已死）**
 
@@ -158,15 +184,15 @@
 ```json
 {
   "step": "intent_analysis",
-  "step_instruction": "判断用户意图，输出 {intent, confidence, reasoning}。",
+  "step_instruction": "判断用户意图，输出 {intent, intent_evidence, reasoning}（intent_evidence 收集 task_criteria_hits / chat_signals / user_quotes 供 P1 V1-V5 验证）。",
   "methodology": {
     "docs": ["prompts/01_intent-analysis-overview.md"],
-    "ref": "§三 意图分类 + §3.1 task 信号 + §3.2 project vs general 信号",
+    "ref": "§三 意图分类 + §3.1 task 信号 + §3.2 project vs general 信号 + 05-opc-reflection-server §二 intent_evidence schema",
     "summary": "4 种意图：task/project_question/general_question/chat"
   },
   "schema": {
     "intent": {"enum": ["task", "project_question", "general_question", "chat"]},
-    "confidence": "number 0-1",
+    "intent_evidence": {"task_criteria_hits": "string[]", "chat_signals": "string[]", "user_quotes": "string[]"},
     "reasoning": "string"
   },
   "next": {"tool": "opc_intent_complete"},

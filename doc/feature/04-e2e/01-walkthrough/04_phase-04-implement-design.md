@@ -46,39 +46,50 @@ Scenario 加权:
     { "name": "api-design", "score": 1.18, "recommended": true },
     { "name": "database-schema", "score": 1.02, "recommended": true }
   ],
-  "max_reflection_rounds": 2
+  "reflection_budget_hint": {
+    "max_rounds": 2,
+    "primary_method": "M4-Critique",
+    "secondary_method": "M5-Debate"
+  }
 }
 ```
 
 ---
 
-## 4.2 自省评估
+## 4.2 收集 selection_evidence → P5 V1-V5 验证
 
-Claude 拿到排序结果后，自省打分：
+Claude 拿到候选后排序 + 收集 `selection_evidence`，提交给 reflection-server P5：
 
 ```
-Claude 自省评估:
-  ① 语义匹配强度: 0.85
-     api-design 0.88 + database-schema 0.72 → 平均 0.80，add-feature scenario 加成
-  ② Scenario 对齐度: 1.0
-     add-feature 推荐 [api-design, database-schema]，完全命中
-  ③ 覆盖完整性: 0.90
-     API 设计 + 数据库 schema → 覆盖了实现设计阶段的核心关注面
-  ④ 节点冗余度: 0.95
-     两个节点职责明确，无重叠
+selection_evidence = {
+  matched_tags: [
+    {node: "api-design", tags: ["backend"]},
+    {node: "database-schema", tags: ["database", "backend"]}
+  ],
+  scenario_hits: ["api-design", "database-schema"],   // add-feature 推荐全命中
+  file_domain_conflicts: [],                          // 两 node 输出域无重叠
+  blocked_by_graph: [
+    {from: "database-schema", to: ["api-design"]}     // input→output 推导
+  ],
+  coverage_gaps: []                                   // [backend, auth, database] 全覆盖
+}
 
-选择置信度 = 0.85×0.30 + 1.0×0.25 + 0.90×0.30 + 0.95×0.15 = 0.92
-
-04-implement-design 的 min_confidence_for_auto = 0.85
-0.92 ≥ 0.85 → 自动确认
+reflection-server P5 判定:
+  V1 schema:         ok (字段完整)
+  V2 referential:    ok (blocked_by 图无环、依赖目标存在)
+  V3 evidence:       ok (matched_tags 非空、scenario_hits 非空)
+  V4 coverage:       ok (coverage_gaps 为空)
+  V5 discrimination: ok (file_domain_conflicts 为空)
+  meta-validator:    无严重 objection
+  → 路径 A 自动确认（auto_confirm: true）
 ```
 
 ```
 Claude 通知用户:
-  "04-implement-design 已自动确认 2 个节点（置信度 0.92）:
-   1. api-design (1.18) — 设计 API 端点
-   2. database-schema (1.02) — 设计数据库表结构
-   node-resolver 推导: database-schema 依赖 api-design → 串行执行。
+  "04-implement-design 已自动确认 2 个节点（P5 evidence 通过 V1-V5）:
+   1. api-design — 设计 API 端点（scenario_hits 命中）
+   2. database-schema — 设计数据库表结构（scenario_hits 命中）
+   依赖: database-schema blocked_by [api-design] → 串行执行。
    如需调整，回复'调整节点'。"
 ```
 

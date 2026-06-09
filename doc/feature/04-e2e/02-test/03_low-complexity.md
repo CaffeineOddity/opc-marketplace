@@ -10,8 +10,8 @@
 ```
 Claude → opc_flow_query → opc_flow_query 返回 active: false
 Claude → opc_flow_start → opc_flow_start 返回 intent_analysis 指令
-Claude → opc_intent_complete({intent: "task", confidence: 0.9})
-  → opc_intent_complete 路由: 返回 task_analysis 指令 + prerequisites:[opc_knowledge_list]
+Claude → opc_intent_complete({intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:修复", "deliverable:登录页按钮"], chat_signals: [], user_quotes: ["修复登录页按钮颜色不对"]}, reasoning: "动作动词+明确缺陷描述"})
+  → opc_intent_complete 经 P1 V1-V5 全 pass → 路由: 返回 task_analysis 指令 + prerequisites:[opc_knowledge_list]
 Claude → opc_knowledge_list → user-auth 有 login, register, session
 Claude → 7 步分析 → complexity: low, knowledge_plan: [{path: "user-auth/login/ui", operation: "update"}]
 Claude → opc_task_analysis_complete({complexity: "low", knowledge_unit: ["user-auth"], ...})

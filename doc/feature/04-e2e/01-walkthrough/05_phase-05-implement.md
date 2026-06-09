@@ -41,49 +41,62 @@ tag 交集:
 
 ---
 
-## 5.2 自省评估 + 反思调整
+## 5.2 收集 selection_evidence → P5 反思调整
 
-Claude 拿到排序结果后，自省打分：
-
-```
-Claude 自省评估:
-  ① 语义匹配强度: 0.81
-     auth-integration 0.92 + tdd 0.85 + backend-endpoint 0.78 + security 0.68
-  ② Scenario 对齐度: 0.75
-     add-feature 推荐 tdd-implementation，auth-integration 吻合，但推荐里只有 3 个节点
-  ③ 覆盖完整性: 0.90
-     auth → tdd → backend → security，覆盖完整
-  ④ 节点冗余度: 0.60  ← 低！
-     auth-integration 和 backend-endpoint 职责有重叠（都涉及 API 端点实现）
-
-选择置信度 = 0.81×0.30 + 0.75×0.25 + 0.90×0.30 + 0.60×0.15 = 0.78
-
-05-implement 的 min_confidence_for_auto = 0.80
-0.78 < 0.80 且 ≥ 0.60 (threshold×0.75) → 快速确认，但 Claude 标注冗余警告
-```
+Claude 拿到排序结果后，收集第一轮 `selection_evidence`：
 
 ```
-Claude 自省发现冗余 → 进入 1 轮反思调整:
+第 1 轮 selection_evidence = {
+  matched_tags: [
+    {node: "auth-integration",    tags: ["auth", "backend"]},
+    {node: "tdd-implementation",  tags: ["backend"]},
+    {node: "backend-endpoint",    tags: ["backend"]},
+    {node: "security-review",     tags: []}            // scenario 强制保留
+  ],
+  scenario_hits: ["tdd-implementation"],
+  file_domain_conflicts: [
+    {between: ["auth-integration", "backend-endpoint"], reason: "src/auth/ 路径与 RESTful endpoint 实现重叠"}
+  ],
+  blocked_by_graph: [],
+  coverage_gaps: []
+}
 
-  "检测到 auth-integration 和 backend-endpoint 可能重叠。
-   auth-integration 已涵盖认证相关端点实现，backend-endpoint 侧重通用 CRUD。
-   由于本任务是纯认证场景，移除 backend-endpoint 可减少冗余。
+reflection-server P5 判定:
+  V1-V3: ok
+  V4 coverage:       ok
+  V5 discrimination: fail (file_domain_conflicts 非空)
+  meta-validator:    保留 1 条严重 objection "auth-integration 已涵盖认证端点实现，backend-endpoint 冗余"
+  → 路径 C 反思循环（primary=M4 Critique）
+```
 
-   调整后方案（3 个节点）:
-   1. auth-integration (1.22)
-   2. tdd-implementation (1.15)
-   3. security-review (0.98)"
+Claude 调用 `opc_flow_reflect`，按 M4 Critique 调整：
 
-重新自省:
-  ④ 节点冗余度: 0.60 → 0.95（消除冗余）
-  选择置信度: 0.81×0.30 + 0.75×0.25 + 0.90×0.30 + 0.95×0.15 = 0.83
+```
+opc_flow_reflect(
+  step_id: "node_selection",
+  round: 1,
+  evidence_diff: {removed: ["backend-endpoint"], added: [], modified: []},
+  validator_result: {V5: "fail"},
+  notes: "auth-integration 已涵盖认证端点实现，移除 backend-endpoint 消除文件域冲突"
+)
 
-0.83 ≥ 0.80 → 自动确认！
+第 2 轮 selection_evidence = {
+  matched_tags: [...3 个节点...],
+  scenario_hits: ["tdd-implementation"],
+  file_domain_conflicts: [],         // 已消除
+  blocked_by_graph: [],
+  coverage_gaps: []
+}
+
+reflection-server P5 判定:
+  V1-V5: 全 ok
+  meta-validator: objections_kept_by_meta = 0
+  → 跳出反思，路径 A 自动确认
 
 Claude 通知用户:
-  "05-implement 经自省调整已确认 3 个节点（置信度 0.83）:
-   已自动移除 backend-endpoint（与 auth-integration 重叠），
-   保留 auth-integration + tdd-implementation + security-review。
+  "05-implement 经 1 轮反思调整已确认 3 个节点（P5 evidence 通过 V1-V5）:
+   - 反思移除: backend-endpoint（与 auth-integration 文件域冲突）
+   - 最终保留: auth-integration + tdd-implementation + security-review
    如需调整，回复'调整节点'。"
 ```
 

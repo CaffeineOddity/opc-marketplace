@@ -12,10 +12,10 @@
 ① Hook 注入"先调 opc_flow_query"指令
 ② Claude → opc_flow_query → 返回 active=false + suggested_actions
 ③ Claude → opc_flow_start → 返回 intent_analysis 指令 + methodology
-④ Claude → 判断 intent=task → opc_intent_complete({intent: "task", confidence: 0.85})
-⑤ opc_intent_complete 路由 → 返回 task_analysis 指令
-⑥ Claude → opc_knowledge_list → 7 步分析 + 自省 → opc_task_analysis_complete
-⑦ opc_task_analysis_complete 判定: high confidence + medium + modify=1 → 路由 brief_generation
+④ Claude → 判断 intent=task → opc_intent_complete({intent: "task", intent_evidence, reasoning})
+⑤ opc_intent_complete 经 P1 V1-V5 全 pass → 返回 task_analysis 指令
+⑥ Claude → opc_knowledge_list → 7 步分析 + 收集 task_analysis_evidence → opc_task_analysis_complete
+⑦ opc_task_analysis_complete 经 P2 V1-V5 全 pass + medium + modify_unit_count=1 → 路由 brief_generation
 ⑧ Claude → 生成 brief → opc_brief_complete → 返回预填的 pipeline_create 参数
 ⑨ Claude → opc_pipeline_create → state-server 写入文件
 ⑩ 返回 flow_next → Claude → opc_knowledge_open
@@ -41,8 +41,8 @@
 ⑤ opc_intent_complete 路由 → task_analysis 指令
 ⑥ Claude → opc_knowledge_list → 7 步分析 → opc_task_analysis_complete
 ⑦ opc_task_analysis_complete 判定: 修改 unit=5 ≥ 2 → 路由 task_decomposition
-⑧ Claude → 拆分 4 条子管线 → opc_decomposition_complete({..., decomp_confidence: 0.87})
-⑨ opc_decomposition_complete 判定: 0.87 ≥ 0.8 → 自动推进，路由 brief_generation
+⑧ Claude → 拆分 4 条子管线 → opc_decomposition_complete({sub_pipelines, execution_order, decomposition_evidence: {boundary_rationale, dependency_graph, unit_isolation_check}})
+⑨ opc_decomposition_complete 经 P3 V1-V5 全 pass + meta-validator 无严重 objection → 自动推进，路由 brief_generation
 ⑩ Claude → 生成 brief → opc_brief_complete
 ⑪ opc_brief_complete → 返回预填的 pipeline_create 参数
 ⑫ Claude → opc_pipeline_create → 写入 pipeline-plan.json

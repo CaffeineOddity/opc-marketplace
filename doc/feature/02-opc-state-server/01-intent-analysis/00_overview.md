@@ -31,20 +31,20 @@ sequenceDiagram
 
     C->>P: Read intent-analysis.md (按需)
     P-->>C: 4 种意图判定规则
-    C->>C: 意图识别<br/>intent=task, conf=0.85
-    C->>F: opc_intent_complete({intent, confidence})
+    C->>C: 意图识别<br/>intent=task + intent_evidence
+    C->>F: opc_intent_complete({intent, intent_evidence, reasoning})
     F-->>C: 路由 task 分支<br/>→ task_analysis 指令
 
     C->>K: opc_knowledge_list()
     K-->>C: 已存在知识单元清单
-    C->>C: 7 步任务分析<br/>+ 5 维度自省
+    C->>C: 7 步任务分析<br/>+ 收集 task_analysis_evidence
 
-    alt 置信度 ≥ 阈值
+    alt V1-V5 全 pass + 无严重 objection
         C->>F: opc_task_analysis_complete
-    else 置信度 < 阈值
+    else V1-V5 fail 或 严重 objection
         C->>F: opc_flow_reflect()
-        F-->>C: 反思指令
-        C->>C: 重新分析
+        F-->>C: 反思指令（M3 CoVe / M2 Reflexion）
+        C->>C: 重新分析 + 重新收集 evidence
     end
 
     F-->>C: 路由判定<br/>(complexity + modify_count)
@@ -67,7 +67,7 @@ sequenceDiagram
 
 ---
 
-## 意图与置信度决策流
+## 意图与 evidence 验证决策流
 
 `opc_flow_query` 返回 `active=false` 后，Claude 按下图决策路由：
 
@@ -80,28 +80,24 @@ flowchart TD
     Resume --> EndR([继续已有流程])
 
     Active -->|false| FlowStart[opc_flow_start]
-    FlowStart --> Intent[意图识别]
+    FlowStart --> Intent[意图识别<br/>+ 收集 intent_evidence]
     Intent --> IType{intent 类型}
 
     IType -->|chat| Chat[直接回复]
     IType -->|question| Ans[读知识/代码回答]
     IType -->|ambiguous| Clarify[追问澄清]
-    IType -->|task| Conf{confidence}
+    IType -->|task| P1{P1 V1-V5<br/>+ meta-validator}
 
-    Conf -->|≥ 0.8| HC[直接 task_analysis]
-    Conf -->|0.5–0.8| MC[task_analysis<br/>+ 反思]
-    Conf -->|< 0.5| LC{反思<br/>达上限?}
-    LC -->|否| Intent
-    LC -->|是| LowFallback[低置信度 fallback]
+    P1 -->|全 pass + 无严重 objection| HC[直接 task_analysis]
+    P1 -->|fail 或 严重 objection| Reflect1[opc_flow_reflect<br/>M3 CoVe / M4 Critique]
+    Reflect1 --> Intent
 
-    HC --> Analysis[7 步任务分析]
-    MC --> Analysis
-    LowFallback --> Analysis
+    HC --> Analysis[7 步任务分析<br/>+ 收集 task_analysis_evidence]
 
-    Analysis --> AConf{analysis<br/>_confidence}
-    AConf -->|< 0.7| Reflect[opc_flow_reflect]
-    Reflect --> Analysis
-    AConf -->|≥ 0.7| Route{complexity +<br/>modify_count}
+    Analysis --> P2{P2 V1-V5<br/>+ meta-validator}
+    P2 -->|fail 或 严重 objection| Reflect2[opc_flow_reflect<br/>M3 CoVe / M2 Reflexion]
+    Reflect2 --> Analysis
+    P2 -->|全 pass + 无严重 objection| Route{complexity +<br/>modify_unit_count}
 
     Route -->|simple / medium<br/>modify=1| Brief[brief_generation]
     Route -->|modify ≥ 2| Decomp[task_decomposition]

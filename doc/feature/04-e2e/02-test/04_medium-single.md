@@ -10,8 +10,8 @@
 ```
 Claude → opc_flow_query → opc_flow_query 返回 active: false
 Claude → opc_flow_start → opc_flow_start 返回 intent_analysis 指令
-Claude → opc_intent_complete({intent: "task", confidence: 0.88})
-  → opc_intent_complete 路由: task_analysis 指令
+Claude → opc_intent_complete({intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:加", "deliverable:短信验证码登录"], chat_signals: [], user_quotes: ["给用户认证系统加个短信验证码登录"]}, reasoning: "动作动词+具体子功能交付物"})
+  → opc_intent_complete 经 P1 V1-V5 全 pass → 路由: task_analysis 指令
 
 Claude → opc_knowledge_list → user-auth/login(v2), user-auth/session(v3)
 
@@ -19,11 +19,12 @@ Claude 分析:
   → complexity: medium
   → knowledge_unit: [user-auth]  ← 只改 1 个 unit
   → suggested_phases: [04-implement-design, 05-implement, 06-testing]
+  → phase_selection_rationale: "add-feature + medium：跳过 00/01/03，直接从实现设计到测试"
   → scenario: add-feature
-  → analysis_confidence: 0.85
+  → task_analysis_evidence: {requirements:[{text:"短信验证码登录", source_quote:"..."}], dependencies:["sms-gateway"], complexity_signals:{needs_design:true, one_round_solvable:true, verdict:"medium"}, phase_selection_rationale: "..."}
 
-Claude → opc_task_analysis_complete({...})
-  → opc_task_analysis_complete 判定: 0.85 ≥ 0.8 + modify_unit_count=1 → 路由 brief_generation
+Claude → opc_task_analysis_complete({analysis_result, task_analysis_evidence})
+  → opc_task_analysis_complete 经 P2 V1-V5 全 pass + modify_unit_count=1 → 路由 brief_generation
 
 Claude → 生成 brief → opc_brief_complete({brief_content})
   → opc_brief_complete 返回 next: opc_pipeline_create 预填全部参数
@@ -34,8 +35,9 @@ Claude → opc_pipeline_create({sub_pipelines: [{id: sub-1, knowledge_unit: [use
 Claude → opc_knowledge_open → 返回 flow_next: opc_phase_start
 
 Claude → opc_phase_start("04-implement-design")
-  → 候选: [api-design(0.92), database-schema(0.78)]
-  → Claude 自省: 0.92 ≥ 0.85 → 自动确认
+  → 候选: [api-design, database-schema] + reflection_budget_hint{max_rounds: 2}
+  → Claude 收集 selection_evidence: matched_tags + scenario_hits=["api-design","database-schema"] + coverage_gaps=[] + file_domain_conflicts=[]
+  → P5 V1-V5 全 pass + meta-validator 无严重 objection → 路径 A 自动确认
   → opc_phase_confirm
   → resolver: Group1[api-design] → Group2[database-schema]
 
@@ -55,11 +57,12 @@ opc_phase_complete → {
 [Claude 按 auto_advance 自动推进]
 
 opc_phase_start("05-implement")
-  → 候选: [tdd-implementation(0.88), backend-endpoint(0.82), security-review(0.65)]
-  → Claude 自省: 0.71 < 0.80 → 调 opc_flow_reflect(step_id: "node_selection", pipeline_id, sub_pipeline_id, phase: "05-implement")
-  → opc_flow_reflect 持久化第 1 轮反思日志到 state.json.phases[].reflection_log → 返回继续反思指令
-  → Claude 调整方案 → opc_flow_reflect(round=2, new_confidence=0.83)
-  → opc_flow_reflect 判定: 0.83 ≥ 0.80 → 跳出，路由 phase_confirm
+  → 候选: [tdd-implementation, backend-endpoint, security-review] + reflection_budget_hint{max_rounds: 3}
+  → Claude 收集第 1 轮 selection_evidence: V5 discrimination fail（backend-endpoint 与 auth 相关节点文件域冲突）
+  → 调 opc_flow_reflect(step_id: "node_selection", round: 1, evidence_diff: {removed:[], added:[], modified:[]}, validator_result: {V5: "fail"})
+  → opc_flow_reflect 持久化第 1 轮反思日志到 state.json.phases[].reflection_log → 按 M4 Critique 返回继续反思指令
+  → Claude 调整方案（移除 backend-endpoint）→ opc_flow_reflect(round=2, evidence_diff: {removed:["backend-endpoint"]}, validator_result: {V1-V5: "ok"}, objections_kept_by_meta: 0)
+  → opc_flow_reflect 判定: validator 全 ok + 无 objection → 跳出，路由 phase_confirm
   → opc_phase_confirm
 
 opc_node_start ... → ... → opc_phase_complete

@@ -21,6 +21,8 @@ phases/
 
 阶段编号代表推荐顺序，但 task-analysis 可根据任务复杂度只挑选其中几个。`02-` 编号已废弃保留位以容纳未来扩展。
 
+> 子集的声明、校验与持久化位置：[`state.json` → `phase_plan`](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)（含 `available` / `selected` / `selected_by` / `selection_rationale` + 偏序校验）。
+
 ---
 
 ## 二、phase.md — 阶段元信息

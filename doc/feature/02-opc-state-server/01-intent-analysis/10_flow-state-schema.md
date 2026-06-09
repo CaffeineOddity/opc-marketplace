@@ -34,12 +34,13 @@
 
   "accumulated": {
     "intent": "task",
-    "intent_confidence": 0.85,
+    "intent_evidence_ref": "opc-logs/reflection/<pipeline_id>/P1.jsonl#L<line>",
     "analysis_result": {
       "description": "...",
       "tags": ["..."],
       "complexity": "medium",
       "suggested_phases": ["..."],
+      "phase_selection_rationale": "add-feature + medium：跳过 00/01/03，从实现设计起步至测试",
       "knowledge_unit": ["..."],
       "scenario": "add-feature",
       "knowledge_plan": [
@@ -47,17 +48,18 @@
         {"path": "user-auth/session/api", "operation": "create"}
       ]
     },
-    "analysis_confidence": 0.88,
+    "analysis_evidence_ref": "opc-logs/reflection/<pipeline_id>/P2.jsonl#L<line>",
     "decomposition_result": null,
-    "decomposition_confidence": null,
-    "brief_content": "..."
+    "decomposition_evidence_ref": null,
+    "brief_content": "...",
+    "brief_evidence_ref": null
   },
 
   "history": [
     {
       "step": "intent_analysis",
       "tool": "opc_intent_complete",
-      "input": {"intent": "task", "confidence": 0.85},
+      "input": {"intent": "task", "intent_evidence": {"task_criteria_hits": [...]}},
       "output": {"next": {"tool": "opc_task_analysis_complete"}},
       "at": "2026-06-08T10:01:00Z"
     }
@@ -67,9 +69,15 @@
     {
       "step_id": "task_analysis",
       "round": 1,
-      "confidence_before": 0.65,
-      "confidence_after": 0.72,
-      "notes": "反方视角：complexity 应为 high",
+      "method": "M3-CoVe",
+      "evidence_diff": {
+        "added": ["requirements[+2]", "risks[+1]"],
+        "modified": ["complexity: medium → high"],
+        "removed": []
+      },
+      "validator_result": {"V1": "ok", "V2": "ok", "V3": "ok", "V4": "ok", "V5": "ok"},
+      "objections_kept_by_meta": 2,
+      "notes": "M3 拆解断言后发现 schema 变更未列入 dependencies",
       "at": "..."
     },
     {
@@ -99,14 +107,17 @@
 | `user_message_history` | opc_flow_start/opc_flow_restart (additional_input) | opc_flow_query, opc_task_analysis_complete |
 | `accumulated.intent` | opc_intent_complete | 推进类工具, opc_flow_revise |
 | `accumulated.analysis_result` | opc_task_analysis_complete | opc_decomposition_complete, opc_brief_complete, opc_flow_revise, opc_flow_restart |
+| `accumulated.*_evidence_ref` | 对应 `opc_*_complete` 工具，指向 reflection-server 日志行 | opc_flow_query, opc_reflect_explain |
 | `accumulated.decomposition_result` | opc_decomposition_complete | opc_brief_complete |
 | `accumulated.brief_content` | opc_brief_complete | opc_brief_complete (推导 pipeline_create args) |
 | `history` | 所有流程工具（追加） | opc_flow_query (摘要展示) |
-| `reflection_log` | opc_flow_reflect (task_analysis 分支) | opc_flow_query, opc_task_analysis_complete |
+| `reflection_log` | opc_flow_reflect / opc_reflect_*_complete（写入 evidence_diff + validator_result） | opc_flow_query, opc_task_analysis_complete, opc_reflect_explain |
 | `pipeline_id` | opc_brief_complete (调 opc_pipeline_create 后)、阶段层工具 | opc_flow_query, opc_flow_abort/opc_flow_recover |
 | `current_pipeline_pointer` | `opc_phase_start` / `opc_phase_confirm` / `opc_node_start` / `opc_node_complete` / `opc_phase_complete` | opc_flow_query, opc_flow_recover |
 
 阶段/节点层工具不属于流程层，但每次调用都会更新 `current_pipeline_pointer` + `last_heartbeat_at`，确保 crash 后 opc_flow_recover 能从精确位置恢复。
+
+> **evidence_ref vs confidence**：本 schema 不存 `confidence: number` 字段。所有 step 的「质量判定」由 reflection-server 的 evidence artifact + V1-V5 validator 决定，flow-state.json 仅保留指向 `opc-logs/reflection/<pipeline_id>/<step>.jsonl` 的引用（`*_evidence_ref`）。reflection_log[].evidence_diff 记录每轮反思后 artifact 的字段变化，供 `opc_reflect_explain` 还原 reasoning_trace。详见 [05-opc-reflection-server/02-server-design/00_overview.md §二 Evidence Schema](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 
 ---
 

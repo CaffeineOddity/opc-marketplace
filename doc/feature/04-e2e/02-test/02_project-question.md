@@ -10,9 +10,9 @@
 ```
 Claude → opc_flow_query() → opc_flow_query 返回 active: false + suggested_actions
 Claude → opc_flow_start → opc_flow_start 返回 intent_analysis 指令
-Claude → 判断 → intent: project_question, confidence: 0.9
-Claude → opc_intent_complete({intent: "project_question", confidence: 0.9})
-  → opc_intent_complete 路由: {
+Claude → 判断 → intent: project_question, intent_evidence: {task_criteria_hits: [], chat_signals: ["question_word:怎么", "info_seeking:认证设计"], user_quotes: ["我们的用户认证是怎么设计的？"]}
+Claude → opc_intent_complete({intent: "project_question", intent_evidence: {...}, reasoning: "疑问句+项目代词'我们的'，info_seeking 信号"})
+  → opc_intent_complete 经 P1 V1-V5 全 pass → 路由: {
       action: "respond_with_knowledge",
       prerequisites: [{tool: "opc_knowledge_search", args: {query: "用户认证设计"}}],
       status: "completed"     ← opc_intent_complete 内部自动标记

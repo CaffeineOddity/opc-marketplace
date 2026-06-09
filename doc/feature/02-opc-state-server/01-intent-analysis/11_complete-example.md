@@ -18,15 +18,15 @@ Claude 判断: 任务消息 → 按 suggested_actions[0] 调用
 Claude → opc_flow_start({user_message: "..."})
   │
   ▼ opc_flow_start 返回 intent_analysis 指令 + methodology
-Claude → 按方法论判断 → intent: task, confidence: 0.85
-Claude → opc_intent_complete({intent: "task", confidence: 0.85})
+Claude → 按方法论判断 → intent: task, intent_evidence: {task_criteria_hits: [...], chat_signals: [], user_quotes: [...]}
+Claude → opc_intent_complete({intent: "task", intent_evidence, reasoning: "..."})
   │
-  ▼ opc_intent_complete 路由 task 分支，返回 task_analysis 指令 + prerequisites
+  ▼ opc_intent_complete 经 P1 V1-V5 全 pass → 路由 task 分支，返回 task_analysis 指令 + prerequisites
 Claude → opc_knowledge_list() → []
-Claude → 按方法论 7 步分析 + 自省打分 → analysis_confidence: 0.88
-Claude → opc_task_analysis_complete({..., analysis_confidence: 0.88})
+Claude → 按方法论 7 步分析 + 收集 task_analysis_evidence
+Claude → opc_task_analysis_complete({analysis_result: {..., phase_selection_rationale: "..."}, task_analysis_evidence: {...}})
   │
-  ▼ opc_task_analysis_complete 判定：高置信度 + complexity=medium + modify_count=1 → 路由 brief_generation
+  ▼ opc_task_analysis_complete 经 P2 V1-V5 全 pass + complexity=medium + modify_unit_count=1 → 路由 brief_generation
 Claude → 按模板生成 brief markdown
 Claude → opc_brief_complete({brief_content: "..."})
   │

@@ -12,7 +12,7 @@ Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本，然后
 ```
 Claude → opc_brief_complete({brief_content: "# 任务工作单\n..."})
 
-opc_decomposition_complete 返回（预填全部参数）:
+opc_brief_complete 返回（从 flow-state.accumulated 推导，预填全部参数）:
 {
   step: "brief_completed",
   step_instruction: "下一步创建管线，参数已预填",
@@ -24,6 +24,7 @@ opc_decomposition_complete 返回（预填全部参数）:
       complexity: "medium",
       knowledge_unit: ["user-auth"],
       suggested_phases: ["04-implement-design", "05-implement", "06-testing"],
+      phase_selection_rationale: "add-feature + medium：跳过 00/01/03，从实现设计起步至测试",
       scenario: "add-feature",
       brief_content: "<刚提交的 brief markdown>",
       sub_pipelines: [{
@@ -162,6 +163,8 @@ opc_knowledge_open(["user-auth"])
 无特殊约束
 
 ## 阶段计划
+> 阶段选择理由：add-feature + medium：跳过 00/01/03，从实现设计起步至测试
+
 | 阶段 | 目标 | 关键节点 |
 |------|------|---------|
 | 04-implement-design | 设计 API 和数据库 | api-design, database-schema |
@@ -199,6 +202,14 @@ opc_knowledge_open(["user-auth"])
     "complexity": "medium",
     "knowledge_unit": ["user-auth"],
     "scenario_hints": ["add-feature"]
+  },
+  "phase_plan": {
+    "available": ["00-ideation", "01-validation", "03-design", "04-implement-design", "05-implement", "06-testing", "07-release", "08-growth", "09-scale"],
+    "selected": ["04-implement-design", "05-implement", "06-testing"],
+    "selected_by": "task_analysis",
+    "selection_rationale": "add-feature + medium：跳过 00/01/03，从实现设计起步至测试",
+    "scenario_hints": ["add-feature"],
+    "order_validated": true
   },
   "status": "in_progress",
   "phases": []
