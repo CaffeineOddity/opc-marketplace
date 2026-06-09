@@ -17,12 +17,24 @@ import {
   saveFlowState,
 } from "./flow-state.js";
 import { deriveSessionId, parseSessionId } from "./session-id.js";
+import {
+  type TransportMode,
+  TransportArgError,
+  resolveClaudePid,
+} from "./transport.js";
 
 export interface FlowServerOptions {
   root: string;
   now?: () => Date;
   pid?: () => number;
   uuid?: () => string;
+  /**
+   * Spec §06-host-contract §2.3 (C2): server-startup transport mode.
+   * Defaults to "stdio". In "stdio" mode, `claude_pid` arguments on
+   * `opc_flow_query` / `opc_flow_lifecycle` are rejected (server uses ppid).
+   */
+  transport?: TransportMode;
+  ppid?: () => number;
 }
 
 export type FlowNext =
@@ -36,6 +48,12 @@ export type FlowNext =
 
 export interface QueryRequest {
   session_id: string;
+  /**
+   * Spec §06-host-contract §2.3 (C2): HTTP/SSE callers MAY pass the Claude
+   * Code pid here. In stdio mode this MUST be omitted — the server uses
+   * `process.ppid` and rejects an explicit param (line 113).
+   */
+  claude_pid?: number;
 }
 
 export interface QueryResponse {
@@ -48,10 +66,15 @@ export type LifecycleRequest =
       action: "start";
       session_id?: string;
       initial_message?: string;
+      /**
+       * @deprecated test/internal override. External callers should pass
+       * `claude_pid` (subject to transport guard, spec §06-host-contract §2.3).
+       */
       pid?: number;
+      claude_pid?: number;
     }
   | { action: "abort"; session_id: string; reason?: string }
-  | { action: "recover"; session_id: string; pid?: number };
+  | { action: "recover"; session_id: string; pid?: number; claude_pid?: number };
 
 export interface LifecycleResponse {
   state: FlowState;
@@ -175,15 +198,24 @@ export class FlowServer {
   private readonly now: () => Date;
   private readonly pid: () => number;
   private readonly uuid: () => string;
+  private readonly transport: TransportMode;
+  private readonly ppid: () => number;
 
   constructor(opts: FlowServerOptions) {
     this.root = opts.root;
     this.now = opts.now ?? ((): Date => new Date());
     this.pid = opts.pid ?? ((): number => process.pid);
     this.uuid = opts.uuid ?? ((): string => randomUUID());
+    this.transport = opts.transport ?? "stdio";
+    this.ppid = opts.ppid ?? ((): number => process.ppid);
   }
 
   async query(req: QueryRequest): Promise<QueryResponse> {
+    if (req.claude_pid !== undefined && this.transport === "stdio") {
+      throw new TransportArgError(
+        "opc_flow_query: claude_pid must not be passed in stdio mode (spec §06-host-contract §2.3)",
+      );
+    }
     const state = await loadFlowState(this.root, req.session_id);
     this.cleanupExpired(state);
     await saveFlowState(this.root, state, this.now());
@@ -487,7 +519,21 @@ export class FlowServer {
   private async lifecycleStart(
     req: Extract<LifecycleRequest, { action: "start" }>,
   ): Promise<LifecycleResponse> {
-    const pid = req.pid ?? this.pid();
+    // Spec §06-host-contract §2.3 (C2): resolve pid through the transport-aware
+    // helper. `req.pid` remains an internal/test override that bypasses the
+    // transport guard; external callers use `claude_pid`.
+    let pid: number;
+    if (req.pid !== undefined) {
+      pid = req.pid;
+    } else {
+      const resolved = resolveClaudePid({
+        transport: this.transport,
+        ...(req.claude_pid !== undefined ? { claude_pid: req.claude_pid } : {}),
+        ppid: this.ppid,
+        serverPid: this.pid,
+      });
+      pid = resolved.pid;
+    }
     const startedAt = this.now();
     const startedAtUnixTs = Math.floor(startedAt.getTime() / 1000);
     // Spec §06-host-contract §2.1 (C1): derive session_id from (pid, ts) so the
@@ -507,7 +553,7 @@ export class FlowServer {
       now: startedAt,
       ...(req.initial_message ? { initialMessage: req.initial_message } : {}),
       started_at_unix_ts: parsed?.started_at_unix_ts ?? startedAtUnixTs,
-      transport: "stdio",
+      transport: this.transport,
     });
     state.history.push(this.entry("start", "opc_flow_lifecycle", req, { session_id }));
     await saveFlowState(this.root, state, startedAt);
@@ -530,8 +576,22 @@ export class FlowServer {
   private async lifecycleRecover(
     req: Extract<LifecycleRequest, { action: "recover" }>,
   ): Promise<LifecycleResponse> {
+    // Spec §06-host-contract §2.3 (C2): same guard as lifecycleStart — in
+    // stdio mode an explicit claude_pid is a hard error; recovery uses ppid.
+    let pidOverride: number | undefined;
+    if (req.pid !== undefined) {
+      pidOverride = req.pid;
+    } else if (req.claude_pid !== undefined || this.transport !== "stdio") {
+      const resolved = resolveClaudePid({
+        transport: this.transport,
+        ...(req.claude_pid !== undefined ? { claude_pid: req.claude_pid } : {}),
+        ppid: this.ppid,
+        serverPid: this.pid,
+      });
+      pidOverride = resolved.pid;
+    }
     const state = await loadFlowState(this.root, req.session_id);
-    if (req.pid !== undefined) state.owner.pid = req.pid;
+    if (pidOverride !== undefined) state.owner.pid = pidOverride;
     state.owner.last_heartbeat_at = this.now().toISOString();
     state.history.push(this.entry("recover", "opc_flow_lifecycle", req, null));
     await saveFlowState(this.root, state, this.now());

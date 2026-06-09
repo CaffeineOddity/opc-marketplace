@@ -523,3 +523,129 @@ describe("M8.d skip_reflection_once_for_step lifecycle", () => {
     expect(done.state.skip_reflection_once_for_step).toBeNull();
   });
 });
+
+describe("FlowServer C2 transport guard (spec §06-host-contract §2.3)", () => {
+  it("stdio mode: lifecycle.start uses ppid and stamps owner.transport=stdio", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 9999,
+      pid: () => 1234,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    expect(r.state.owner.pid).toBe(9999);
+    expect(r.state.owner.transport).toBe("stdio");
+    expect(r.state.session_id).toBe("sess-9999-1781049600");
+  });
+
+  it("stdio mode: lifecycle.start with claude_pid throws TransportArgError", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 9999,
+    });
+    await expect(fs.lifecycle({ action: "start", claude_pid: 1234 })).rejects.toThrow(
+      /claude_pid must not be passed in stdio mode/,
+    );
+  });
+
+  it("stdio mode: query with claude_pid throws TransportArgError", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 9999,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    await expect(fs.query({ session_id: r.state.session_id, claude_pid: 5555 })).rejects.toThrow(
+      /claude_pid must not be passed in stdio mode/,
+    );
+  });
+
+  it("stdio mode: query without claude_pid succeeds", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 9999,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    const q = await fs.query({ session_id: r.state.session_id });
+    expect(q.state.session_id).toBe(r.state.session_id);
+  });
+
+  it("http mode: lifecycle.start with claude_pid uses it and stamps transport=http", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "http",
+      pid: () => 1234,
+    });
+    const r = await fs.lifecycle({ action: "start", claude_pid: 7777 });
+    expect(r.state.owner.pid).toBe(7777);
+    expect(r.state.owner.transport).toBe("http");
+  });
+
+  it("http mode: lifecycle.start without claude_pid falls back to server pid", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "http",
+      pid: () => 5555,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    expect(r.state.owner.pid).toBe(5555);
+    expect(r.state.owner.transport).toBe("http");
+  });
+
+  it("stdio mode: lifecycle.recover with claude_pid throws TransportArgError", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 9999,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    await expect(
+      fs.lifecycle({ action: "recover", session_id: r.state.session_id, claude_pid: 1 }),
+    ).rejects.toThrow(/claude_pid must not be passed in stdio mode/);
+  });
+
+  it("http mode: lifecycle.recover with claude_pid swaps owner.pid", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "http",
+      pid: () => 1,
+    });
+    const r = await fs.lifecycle({ action: "start", claude_pid: 100 });
+    const rec = await fs.lifecycle({
+      action: "recover",
+      session_id: r.state.session_id,
+      claude_pid: 200,
+    });
+    expect(rec.state.owner.pid).toBe(200);
+  });
+
+  it("defaults to stdio transport when option omitted", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      ppid: () => 4242,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    expect(r.state.owner.transport).toBe("stdio");
+    expect(r.state.owner.pid).toBe(4242);
+  });
+});

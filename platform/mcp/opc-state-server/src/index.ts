@@ -167,3 +167,14 @@ export {
   isStdioDerivedSessionId,
 } from "./session-id.js";
 export type { DerivedSessionParts } from "./session-id.js";
+export {
+  readTransportFromEnv,
+  resolveClaudePid,
+  TransportArgError,
+  TransportConfigError,
+} from "./transport.js";
+export type {
+  TransportMode,
+  ResolvedClaudePid,
+  ResolveClaudePidArgs,
+} from "./transport.js";
