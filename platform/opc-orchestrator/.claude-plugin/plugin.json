@@ -1,0 +1,20 @@
+{
+  "name": "opc-orchestrator",
+  "version": "0.1.0",
+  "description": "OPC orchestrator: minimal UserPromptSubmit hook that nudges Claude to call opc_flow_query before reasoning about a request.",
+  "depends": ["mcp"],
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/opc-hook.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "scenarios_dir": "scenarios"
+}

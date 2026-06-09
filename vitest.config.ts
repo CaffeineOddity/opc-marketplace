@@ -2,7 +2,11 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["shared/**/src/**/*.test.ts", "platform/mcp/**/src/**/*.test.ts"],
+    include: [
+      "shared/**/src/**/*.test.ts",
+      "platform/mcp/**/src/**/*.test.ts",
+      "platform/opc-orchestrator/test/**/*.test.ts",
+    ],
     environment: "node",
     reporters: "default",
     coverage: {

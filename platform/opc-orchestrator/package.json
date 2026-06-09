@@ -1,0 +1,10 @@
+{
+  "name": "@opc/orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OPC UserPromptSubmit hook plugin (quiet default).",
+  "scripts": {
+    "test": "echo \"orchestrator tests run via root vitest\""
+  }
+}
