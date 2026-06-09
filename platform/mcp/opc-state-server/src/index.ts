@@ -186,3 +186,16 @@ export type {
   SessionScanEntry,
   SuggestedAction,
 } from "./orphan-scanner.js";
+export {
+  checkKitHealth,
+  notLoadedAgents,
+  INSTALLED_KITS_FILENAME,
+} from "./kit-health.js";
+export type {
+  InstalledKit,
+  InstalledKitsFile,
+  KitWarning,
+  KitSuggestedAction,
+  KitHealthResult,
+  KitHealthArgs,
+} from "./kit-health.js";

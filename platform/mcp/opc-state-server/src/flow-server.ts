@@ -23,6 +23,11 @@ import {
   scanForOrphans,
 } from "./orphan-scanner.js";
 import {
+  type KitWarning,
+  type KitSuggestedAction,
+  checkKitHealth,
+} from "./kit-health.js";
+import {
   type TransportMode,
   TransportArgError,
   resolveClaudePid,
@@ -76,7 +81,15 @@ export interface QueryResponse {
    * recommending an `opc_flow_lifecycle({action:"recover"})` call.
    */
   orphan_candidates?: OrphanScanResult["orphan_candidates"];
-  suggested_actions?: SuggestedAction[];
+  /**
+   * Spec §06-host-contract §2.7.5 (A4): non-fatal warnings — currently
+   * KIT_PROBABLY_NOT_LOADED, emitted when a kit was installed after the
+   * current session started (almost certainly not loaded into the Claude
+   * Code process). Surfaced so Claude can ask the user to restart instead
+   * of failing inside a Task dispatch.
+   */
+  _warnings?: KitWarning[];
+  suggested_actions?: Array<SuggestedAction | KitSuggestedAction>;
 }
 
 export type LifecycleRequest =
@@ -277,6 +290,7 @@ export class FlowServer {
     // sessions (other in-progress sess-* directories whose owner.pid is dead)
     // so Claude can choose to opc_flow_recover them.
     const response: QueryResponse = { state, next: this.computeNext(state) };
+    const aggregatedActions: Array<SuggestedAction | KitSuggestedAction> = [];
     if (this.transport === "stdio") {
       const currentPid = req.claude_pid ?? this.ppid();
       try {
@@ -287,12 +301,28 @@ export class FlowServer {
         });
         if (scan.orphan_candidates.length > 0) {
           response.orphan_candidates = scan.orphan_candidates;
-          response.suggested_actions = scan.suggested_actions;
+          for (const a of scan.suggested_actions) aggregatedActions.push(a);
         }
       } catch {
         // Orphan scan is best-effort; never let it block the query response.
       }
     }
+    // Spec §06-host-contract §2.7.5 (A4): kit-health check — flag kits
+    // installed AFTER session start. Runs in every transport; the heuristic
+    // is `installed_at > owner.started_at`, which is transport-agnostic.
+    try {
+      const health = await checkKitHealth({
+        root: this.root,
+        sessionStartedAt: state.owner.started_at,
+      });
+      if (health.warnings.length > 0) {
+        response._warnings = health.warnings;
+        for (const a of health.suggested_actions) aggregatedActions.push(a);
+      }
+    } catch {
+      // Kit-health is best-effort; never let it block the query response.
+    }
+    if (aggregatedActions.length > 0) response.suggested_actions = aggregatedActions;
     return response;
   }
 

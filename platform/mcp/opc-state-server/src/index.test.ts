@@ -11,7 +11,9 @@ import {
   loadFlowState,
   saveFlowState,
   SessionNotFoundError,
+  INSTALLED_KITS_FILENAME,
 } from "./index.js";
+import { writeFile } from "node:fs/promises";
 
 let root: string;
 let counter = 0;
@@ -859,3 +861,140 @@ describe("FlowServer recover aliveness check (spec §06-host-contract §2.2 step
     }
   });
 });
+
+describe("FlowServer kit-health A4 (spec §06-host-contract §2.7.5)", () => {
+  it("returns no _warnings when installed-kits.json absent", async () => {
+    const fs = fresh();
+    const start = await fs.lifecycle({ action: "start" });
+    const q = await fs.query({ session_id: start.state.session_id });
+    expect(q._warnings).toBeUndefined();
+    expect(q.suggested_actions).toBeUndefined();
+  });
+
+  it("emits _warnings + suggested_actions for kit installed after session start", async () => {
+    const fs = fresh();
+    const start = await fs.lifecycle({ action: "start" });
+    // owner.started_at is fixedNow = 2026-06-10T00:00:00Z
+    await writeFile(
+      join(root, INSTALLED_KITS_FILENAME),
+      JSON.stringify({
+        kits: [
+          {
+            name: "backend-pro",
+            agents: ["backend-engineer"],
+            mcp_servers: ["postgres"],
+            installed_at: "2026-06-10T05:00:00Z",
+          },
+        ],
+      }),
+    );
+    const q = await fs.query({ session_id: start.state.session_id });
+    expect(q._warnings).toHaveLength(1);
+    expect(q._warnings?.[0]).toMatchObject({
+      code: "KIT_PROBABLY_NOT_LOADED",
+      kit: "backend-pro",
+      affected_agents: ["backend-engineer"],
+    });
+    expect(q.suggested_actions).toHaveLength(1);
+    expect(q.suggested_actions?.[0]).toMatchObject({
+      action: "restart_session",
+      reason: "kit_not_loaded",
+    });
+  });
+
+  it("does NOT warn when kit installed BEFORE session start", async () => {
+    const fs = fresh();
+    const start = await fs.lifecycle({ action: "start" });
+    await writeFile(
+      join(root, INSTALLED_KITS_FILENAME),
+      JSON.stringify({
+        kits: [
+          {
+            name: "old-kit",
+            agents: ["x"],
+            installed_at: "2026-06-09T00:00:00Z",
+          },
+        ],
+      }),
+    );
+    const q = await fs.query({ session_id: start.state.session_id });
+    expect(q._warnings).toBeUndefined();
+  });
+
+  it("kit-health runs even in http transport mode (heuristic transport-agnostic)", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      pid: () => 1234,
+      uuid: fixedUuid,
+      transport: "http",
+    });
+    const start = await fs.lifecycle({ action: "start", claude_pid: 1234 });
+    await writeFile(
+      join(root, INSTALLED_KITS_FILENAME),
+      JSON.stringify({
+        kits: [
+          {
+            name: "k",
+            agents: ["a"],
+            installed_at: "2026-06-10T05:00:00Z",
+          },
+        ],
+      }),
+    );
+    const q = await fs.query({ session_id: start.state.session_id });
+    expect(q._warnings).toHaveLength(1);
+    // In http mode there should be no orphan_candidates field even when kit
+    // warnings are present.
+    expect(q.orphan_candidates).toBeUndefined();
+  });
+
+  it("orphan suggested_actions and kit suggested_actions both populate the aggregated array", async () => {
+    // Create one orphan session (dead pid) + a stale kit, both visible from
+    // the current session's query.
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      pid: () => 1234,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 1234,
+      isAlive: (pid) => pid === 1234,
+    });
+    // Live current session.
+    const live = await fs.lifecycle({ action: "start" });
+    // Inject an orphan session (dead pid 9999) on disk by direct save.
+    const orphanState = await loadFlowState(root, live.state.session_id);
+    const orphanCopy = {
+      ...orphanState,
+      session_id: "sess-9999-orphan",
+      owner: { ...orphanState.owner, pid: 9999 },
+    };
+    await saveFlowState(root, orphanCopy, fixedNow());
+    // Install a fresh kit.
+    await writeFile(
+      join(root, INSTALLED_KITS_FILENAME),
+      JSON.stringify({
+        kits: [
+          { name: "k", agents: ["a"], installed_at: "2026-06-10T05:00:00Z" },
+        ],
+      }),
+    );
+    const q = await fs.query({ session_id: live.state.session_id });
+    expect(q.orphan_candidates).toHaveLength(1);
+    expect(q._warnings).toHaveLength(1);
+    expect(q.suggested_actions).toHaveLength(2);
+    const actions = q.suggested_actions?.map((a) => a.action).sort() ?? [];
+    expect(actions).toEqual(["recover_orphan_session", "restart_session"]);
+  });
+
+  it("malformed installed-kits.json is swallowed (best-effort, never blocks query)", async () => {
+    const fs = fresh();
+    const start = await fs.lifecycle({ action: "start" });
+    await writeFile(join(root, INSTALLED_KITS_FILENAME), "{ broken");
+    const q = await fs.query({ session_id: start.state.session_id });
+    expect(q._warnings).toBeUndefined();
+    expect(q.state.session_id).toBe(start.state.session_id);
+  });
+});
+
