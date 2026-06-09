@@ -18,6 +18,18 @@ export interface FlowOwner {
   pid: number;
   started_at: string;
   last_heartbeat_at: string;
+  /**
+   * Spec §06-host-contract §2.1 (C1): seconds-resolution unix timestamp that
+   * also seeds session_id. Persisted so opc_flow_recover can reason about
+   * "same (pid, started_at_unix_ts) pair" without re-deriving from now().
+   */
+  started_at_unix_ts?: number;
+  /**
+   * Spec §06-host-contract §2.3 (C2): transport mode that determined how
+   * pid was acquired. "stdio" = process.ppid; "http"/"sse" = explicit
+   * param from opc_flow_query. Defaults to "stdio".
+   */
+  transport?: "stdio" | "http" | "sse";
 }
 
 export interface AnalysisResult {
@@ -203,12 +215,21 @@ export function newFlowState(args: {
   pid: number;
   now: Date;
   initialMessage?: string;
+  started_at_unix_ts?: number;
+  transport?: "stdio" | "http" | "sse";
 }): FlowState {
   const iso = args.now.toISOString();
+  const owner: FlowOwner = {
+    pid: args.pid,
+    started_at: iso,
+    last_heartbeat_at: iso,
+  };
+  if (args.started_at_unix_ts !== undefined) owner.started_at_unix_ts = args.started_at_unix_ts;
+  if (args.transport !== undefined) owner.transport = args.transport;
   return {
     session_id: args.session_id,
     status: "in_progress",
-    owner: { pid: args.pid, started_at: iso, last_heartbeat_at: iso },
+    owner,
     created_at: iso,
     last_active_at: iso,
     aborted_at: null,

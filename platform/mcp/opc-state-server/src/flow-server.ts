@@ -16,6 +16,7 @@ import {
   newFlowState,
   saveFlowState,
 } from "./flow-state.js";
+import { deriveSessionId, parseSessionId } from "./session-id.js";
 
 export interface FlowServerOptions {
   root: string;
@@ -486,16 +487,30 @@ export class FlowServer {
   private async lifecycleStart(
     req: Extract<LifecycleRequest, { action: "start" }>,
   ): Promise<LifecycleResponse> {
-    const session_id = req.session_id ?? `sess-${this.uuid()}`;
     const pid = req.pid ?? this.pid();
+    const startedAt = this.now();
+    const startedAtUnixTs = Math.floor(startedAt.getTime() / 1000);
+    // Spec §06-host-contract §2.1 (C1): derive session_id from (pid, ts) so the
+    // same Claude Code process resuming on the same second is idempotent, while
+    // pid recycling after restart yields a fresh id. Honour caller-provided
+    // session_id only when it parses as the same shape; otherwise auto-derive.
+    let session_id: string;
+    if (req.session_id) {
+      session_id = req.session_id;
+    } else {
+      session_id = deriveSessionId({ pid, started_at_unix_ts: startedAtUnixTs });
+    }
+    const parsed = parseSessionId(session_id);
     const state = newFlowState({
       session_id,
       pid,
-      now: this.now(),
+      now: startedAt,
       ...(req.initial_message ? { initialMessage: req.initial_message } : {}),
+      started_at_unix_ts: parsed?.started_at_unix_ts ?? startedAtUnixTs,
+      transport: "stdio",
     });
     state.history.push(this.entry("start", "opc_flow_lifecycle", req, { session_id }));
-    await saveFlowState(this.root, state, this.now());
+    await saveFlowState(this.root, state, startedAt);
     return { state, next: this.computeNext(state) };
   }
 

@@ -160,3 +160,10 @@ export type {
   NodeEvidence,
   QualityGate,
 } from "./state-json.js";
+export {
+  deriveSessionId,
+  deriveSessionIdFromDate,
+  parseSessionId,
+  isStdioDerivedSessionId,
+} from "./session-id.js";
+export type { DerivedSessionParts } from "./session-id.js";
