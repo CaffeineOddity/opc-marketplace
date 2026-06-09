@@ -34,7 +34,7 @@ opc_phase_start("05-implement") → ... [同理]
 opc_pipeline_complete
 ```
 
-**关键改进**：auto_advance 公式已在 `phase/06_phase-complete-reset.md §auto_advance` 明确（complexity ≠ high + 100% completed + 当前 phase 的 P5 selection_evidence 通过 V1-V5 + meta-validator 无严重 objection + 下一 phase 在 `phase_plan.selected` 中）。
+**关键改进**：auto_advance 公式已在 `phase/06_phase-complete-reset.md auto_advance` 明确（complexity ≠ high + 100% completed + 当前 phase 的 P5 selection_evidence 通过 V1-V5 + meta-validator 无严重 objection + 下一 phase 在 `phase_plan.selected` 中）。
 
 **结论**：✓ 无缺口。
 

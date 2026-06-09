@@ -6,10 +6,15 @@
 
 ## 一、opc_phase_confirm — 锁定执行计划
 
+> ⚠️ **reflection-registry-guard 前置校验**：本工具受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，且当前调用工具不是 `must_be_registered_by` 指定的登记口，则 reject 并返回 `required_action`。完整契约见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
+
 ```
 参数: pipeline_id, sub_pipeline_id, phase, nodes: [{name, blocked_by?}]
 
 行为:
+  ⓪ registry-guard 前置校验:
+     → 读 flow-state.json.pending_reflections[]
+     → 若非空 → reject: { error: "pending_reflection_unregistered", required_action: {...} }
   → node-resolver 解析依赖（即使用户传了 blocked_by 也校验 + 修正）
   → 文件域冲突检查（artifacts + knowledge 路径重叠 → 降级串行）
   → 写入 state.json phases[].nodes[] + blocked_by

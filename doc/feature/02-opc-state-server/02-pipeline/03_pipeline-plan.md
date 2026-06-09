@@ -29,7 +29,7 @@
     }
   ],
   "execution_order": [
-    {"group": 1, "parallel": ["sub-1"]}
+    {"group": 1, "sub_pipeline_ids": ["sub-1"]}
   ]
 }
 ```
@@ -52,9 +52,9 @@
     {"id": "sub-4", "title": "下单与支付",  "knowledge_unit": ["order", "payment"], "status": "pending", "blocked_by": ["sub-3", "sub-2"]}
   ],
   "execution_order": [
-    {"group": 1, "parallel": ["sub-1", "sub-2"]},
-    {"group": 2, "sequential": ["sub-3"]},
-    {"group": 3, "sequential": ["sub-4"]}
+    {"group": 1, "sub_pipeline_ids": ["sub-1", "sub-2"]},
+    {"group": 2, "sub_pipeline_ids": ["sub-3"]},
+    {"group": 3, "sub_pipeline_ids": ["sub-4"]}
   ]
 }
 ```
@@ -74,9 +74,9 @@
 | `sub_pipelines[].knowledge_unit` | 该子管线负责的 unit |
 | `sub_pipelines[].status` | `pending` / `in_progress` / `completed` / `failed` |
 | `sub_pipelines[].blocked_by` | 依赖的其他子管线 ID |
-| `execution_order` | 执行分组。`parallel` 可并行；group 之间串行 |
+| `execution_order` | 执行分组列表。`sub_pipeline_ids` 按列表顺序串行执行；group 之间串行 |
 
-> **phase 选择不在本文件**：每条子管线实际跑哪些 phase 由 `sub-pipelines/<id>/state.json` 的 `phase_plan` 块声明（包含 `available` / `selected` / `selected_by` / `selection_rationale`，并由 state-server 做偏序与一致性校验）。详见 [04_state-json.md §六](04_state-json.md#六phase_plan-校验规则deterministic)。
+> **phase 选择不在本文件**：每条子管线实际跑哪些 phase 由 `sub-pipelines/<id>/state.json` 的 `phase_plan` 块声明（包含 `available` / `selected` / `selected_by` / `selection_rationale`，并由 state-server 做偏序与一致性校验）。详见 [04_state-json.md 六](04_state-json.md#六phase_plan-校验规则deterministic)。
 
 ---
 
@@ -95,7 +95,7 @@
 
 ---
 
-## 五、owner 字段 — 并发隔离
+## 五、owner 字段 — 进程隔离
 
 ```
 → 扫描 .opc/pipelines/*/pipeline-plan.json
@@ -105,7 +105,7 @@
   └── 进程已死 → 孤儿管线 → 提示用户恢复
 ```
 
-详见 [06_lifecycle.md §恢复](06_lifecycle.md#五恢复)。
+串行执行下同一时刻只有一条 sub 在写状态，无需原子写保护。owner.pid 仅用于跨 session 的孤儿检测。详见 [06_lifecycle.md 恢复](06_lifecycle.md#五恢复)。
 
 ---
 

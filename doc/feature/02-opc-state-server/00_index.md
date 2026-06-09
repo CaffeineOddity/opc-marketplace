@@ -6,7 +6,7 @@
 
 - [01 意图识别与任务分析](01-intent-analysis/00_overview.md) — 自然语言入口、意图分类、置信度、任务分析、复杂度分叉、拆分判断、工作单生成
 - [02 管线](02-pipeline/00_overview.md) — 两层 Plan 模型、`pipeline-plan.json`、`state.json`、单管线/拆分管线、生命周期、状态展示、完整调用链路
-- [03 阶段](03-phase/00_overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、置信度阈值、`/comma` 独立运行、分层回退
+- [03 阶段](03-phase/00_overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、分层回退
 - [04 节点](04-node/00_overview.md) — 节点类型与定义、信号匹配、并发与文件域隔离、依赖解析、质量门、超时重试、`plugin.json`
 
 ## 阅读顺序

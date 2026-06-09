@@ -24,13 +24,11 @@
 | 12 | `opc_phase_confirm` | 锁定节点计划，写入 state，创建快照 |
 | 13 | `opc_phase_complete` | 标记完成，返回推进指令 |
 | 14 | `opc_phase_reset` | 从快照恢复 knowledge，下游级联 pending |
-| 15 | `opc_phase_run` | 独立运行阶段（/comma），支持 dry-run / mock-inputs |
 
 各工具完整规范散落在：
 - `opc_phase_start` → [04_phase-start.md](04_phase-start.md)
 - `opc_phase_confirm` → [05_phase-confirm-execute.md](05_phase-confirm-execute.md)
 - `opc_phase_complete` / `opc_phase_reset` → [06_phase-complete-reset.md](06_phase-complete-reset.md)
-- `opc_phase_run` → [07_comma-command.md](07_comma-command.md)
 
 ---
 
@@ -52,16 +50,16 @@ auto_advance = (
 
 - `auto_advance: true` → Claude 直接调 `opc_phase_start` 进入下一 phase
 - `auto_advance: false` → 提示用户确认后推进
-- `next_phase == null` + `ready_sub_pipelines` 非空 → Claude 启动下一条子管线
-- `next_phase == null` + `ready_sub_pipelines` 为空 + 全部 sub completed → 调 `opc_pipeline_complete`
+- `next_phase == null` + `next_sub_pipeline != null` → Claude 启动下一条子管线
+- `next_phase == null` + `next_sub_pipeline == null` + 全部 sub completed → 调 `opc_pipeline_complete`
 
 ### 3.2 节点选择反思持久化
 
 每轮反思通过 `opc_flow_reflect` 写入 `state.json.phases[].reflection_log`，同时在 `flow-state.json` 留指针，crash 后 `opc_flow_recover` 可续传从指定 round 继续。
 
-### 3.3 跨子管线 ready 检测
+### 3.3 跨子管线 next 检测
 
-`opc_phase_complete` 返回 `pipeline_progress.ready_sub_pipelines`，state-manager 聚合规则：blocked_by 全部 completed 且 upstream 无 failed 才纳入。
+`opc_phase_complete` 返回 `pipeline_progress.next_sub_pipeline`，state-manager 按 execution_order 顺序找第一个 `status=pending` 且 `blocked_by` 全 `completed` 且 upstream 无 `failed` 的 sub；若无则返回 `null`。
 
 ---
 

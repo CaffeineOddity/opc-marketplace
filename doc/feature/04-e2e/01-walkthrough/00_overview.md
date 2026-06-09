@@ -95,7 +95,7 @@ flowchart TD
     V -->|全 pass + 无严重 objection| AutoConfirm[路径 A 自动确认]
     V -->|pass + 中等 objection| QuickConf[路径 B 快速确认<br/>展示 reasoning_trace]
     V -->|fail 或 严重 objection| Adjust[路径 C 反思循环<br/>opc_flow_reflect<br/>primary M4 / secondary M5]
-    V -->|budget-guard 耗尽| Manual[强制确认 ask_user]
+    V -->|rounds-guard 耗尽| Manual[强制确认 ask_user]
 
     Adjust --> Score
     QuickConf --> Confirm[opc_phase_confirm]

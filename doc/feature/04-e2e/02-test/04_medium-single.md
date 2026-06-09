@@ -51,7 +51,7 @@ opc_node_start("database-schema") → ... → opc_node_complete → { unblocked_
 opc_phase_complete → {
   next_phase: "05-implement",
   auto_advance: true,
-  pipeline_progress: { ready_sub_pipelines: [], current_sub_status: "in_progress" }
+  pipeline_progress: { next_sub_pipeline: null, current_sub_status: "in_progress" }
 }
 
 [Claude 按 auto_advance 自动推进]

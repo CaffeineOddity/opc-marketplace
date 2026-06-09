@@ -6,17 +6,20 @@
 
 ## 一、opc_phase_complete — 阶段完成
 
+> ⚠️ **reflection-registry-guard 前置校验**：本工具受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，则 reject 并返回 `required_action`。完整契约见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
+
 ```
 参数: pipeline_id, sub_pipeline_id, phase
 
 行为:
+  ⓪ registry-guard 前置校验 → pending_reflections 非空时 reject
   → 校验该 phase 全部 node completed
   → 写入 state.json phases[].status = completed
   → 计算下一 phase + 是否 auto_advance
-  → 计算 pipeline_progress（含 ready_sub_pipelines、failed downstream 等）
+  → 计算 pipeline_progress（含 next_sub_pipeline、failed downstream 等）
   → 更新 flow-state.json:
       · 若 next_phase 存在 + auto_advance → current_pipeline_pointer = { sub_pipeline_id, phase: next_phase, node: null }
-      · 若 next_phase 为 null + ready_sub_pipelines 非空 → current_pipeline_pointer = { sub_pipeline_id: ready_sub_pipelines[0], phase: null, node: null }
+      · 若 next_phase 为 null + next_sub_pipeline 非空 → current_pipeline_pointer = { sub_pipeline_id: next_sub_pipeline.id, phase: null, node: null }
       · 若全部完成 → current_pipeline_pointer 保留为最后位置，等待 opc_pipeline_complete
       · last_heartbeat_at 刷新
 
@@ -30,7 +33,7 @@
   pipeline_progress: {
     current_sub: "sub-1",
     current_sub_status: "in_progress",
-    ready_sub_pipelines: [],          ← blocked_by 全满足且非 failed downstream 的子管线
+    next_sub_pipeline: null,          ← execution_order 顺序下一个 blocked_by 满足且非 failed downstream 的子管线
     pending_sub_pipelines: ["sub-3"]
   },
   flow_next: {
@@ -44,8 +47,8 @@
 调用方根据 `auto_advance` + `pipeline_progress` 决定下一步：
 - `next_phase != null` 且 `auto_advance: true` → 直接调 `opc_phase_start` 推进当前子管线
 - `next_phase != null` 且 `auto_advance: false` → 提示用户确认后推进
-- `next_phase == null` 且 `ready_sub_pipelines` 非空 → 启动下一条子管线
-- `next_phase == null` 且 `ready_sub_pipelines` 为空 + 全部 sub completed → 调 `opc_pipeline_complete`
+- `next_phase == null` 且 `next_sub_pipeline != null` → 启动下一条子管线
+- `next_phase == null` 且 `next_sub_pipeline == null` + 全部 sub completed → 调 `opc_pipeline_complete`
 
 ---
 
@@ -64,9 +67,9 @@ auto_advance = (
 
 任一条件不满足即 `auto_advance: false`，由用户确认。
 
-> selection_evidence + V1-V5 的契约见 [05-opc-reflection-server/02-server-design §三 Deterministic Validator](../../05-opc-reflection-server/02-server-design/00_overview.md#三deterministic-validatorv1v5--三个工程兜底)；
+> selection_evidence + V1-V5 的契约见 [05-opc-reflection-server/02-server-design 三 Deterministic Validator](../../05-opc-reflection-server/02-server-design/00_overview.md#三deterministic-validatorv1v5--三个工程兜底)；
 > phase_plan.selected 顺序由 `opc_pipeline_create` 写入时跑偏序校验，详见
-> [02-pipeline/04_state-json.md §六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)。
+> [02-pipeline/04_state-json.md 六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)。
 
 ---
 

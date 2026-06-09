@@ -23,7 +23,7 @@ task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，触发 task-d
     {"id": "sub-1", "blocked_by": []}
   ],
   "execution_order": [
-    {"group": 1, "parallel": ["sub-1"]}
+    {"group": 1, "sub_pipeline_ids": ["sub-1"]}
   ]
 }
 ```
@@ -45,4 +45,4 @@ task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，触发 task-d
 
 - [03_pipeline-plan.md](03_pipeline-plan.md) — `sub_pipelines[]` schema
 - [../01-intent-analysis/07_task-decomposition.md](../01-intent-analysis/07_task-decomposition.md) — 拆分规则
-- [07_dependency-parallel.md](07_dependency-parallel.md) — 依赖与并行执行
+- [07_dependency-parallel.md](07_dependency-parallel.md) — 依赖与串行执行

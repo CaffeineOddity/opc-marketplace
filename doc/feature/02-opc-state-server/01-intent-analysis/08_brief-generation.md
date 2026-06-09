@@ -15,7 +15,7 @@
   "step_instruction": "按 brief-generation.md 模板生成 brief markdown，可选收集 brief_evidence（覆盖度/约束完整性），提交给 opc_brief_complete。",
   "methodology": {
     "docs": ["prompts/brief-generation.md"],
-    "ref": "§8.1 模板 + §8.2 生成规则 + 05-opc-reflection-server §二 brief_evidence schema",
+    "ref": "8.1 模板 + 8.2 生成规则 + 05-opc-reflection-server 二 brief_evidence schema",
     "summary": "8 个固定段落：描述/基本信息/范围/约束/阶段计划/关联知识/准入检查"
   },
   "schema": { "brief_content": "string (markdown)", "brief_evidence?": "..." },
@@ -23,7 +23,7 @@
 }
 ```
 
-> 本步骤走 reflection-server **P4 反思位点**（轻量），primary 方法 = M3 CoVe，secondary = M4 Critique。brief 是 task_analysis + decomposition 结果的"汇编"，evidence 复用上游 P2/P3 evidence_ref，仅需补充覆盖度检查项。budget-guard 默认仅 1 轮，绝大多数情况直接通过。详见 [05-opc-reflection-server/01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> 本步骤走 reflection-server **P4 反思位点**（轻量），primary 方法 = M3 CoVe，secondary = M4 Critique。brief 是 task_analysis + decomposition 结果的"汇编"，evidence 复用上游 P2/P3 evidence_ref，仅需补充覆盖度检查项。rounds-guard 默认仅 1 轮，绝大多数情况直接通过。详见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 ### 8.1 模板
 

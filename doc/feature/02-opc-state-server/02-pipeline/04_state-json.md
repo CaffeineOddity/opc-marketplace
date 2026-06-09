@@ -70,7 +70,7 @@
 | `phase_plan.selected_by` | 选择来源：`task_analysis` / `scenario_template` / `user_specified` / `replan` |
 | `phase_plan.selection_rationale` | 自然语言说明为何这样选（供反思 evidence 与 replan 复用） |
 | `phase_plan.scenario_hints` | task-analysis 推断出的 scenario 列表，影响 phase 选择与节点加权 |
-| `phase_plan.order_validated` | 是否通过偏序校验（详见 §六） |
+| `phase_plan.order_validated` | 是否通过偏序校验（详见 六） |
 | `phases[].status` | `pending` / `in_progress` / `completed` / `blocked` |
 | `phases[].nodes[].status` | `pending` / `in_progress` / `completed` / `failed` |
 | `phases[].nodes[].blocked_by` | 依赖的前置 node name |

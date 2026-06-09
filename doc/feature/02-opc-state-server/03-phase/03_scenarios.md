@@ -39,7 +39,7 @@ platform/opc-orchestrator/scenarios/
 
 Scenario 也可作为快速启动模板：用户直接声明 "用 add-feature 模板"，跳过信号匹配，直接使用推荐节点。
 
-在 `opc_phase_start` 返回中通过 `scenario` 字段透传给 Claude，由 Claude 在匹配排序时给推荐节点 +0.3 权重加成（详见 [02_node-selection.md §二](02_node-selection.md#二claude-的匹配排序)）。
+在 `opc_phase_start` 返回中通过 `scenario` 字段透传给 Claude，由 Claude 在匹配排序时给推荐节点 +0.3 权重加成（详见 [02_node-selection.md 二](02_node-selection.md#二claude-的匹配排序)）。
 
 ---
 

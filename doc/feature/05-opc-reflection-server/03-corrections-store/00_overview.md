@@ -8,11 +8,13 @@
 
 | 层 | 位置 | 内容 | 生命周期 |
 |---|---|---|---|
-| L1 | `<workspace>/.opc/state/flow-state.json` 的 `user_interventions[]` | 单次 pipeline 的原始介入流水（带时间戳、原文、阶段、节点） | pipeline 结束随快照保留 |
+| L1 | `<workspace>/.opc/state/flow-state.json` 的 `user_interventions[]` | 单次 pipeline 的原始介入流水（带时间戳、原文、阶段、节点、`trigger` 类型）。两类 trigger：`ask_user_rounds_exceeded`（state-server 反思 rounds 耗尽主动询问 → A3 回灌）+ `user_initiated`（用户主动 revise/restart/replan/phase_reset） | pipeline 结束随快照保留 |
 | L2 | `<workspace>/opc-memory/corrections/<unit>/<section>/<sub>.md` | 项目级提炼后的纠正库（三层模型） | 项目持久 |
 | L3 | `~/.opc/global-corrections.jsonl` | 跨项目通用教训（脱敏） | 全局持久 |
 
 **流向**：L1（每次 pipeline）→ distiller sub-agent 提炼 → L2（项目库）→ 用户标记「通用」时晋升 → L3。
+
+> **distiller 优先级**：L1 中带 `trigger: "ask_user_rounds_exceeded"` 的条目优先处理——它们由 A3 闭环写入，附带 `linked_reflection_artifacts`（指向 N 轮反思 artifact 路径），上下文丰富度远高于纯用户主动纠错，提炼为 corrections 后命中率与召回率都更高。详见 [04-reflection-flow/06_call-sequence-contract.md 八·补](../04-reflection-flow/06_call-sequence-contract.md#八补-ask_user-回灌闭环a3-契约)。
 
 ---
 

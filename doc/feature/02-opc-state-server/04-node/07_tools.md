@@ -17,10 +17,13 @@
 
 ## opc_node_start
 
+> ⚠️ **reflection-registry-guard 前置校验**：本工具受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，则 reject 并返回 `required_action`，要求先调 `opc_flow_reflect` 登记反思记录。完整契约见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
+
 ```
 参数: pipeline_id, sub_pipeline_id, node_name
 
 行为:
+  ⓪ registry-guard 前置校验 → pending_reflections 非空时 reject
   ① 读取 node 定义（按"项目覆盖优先"解析最终路径），提取 agents.primary[]
   ② 扫描已安装 kit → 构建可用 Agent 集合
   ③ 逐一校验 primary Agent 是否可用 → 不可用立即报错

@@ -19,7 +19,7 @@ Claude → opc_flow_query()
   step_instruction: "判断用户最近一条消息的意图。若是开发任务 → opc_flow_start；若是项目问答 → opc_knowledge_search；若是闲聊/纯知识 → 直接回答。",
   methodology: {
     docs: ["prompts/01_intent-analysis-overview.md"],
-    ref: "§三 意图分类",
+    ref: "三 意图分类",
     summary: "4 种意图：task/project_question/general_question/chat"
   },
   suggested_actions: [
@@ -48,7 +48,7 @@ Claude → opc_flow_start({user_message: "实现用户认证系统，支持邮�
   step_instruction: "判断意图，收集 intent_evidence（task_criteria_hits / chat_signals / user_quotes）后输出 {intent, intent_evidence, reasoning}",
   methodology: {
     docs: ["prompts/01_intent-analysis-overview.md"],
-    ref: "§三 意图分类 + §3.1 task 信号 + 05-opc-reflection-server §二 intent_evidence schema",
+    ref: "三 意图分类 + 3.1 task 信号 + 05-opc-reflection-server 二 intent_evidence schema",
     summary: "动作动词、明确交付物、!task 前缀计入 task_criteria_hits；疑问词、闲聊语气计入 chat_signals"
   },
   schema: { intent: [...], intent_evidence: {task_criteria_hits[], chat_signals[], user_quotes[]}, reasoning: "string" },
@@ -87,7 +87,7 @@ opc_intent_complete 经 reflection-server P1 V1-V5 + meta-validator:
   step_instruction: "先调 opc_knowledge_list() 获取已有 unit，然后做 7 步分析 + 收集 task_analysis_evidence",
   methodology: {
     docs: ["prompts/task-analysis.md"],
-    ref: "§6.2 分析步骤 + 05-opc-reflection-server §二 task_analysis_evidence schema",
+    ref: "6.2 分析步骤 + 05-opc-reflection-server 二 task_analysis_evidence schema",
     summary: "提炼描述→打标签→判复杂度→推荐阶段→提取知识→匹配 scenario→知识操作计划"
   },
   prerequisites: [{tool: "opc_knowledge_list", why: "获取已有 unit 上下文"}],
@@ -162,7 +162,7 @@ opc_task_analysis_complete 判定:
   step_instruction: "按 brief-generation.md 模板生成 brief markdown",
   methodology: {
     docs: ["prompts/brief-generation.md"],
-    ref: "§8.1 模板 + §8.2 生成规则 + 05-opc-reflection-server §二 brief_evidence schema",
+    ref: "8.1 模板 + 8.2 生成规则 + 05-opc-reflection-server 二 brief_evidence schema",
     summary: "8 个固定段落，阶段计划顶部追加 phase_selection_rationale"
   },
   schema: { brief_content: "string (markdown)", brief_evidence?: "..." },

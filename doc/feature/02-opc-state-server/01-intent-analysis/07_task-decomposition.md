@@ -17,7 +17,7 @@
   "step_instruction": "按方法论执行拆分分析，收集 decomposition_evidence，提交给 opc_decomposition_complete。",
   "methodology": {
     "docs": ["prompts/task-decomposition.md"],
-    "ref": "§7.2 拆分原则 + 05-opc-reflection-server §二 decomposition_evidence schema",
+    "ref": "7.2 拆分原则 + 05-opc-reflection-server 二 decomposition_evidence schema",
     "summary": "按领域边界拆，独立的拆开，紧密耦合的合并，通过 _refs 推导依赖"
   },
   "schema": { sub_pipelines, execution_order, decomposition_evidence },
@@ -25,7 +25,7 @@
 }
 ```
 
-> 本步骤走 reflection-server **P3 反思位点**，提交 `decomposition_evidence`（schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等，详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。路由由 V1-V5 验证器 + meta-validator 输出，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 启用），详见 [05-opc-reflection-server/01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> 本步骤走 reflection-server **P3 反思位点**，提交 `decomposition_evidence`（schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等，详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。路由由 V1-V5 验证器 + meta-validator 输出，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 启用），详见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 修改数 = 1 时跳过：opc_task_analysis_complete 直接路由到 brief_generation。
 
@@ -77,9 +77,9 @@ order._refs → [cart, user-center]
     { "id": "sub-4", "title": "下单与支付", "knowledge_unit": ["order", "payment"], "blocked_by": ["sub-3", "sub-2"] }
   ],
   "execution_order": [
-    {"group": 1, "parallel": ["sub-1", "sub-2"]},
-    {"group": 2, "sequential": ["sub-3"]},
-    {"group": 3, "sequential": ["sub-4"]}
+    {"group": 1, "sub_pipeline_ids": ["sub-1", "sub-2"]},
+    {"group": 2, "sub_pipeline_ids": ["sub-3"]},
+    {"group": 3, "sub_pipeline_ids": ["sub-4"]}
   ],
   "decomposition_evidence": {
     "boundary_rationale": [
@@ -100,13 +100,13 @@ order._refs → [cart, user-center]
 
 ### 7.4 路由（由 opc_decomposition_complete 按 V1-V5 + meta-validator 结果分流）
 
-详见 [03_flow-tools-step-routing.md §opc_decomposition_complete](03_flow-tools-step-routing.md#opc_decomposition_complete)。
+详见 [03_flow-tools-step-routing.md opc_decomposition_complete](03_flow-tools-step-routing.md#opc_decomposition_complete)。
 
 | validator 结果 | 路由行为 | 典型场景 |
 |----------------|---------|---------|
 | V1-V5 pass + 无严重 objection | 路由到 brief_generation，附 step_instruction "拆分方案 evidence 通过验证，开始生成 brief" | _refs 完整 + 边界清晰 |
 | V1-V5 pass + 中等 objection | 路由到 brief_generation，附 step_instruction "展示方案 + reasoning_trace 后开始生成 brief" | 大部分常规任务 |
-| V1-V5 fail 或 严重 objection | 路由到 P3 反思（primary=M6 ToT，secondary=M5 Debate），受 budget-guard 约束；budget 耗尽 → ask_user | 全新领域、边界模糊 |
+| V1-V5 fail 或 严重 objection | 路由到 P3 反思（primary=M6 ToT，secondary=M5 Debate），受 rounds-guard 约束；rounds 耗尽 → ask_user | 全新领域、边界模糊 |
 
 **自动推进时 Claude 主动告知：**
 

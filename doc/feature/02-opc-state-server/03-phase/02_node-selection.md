@@ -34,7 +34,7 @@ Claude 拿到 `available_nodes` 后执行：
   - tdd-implementation: +0.3 weight
 ```
 
-排序完成后，Claude 收集 `selection_evidence` 提交给 reflection-server P5 验证，详见 [04_phase-start.md §三](04_phase-start.md#三selection_evidence-schema)。
+排序完成后，Claude 收集 `selection_evidence` 提交给 reflection-server P5 验证，详见 [04_phase-start.md 三](04_phase-start.md#三selection_evidence-schema)。
 
 ---
 
@@ -48,13 +48,13 @@ Claude 拿到 `available_nodes` 后执行：
 | `blocked_by_graph` | 输出→输入推导出的依赖图 | V2 referential |
 | `coverage_gaps[]` | task_tags 中未被任何选中 node 覆盖的标签 | V4 coverage |
 
-完整 schema 见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
+完整 schema 见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 
 ---
 
-## 四、反思 budget-guard 上限（按 phase + complexity 配置）
+## 四、反思 rounds-guard 上限（按 phase + complexity 配置）
 
-`opc_phase_start` 返回的 `reflection_budget_hint.max_rounds`，作为 budget-guard 的硬上限：
+`opc_phase_start` 返回的 `reflection_budget_hint.max_rounds`，作为 rounds-guard 的硬上限（**仅控制轮次，不再追踪 token**）：
 
 | Phase | medium | high | 理由 |
 |-------|--------|------|------|
@@ -78,9 +78,9 @@ low 复杂度走 quick_dispatch，不进入 phase 反思循环。
 |--------------|---------|---------|
 | V1-V5 全部 pass + 无严重 objection | AI 自行确定节点列表，调 `opc_phase_confirm` | 满足 auto_advance 4 条件之一（P5 通过） |
 | V1-V5 pass + 中等 objection | 展示方案 + reasoning_trace + objection，用户一键确认 | 同上但 step_instruction 提示确认 |
-| V1-V5 fail 或 严重 objection | 进入 P5 反思循环（M4 Critique + M5 Debate），受 budget-guard 约束 | `auto_advance: false`，等反思收敛或 ask_user |
+| V1-V5 fail 或 严重 objection | 进入 P5 反思循环（M4 Critique + M5 Debate），受 rounds-guard 约束 | `auto_advance: false`，等反思收敛或 ask_user |
 
-> auto_advance 4 条件全集见 [06_phase-complete-reset.md §auto_advance](06_phase-complete-reset.md)；V1-V5 规则见 [05-opc-reflection-server/02-server-design/00_overview.md §三](../../05-opc-reflection-server/02-server-design/00_overview.md#三validators)。
+> auto_advance 4 条件全集见 [06_phase-complete-reset.md auto_advance](06_phase-complete-reset.md)；V1-V5 规则见 [05-opc-reflection-server/02-server-design/00_overview.md 三](../../05-opc-reflection-server/02-server-design/00_overview.md#三validators)。
 
 ---
 

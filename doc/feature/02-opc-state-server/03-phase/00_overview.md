@@ -133,12 +133,6 @@ flowchart TD
 | [04_phase-start.md](04_phase-start.md) | `opc_phase_start` + P5 selection_evidence 收集 + V1-V5 validator 路由 + 反思循环 | `opc_phase_start` / `opc_flow_reflect` |
 | [05_phase-confirm-execute.md](05_phase-confirm-execute.md) | `opc_phase_confirm` 锁定执行 + 逐 node 执行 | `opc_phase_confirm` / `opc_node_start` |
 | [06_phase-complete-reset.md](06_phase-complete-reset.md) | `opc_phase_complete` + auto_advance 规则 + `opc_phase_reset` + 分层回退 L0–L3 | `opc_phase_complete` / `opc_phase_reset` |
-
-### 扩展能力
-
-| 子文档 | 内容 |
-|------|------|
-| [07_comma-command.md](07_comma-command.md) | `/comma` 阶段独立运行 + dry-run / mock-inputs |
 | [08_tools-and-automation.md](08_tools-and-automation.md) | 节点来源 + 6 个阶段工具汇总 + 自动机制 |
 
 ---

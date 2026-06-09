@@ -30,7 +30,7 @@
 
 ## 二、执行
 
-按 `execution_order` 分组推进。group 内 `parallel` 的子管线可并行执行；group 之间严格串行。每条子管线内部按 phases 顺序执行。
+子管线按 `execution_order` 严格串行执行。同一时刻只有一条子管线在执行；当前 sub 全部 phase completed 后，由 `opc_phase_complete` 返回 `next_sub_pipeline` 引导下一条 sub 启动。每条子管线内部按 phases 顺序执行。
 
 阶段执行循环详见 [phase.md](../03-phase/00_overview.md)。
 
@@ -55,7 +55,7 @@
 - 下游 `pending` 保持 `pending`（不再推进）
 - 清理快照
 
-工具规范详见 [09_tools.md §opc_pipeline_abort](09_tools.md#opc_pipeline_abort)。
+工具规范详见 [09_tools.md opc_pipeline_abort](09_tools.md#opc_pipeline_abort)。
 
 ---
 

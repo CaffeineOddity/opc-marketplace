@@ -18,22 +18,21 @@ Claude 拆分:
   sub-2: user-center（无依赖）
   sub-3: cart（blocked_by: [sub-1, sub-2]）
   sub-4: order+payment（blocked_by: [sub-3, sub-2]）
-  execution_order: Group1[sub-1 ∥ sub-2] → Group2[sub-3] → Group3[sub-4]
+  execution_order: sub-1 → sub-2 → sub-3 → sub-4（严格串行）
 
 Claude → opc_decomposition_complete → opc_decomposition_complete 路由 brief_generation
 Claude → opc_brief_complete → opc_pipeline_create
 
-按 execution_order 推进:
-  Group1: 单 session 内交错推进 sub-1 + sub-2 phases
-    → sub-1 全 phase completed
-    → sub-2 全 phase completed → ready_sub_pipelines 包含 sub-3 ✓
-  Group2: sub-3 phases → completed → ready_sub_pipelines 包含 sub-4 ✓
-  Group3: sub-4 phases → opc_pipeline_complete
+按 execution_order 严格串行推进:
+  sub-1 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-2
+  sub-2 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-3
+  sub-3 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-4
+  sub-4 全 phase completed → opc_pipeline_complete
 ```
 
 **关键改进**：
-1. 单 session 内"并行"实质是交错执行。Claude 通过 `opc_pipeline_status` 或 `opc_phase_complete` 返回的 `pipeline_progress` 查看全局调度。
-2. failed 子管线的 downstream 不会出现在 `ready_sub_pipelines` 里（state-manager 聚合规则）。
+1. 严格按 `execution_order` 串行执行，同一时刻只有一条 sub 在跑。Claude 通过 `opc_pipeline_status` 或 `opc_phase_complete` 返回的 `pipeline_progress.next_sub_pipeline` 查看下一条要启动的 sub。
+2. failed 子管线的 downstream 不会出现在 `next_sub_pipeline` 里（state-manager 按 execution_order 顺序找首个就绪且 upstream 无 failed 的 sub）。
 
 **结论**：✓ 无缺口。
 

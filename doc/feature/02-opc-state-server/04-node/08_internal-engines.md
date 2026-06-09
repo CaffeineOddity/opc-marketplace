@@ -34,7 +34,7 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 - `check_node_timeout()` — 惰性检测 in_progress node 超时
 - `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
 - `compute_unblocked_nodes()` — 严格语义：blocked_by 全部 completed 才纳入
-- `compute_ready_sub_pipelines()` — 聚合规则：blocked_by 全 completed 且 upstream 无 failed
+- `compute_next_sub_pipeline()` — 按 execution_order 顺序找第一个 `status=pending` 且 `blocked_by` 全 completed 且 upstream 无 failed 的 sub；若无则返回 null
 
 ### 2.3 flow-router（state-server 内部，新增）
 

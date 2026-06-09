@@ -33,7 +33,7 @@ opc_brief_complete 返回（从 flow-state.accumulated 推导，预填全部参�
         knowledge_unit: ["user-auth"],
         blocked_by: []
       }],
-      execution_order: [{group: 1, parallel: ["sub-1"]}]
+      execution_order: [{group: 1, sub_pipeline_ids: ["sub-1"]}]
     }
   }
 }
@@ -94,7 +94,7 @@ Claude → opc_pipeline_create({...预填参数...})
     "status": "in_progress",
     "blocked_by": []
   }],
-  "execution_order": [{ "group": 1, "parallel": ["sub-1"] }]
+  "execution_order": [{ "group": 1, "sub_pipeline_ids": ["sub-1"] }]
 }
 ```
 
@@ -123,7 +123,7 @@ opc_knowledge_open(["user-auth"])
     },
     methodology: {
       docs: ["prompts/phase-execution.md"],
-      ref: "§十一 阶段执行循环",
+      ref: "十一 阶段执行循环",
       summary: "phase_start → 自省排序 → 反思 → confirm → node 执行 → complete"
     }
   }

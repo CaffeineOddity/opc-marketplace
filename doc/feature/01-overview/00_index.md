@@ -14,7 +14,7 @@
 
 - [意图识别与任务分析](../02-opc-state-server/01-intent-analysis/00_overview.md) — 自然语言入口、意图分类、置信度、任务分析、复杂度分叉、拆分判断、工作单生成
 - [管线](../02-opc-state-server/02-pipeline/00_overview.md) — 两层 Plan 模型、pipeline-plan.json、state.json、单管线/拆分管线、生命周期、状态展示、完整调用链路
-- [阶段](../02-opc-state-server/03-phase/00_overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、置信度阈值、/comma 独立运行、分层回退
+- [阶段](../02-opc-state-server/03-phase/00_overview.md) — 9 阶段定义、节点选择策略、Scenario 加权、反思轮次、分层回退
 - [节点](../02-opc-state-server/04-node/00_overview.md) — 节点类型与定义、信号匹配、并发与文件域隔离、依赖解析、质量门、超时重试、plugin.json
 
 ### 03 opc-knowledge-server — 知识库
@@ -59,6 +59,7 @@
 4. **流程可观测可恢复** —— flow-state.json 记录每一步的输入、输出、反思日志，crash 后 `opc_flow_query` 检测到 owner.pid 已死 → `opc_flow_recover` 续跑
 5. **工具返回自包含 next** —— 每个工具返回 `flow_next` 字段告诉 Claude 下一步调什么，避免文档硬编码跳转
 6. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
+7. **子管线严格串行** —— 按 execution_order 依次执行，blocked_by 阻塞未就绪的 sub，无需并发写保护
 7. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
 8. **知识属于项目** —— 切换目录 = 切换知识上下文
 9. **三 MCP 服务** —— opc-state-server 管流程+任务跟进，opc-knowledge-server 管知识库，opc-reflection-server 管反思方法学+用户纠正归档

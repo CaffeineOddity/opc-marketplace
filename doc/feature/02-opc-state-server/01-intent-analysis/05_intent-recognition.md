@@ -16,7 +16,7 @@ Claude 收到 opc_flow_query 返回后按方法论判断。四种意图：
 | `general_question` | 与项目无关的纯知识问答 | opc_flow_start done，Claude 直接回答 |
 | `chat` | 闲聊 / 无技术内容 | opc_flow_start done |
 
-### 4.1 task 信号（详见 prompts/01_intent-analysis-overview.md §3.1）
+### 4.1 task 信号（详见 prompts/01_intent-analysis-overview.md 3.1）
 
 | 信号 | 加权 |
 |------|------|
@@ -46,7 +46,7 @@ Claude 收到 opc_flow_query 返回后按方法论判断。四种意图：
 
 | 字段 | 说明 |
 |------|------|
-| `task_criteria_hits[]` | 命中的 task 判定条件（如「包含动作动词」「明确交付物」等具名条目，逐条引用 §4.1 信号源） |
+| `task_criteria_hits[]` | 命中的 task 判定条件（如「包含动作动词」「明确交付物」等具名条目，逐条引用 4.1 信号源） |
 | `chat_signals[]` | 命中的 chat/question 反向信号 |
 | `user_quotes[]` | 原始用户消息中支撑判定的逐字引文（必须能在 user_message_history 中检索到） |
 
@@ -56,9 +56,9 @@ opc_intent_complete 路由按 reflection-server V1-V5 validator + meta-validator
 |----------------|---------|
 | V1-V5 全部 pass + 无严重 objection | 直接路由到对应分支（task → task_analysis；project_question → knowledge_search；general/chat → done） |
 | validator pass + 中等 objection | 路由到对应分支，但 step_instruction 提示 Claude 向用户简短确认（附 reasoning_trace） |
-| validator fail 或严重 objection | 进入 P1 反思（primary=M3 CoVe，secondary=M4 Critique）；budget 耗尽 → ask_user |
+| validator fail 或严重 objection | 进入 P1 反思（primary=M3 CoVe，secondary=M4 Critique）；rounds 耗尽 → ask_user |
 
-> evidence schema 完整字段、V1-V5 规则、M3/M4 方法定义见 [05-opc-reflection-server/02-server-design/00_overview.md §二/§三](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema) + [01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> evidence schema 完整字段、V1-V5 规则、M3/M4 方法定义见 [05-opc-reflection-server/02-server-design/00_overview.md 二/三](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema) + [01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 ### 5.2 纠错指令
 

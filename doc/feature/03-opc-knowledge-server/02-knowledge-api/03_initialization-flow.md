@@ -5,7 +5,7 @@
 
 ---
 
-管线启动时，Claude 按 MCP 流程状态机推进（详见 [intent-analysis §流程工具速览](../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md)），知识工具穿插调用：
+管线启动时，Claude 按 MCP 流程状态机推进（详见 [intent-analysis 流程工具速览](../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md)），知识工具穿插调用：
 
 ```
 ① Hook 注入"调 opc_flow_start"指令 → Claude → opc_flow_start

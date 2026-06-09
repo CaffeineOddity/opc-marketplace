@@ -31,8 +31,8 @@ sequenceDiagram
     Note over U,K: ② 执行
     loop 各子管线
         U->>PC: opc_pipeline_status()
-        PC->>PP: 读 ready_sub_pipelines<br/>(blocked_by 全 completed<br/>且 upstream 无 failed)
-        PC-->>U: 可启动 sub 列表
+        PC->>PP: 读 next_sub_pipeline<br/>(execution_order 顺序<br/>+ blocked_by 全 completed<br/>+ upstream 无 failed)
+        PC-->>U: 可启动的下一条 sub
 
         U->>PH: opc_phase_start(sub_id)
         PH->>ST: 阶段执行循环<br/>(见 03_phase-overview.md)
@@ -77,8 +77,8 @@ flowchart TD
 
     Split --> Deps[推导 sub 间<br/>blocked_by 拓扑]
     Deps --> Allocate[分配 knowledge_unit<br/>到各 sub]
-    Allocate --> EO[生成 execution_order<br/>分组]
-    EO --> Topo{拓扑一致性<br/>校验}
+    Allocate --> EO[生成 execution_order<br/>排序列表]
+    EO --> Topo{blocked_by 无环<br/>校验}
     Topo -->|失败| Reject[拒绝创建<br/>返回错误]
     Topo -->|通过| CreateSplit[opc_pipeline_create<br/>多 sub]
 
@@ -102,7 +102,7 @@ flowchart TD
 |------|------|
 | [01_plan-model.md](01_plan-model.md) | 两层 Plan 模型（编排层 vs 执行层） |
 | [02_directory-structure.md](02_directory-structure.md) | `.opc/pipelines/<id>/` 目录布局与读写归属 |
-| [03_pipeline-plan.md](03_pipeline-plan.md) | `pipeline-plan.json` schema、状态聚合、owner 并发隔离 |
+| [03_pipeline-plan.md](03_pipeline-plan.md) | `pipeline-plan.json` schema、状态聚合、owner 进程隔离 |
 | [04_state-json.md](04_state-json.md) | `state.json` schema、状态枚举、input/output 规则、error 类型 |
 
 ### 管线编排
@@ -110,7 +110,7 @@ flowchart TD
 | 子文档 | 内容 |
 |------|------|
 | [05_single-vs-split.md](05_single-vs-split.md) | 单管线 vs 拆分管线触发条件、`knowledge_unit` 分配 |
-| [07_dependency-parallel.md](07_dependency-parallel.md) | `blocked_by` 语义、`execution_order` 分组、失败传播、多 Feature 并行 |
+| [07_dependency-parallel.md](07_dependency-parallel.md) | `blocked_by` 语义、`execution_order` 排序、失败传播、多 Feature 独立管线 |
 
 ### 生命周期与工具
 
@@ -131,7 +131,7 @@ flowchart TD
 ## 快速入口
 
 - **创建管线**：[`opc_pipeline_create`](09_tools.md#opc_pipeline_create) — 由 `opc_brief_complete` 路由预填参数触发
-- **查看状态**：[`opc_pipeline_status`](09_tools.md#opc_pipeline_status) — 不带 sub_id 返回聚合视图 + `ready_sub_pipelines`
+- **查看状态**：[`opc_pipeline_status`](09_tools.md#opc_pipeline_status) — 不带 sub_id 返回聚合视图 + `next_sub_pipeline`
 - **细粒度修改**：[`opc_pipeline_replan`](09_tools.md#opc_pipeline_replan细粒度) — 增删节点/阶段/子管线，不影响 in_progress
 
 ---
@@ -140,9 +140,9 @@ flowchart TD
 
 - **两层 Plan 分离**：编排层（`pipeline-plan.json`）与执行层（`state.json`）解耦，分别由不同工具维护
 - **状态机驱动**：所有状态迁移仅通过 MCP 工具完成，禁止手工编辑 JSON
-- **owner 并发隔离**：基于 pid 存活检测识别孤儿管线，支持跨 session 恢复
-- **拓扑一致性**：`execution_order` 必须与 `blocked_by` 推导的拓扑排序一致，`opc_pipeline_create` 时强制校验
-- **并发优先，依赖串行**：拆分管线默认尽量并发，`blocked_by` 是唯一串行依据。`opc_pipeline_status` 返回所有 ready 子管线，Host 在一次响应里并发拉起多个 `opc_phase_start`（详见 [07_dependency-parallel.md](07_dependency-parallel.md)）
+- **owner 进程隔离**：基于 pid 存活检测识别孤儿管线，支持跨 session 恢复
+- **依赖无环**：`blocked_by` 引用的 sub_id 必须存在且无环，`opc_pipeline_create` 时强制校验
+- **严格串行执行**：子管线按 `execution_order` 依次执行，`blocked_by` 阻塞未就绪的 sub。`opc_phase_complete` 返回 `next_sub_pipeline`，Claude 直接调下一条 `opc_phase_start`（详见 [07_dependency-parallel.md](07_dependency-parallel.md)）
 
 ---
 

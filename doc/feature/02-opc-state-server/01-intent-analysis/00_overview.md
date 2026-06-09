@@ -157,7 +157,7 @@ flowchart TD
 - **工具内部强制校验**：所有 `opc_flow_*` 都内置 pid + status 校验
 - **方法论文档按需读**：MCP 工具返回 `methodology.docs` 指向 `prompts/*.md`，复杂边界场景才完整 Read
 
-详见 [01_hook-architecture.md §1.1 设计原则](01_hook-architecture.md#11-设计原则)。
+详见 [01_hook-architecture.md 1.1 设计原则](01_hook-architecture.md#11-设计原则)。
 
 ---
 

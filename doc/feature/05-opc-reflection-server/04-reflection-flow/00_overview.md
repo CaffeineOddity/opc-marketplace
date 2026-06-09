@@ -6,6 +6,8 @@
 
 ## 一、per-step 反思链路（标准时序）
 
+> ⚠️ 本时序图遵循单驱动者原则：**`flow_next` 只从 state-server 发出**。`opc_reflect_*_complete` 写盘 artifact 并发出 `pending_reflection`，Claude 必须调 `opc_flow_reflect({reflection_id})` 登记才能推进。详见 [06_call-sequence-contract.md](06_call-sequence-contract.md)。
+
 每个判断点 P1–P8 的统一时序：
 
 ```mermaid
@@ -31,7 +33,7 @@ sequenceDiagram
     alt intensity != off
         C->>RS: opc_reflect_plan(step, ctx)
         RS->>MS: corrections_query
-        RS-->>C: { method, secondary, prior_corrections, budget }
+        RS-->>C: { method, secondary, prior_corrections, budget, next_step_hint }
 
         Note over C,U: ③ 执行 primary 方法
         C->>RS: opc_reflect_<method>(artifact, prompt)
@@ -39,20 +41,21 @@ sequenceDiagram
         C->>A: Task(agent_spec)
         A-->>C: objections + reasoning_trace
 
-        Note over C,U: ④ meta-validator
+        Note over C,U: ④ reflection-server 跑 meta-validator + 写盘 artifact + 发 pending_reflection
         C->>RS: opc_reflect_<method>_complete(objections)
-        RS->>RS: meta-validator
-        alt objections kept
-            RS-->>C: flow_next: opc_flow_reflect(seed)
-            Note over C: 必须 evidence_diff 才能再次 complete
-        else 干净
-            RS-->>C: flow_next: opc_<step>_finalize
-        end
+        RS->>RS: meta-validator + 写盘 artifact 到 opc-logs/reflection/
+        RS-->>C: { verdict, kept_objections, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
 
-        Note over C,U: ⑤ secondary（如 primary 触发问题）
-        opt primary 有严重 objections
-            C->>RS: opc_reflect_<secondary>(...)
-            Note over C,A: 重复 ②–④
+        Note over C,U: ⑤ state-server 登记并决定下一步
+        C->>SS: opc_flow_reflect({ reflection_id })
+        SS->>SS: registry-guard 读 artifact + 登记到 reflection_log[]
+        alt verdict=objections_remain
+            SS-->>C: flow_next: opc_reflect_<secondary> (secondary 方法)
+            Note over C,A: 重复 ③–⑤
+        else verdict=clean
+            SS-->>C: flow_next: opc_<step>_finalize (上层流程继续)
+        else rounds 耗尽 (rounds_exceeded)
+            SS-->>C: ask_user + reasoning_trace
         end
     end
 
@@ -160,6 +163,8 @@ phase 回退时反思状态如何处理：
 
 ## 六、端到端时序（pipeline 全程反思视角）
 
+> ⚠️ 简化版示意：仅展示 state-server 与 reflection-server 的接力主线。完整 5 步铁律见 [06_call-sequence-contract.md 二](06_call-sequence-contract.md)。
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -170,19 +175,25 @@ sequenceDiagram
 
     Note over C,U: P1 意图
     C->>SS: opc_intent_complete(intent_evidence)
-    SS->>RS: V1-V5 + plan
-    RS-->>C: CoVe (primary)
-    C->>RS: critique_complete → 干净
+    SS-->>C: flow_next: opc_reflect_plan
+    C->>RS: opc_reflect_plan + opc_reflect_cove_complete
+    RS-->>C: { verdict:clean, pending_reflection }
+    C->>SS: opc_flow_reflect({ reflection_id })
+    SS-->>C: flow_next: opc_task_analysis_complete
 
     Note over C,U: P2 任务分析
     C->>SS: opc_task_analysis_complete(evidence)
-    RS-->>C: CoVe → objection → Critique (secondary)
-    C->>U: ask_user (intervention)
+    SS-->>C: flow_next: opc_reflect_plan
+    C->>RS: CoVe → objection → Critique (secondary)
+    RS-->>C: { verdict:objections_remain, pending_reflection }
+    C->>SS: opc_flow_reflect({ reflection_id })
+    SS-->>C: ask_user (budget 或严重 objection)
+    C->>U: ask_user
     U-->>C: 补充需求
     C->>SS: opc_flow_revise → L1 写
 
     Note over C,U: P3 分解 / P4 brief / P5 节点选择
-    Note over C,U: ... 每个 step 重复 plan → method → complete
+    Note over C,U: ... 每个 step 重复 plan → method → complete → ack → flow_reflect
 
     Note over C,U: P6/P7 执行与完成
     C->>SS: opc_node_complete (validator-heavy)
@@ -200,7 +211,7 @@ sequenceDiagram
     SS-->>C: flow_next: opc_reflect_record_interventions
     C->>RS: distiller 提炼 L1 → L2
     RS->>RS: meta-reflection (本次方法表现)
-    RS-->>C: manifest + 新增教训 + 健康度变化
+    RS-->>C: { manifest, 新增教训, 健康度变化 } (无 flow_next)
 ```
 
 ---
@@ -214,6 +225,8 @@ sequenceDiagram
 | 03_intervention-archival.md | L1 → L2 → L3 归档链与 distiller 提示词 |
 | 04_meta-reflection.md | pipeline 级 meta-reflection 算法 + 报告模板 |
 | 05_phase-reset-interaction.md | 与 state-server phase_reset 的边界 |
+| [06_call-sequence-contract.md](06_call-sequence-contract.md) | 单驱动者契约 + reflection-registry-guard 三层防御 + 5 步铁律 + 命名约定 + 不变量 |
+| [07_three-server-seam-matrix.md](07_three-server-seam-matrix.md) | **接缝矩阵**：P1–P8 × 触发器/evidence/方法/pending/持久化/knowledge/降级一表打通 |
 
 ---
 

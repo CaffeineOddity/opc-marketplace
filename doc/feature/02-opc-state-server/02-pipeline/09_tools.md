@@ -39,8 +39,8 @@
       · selected = suggested_phases（或子管线自带 selected）
       · selected_by = "task_analysis"（拆分子管线为 "task_decomposition"）
       · selection_rationale = phase_selection_rationale
-      · 跑 phase_plan §六 5 条校验，任一 fail 则整体回滚
-  → 校验 execution_order 与 blocked_by 的拓扑一致性
+      · 跑 phase_plan 六 5 条校验，任一 fail 则整体回滚
+  → 校验 blocked_by 引用的 sub_id 存在且无环
   → 更新 .opc/sessions/<id>/flow-state.json：
       · pipeline_id = <新 ID>
       · current_step = "pipeline_created"
@@ -57,7 +57,7 @@
 }
 ```
 
-> phase_plan 校验失败时返回 `{ error: "phase_plan_invalid", failed_rules: [...], suggested_action: "opc_flow_restart(from_step: 'task_analysis')" }`。详见 [04_state-json.md §六](04_state-json.md#六phase_plan-校验规则deterministic)。
+> phase_plan 校验失败时返回 `{ error: "phase_plan_invalid", failed_rules: [...], suggested_action: "opc_flow_restart(from_step: 'task_analysis')" }`。详见 [04_state-json.md 六](04_state-json.md#六phase_plan-校验规则deterministic)。
 
 ---
 
@@ -67,7 +67,7 @@
 参数: pipeline_id, sub_pipeline_id? (可选)
 
 带 sub_pipeline_id → state.json 完整内容 + node 状态 + unblocked_nodes
-不带 → 各子管线状态聚合 + ready_sub_pipelines + concurrency_hint
+不带 → 各子管线状态聚合 + next_sub_pipeline + blocked_sub_pipelines
 ```
 
 ### 不带 sub_pipeline_id 的返回结构
@@ -81,53 +81,23 @@
     {"id": "sub-2", "status": "in_progress"},
     {"id": "sub-3", "status": "pending", "blocked_by": ["sub-1", "sub-2"]}
   ],
-  "ready_sub_pipelines": [
-    {
-      "id": "sub-2",
-      "reason": "blocked_by 全部 completed",
-      "next": {"tool": "opc_phase_start", "args": {"sub_pipeline_id": "sub-2"}}
-    }
-  ],
-  "concurrency_hint": {
-    "ready_count": 1,
-    "recommended_action": "single",
-    "max_parallel_recommended": 3,
-    "note": "Host 应在 ready_count ≥ 2 时一次响应内并发发起多个 opc_phase_start；超过 max_parallel_recommended 时分批"
+  "next_sub_pipeline": {
+    "id": "sub-2",
+    "reason": "execution_order 顺序第一位且 blocked_by 全部 completed",
+    "next": {"tool": "opc_phase_start", "args": {"sub_pipeline_id": "sub-2"}}
   },
-  "failed_sub_pipelines": [],
   "blocked_sub_pipelines": [
     {"id": "sub-3", "waiting_for": ["sub-2"]}
   ]
 }
 ```
 
-### ready_sub_pipelines 计算规则
+### next_sub_pipeline 计算规则
 
-- 返回**当前所有 ready** 子管线（不做条数限制）
+- 返回**当前唯一可执行**的子管线（不做条数限制）
 - 进入条件：`status == pending` **且** `blocked_by` 全部 `completed` **且** 无 `blocked_by` 路径上的 `failed`
-- 顺序：按 `execution_order` 分组顺序输出，便于 Host 决定批次
-
-### concurrency_hint 字段
-
-| 字段 | 含义 |
-|------|------|
-| `ready_count` | 当前 ready 子管线数 |
-| `recommended_action` | `single`（ready_count=1）/ `parallel`（ready_count ≥ 2 且 ≤ max）/ `batch`（超过 max，建议分批） |
-| `max_parallel_recommended` | 建议的最大并发数（默认 3，可由 server 配置；超过会增加 context 压力） |
-| `note` | Host 行为建议文本 |
-
-### Host 调度规约
-
-```
-1. Host 调 opc_pipeline_status() 拿到 ready_sub_pipelines = [A, B, C]
-2. 根据 concurrency_hint.recommended_action：
-     · single   → 串行发起一个 opc_phase_start
-     · parallel → 在【同一响应】里并发发起多个 opc_phase_start
-     · batch    → 按 max_parallel_recommended 切批，每批并发
-3. 任一 sub 完成 opc_phase_complete / opc_pipeline_status 重检 ready
-```
-
-**核心原则**：**`blocked_by = []` 的 ready sub 默认并发**；只有用户明确 opt-out 或上下文压力大时才降级串行。详见 [07_dependency-parallel.md §四 Host 并发执行规约](07_dependency-parallel.md#四host-并发执行规约)。
+- 如有多条 pending sub 同时满足，取 `execution_order` 中顺序最靠前的一条
+- 若无可执行的 sub → 返回 `null`
 
 ---
 
@@ -155,10 +125,13 @@
 
 ## opc_pipeline_complete
 
+> ⚠️ **reflection-registry-guard 前置校验**：本工具受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，则 reject 并返回 `required_action`。完整契约见 [../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
+
 ```
 参数: pipeline_id
 
 行为:
+  ⓪ registry-guard 前置校验 → pending_reflections 非空时 reject
   → 校验全部子管线状态 == completed
   → 汇总各子管线的 output 产物清单
   → 写入 .opc/pipelines/<id>/manifest.md
@@ -226,10 +199,10 @@
      · 已 in_progress 的 phase/node 不可修改其结构
      · 增加节点：tag 必须与该 phase 兼容；blocked_by 节点必须存在
      · 增加阶段：必须在该子管线 phase_plan.available 列表中
-     · update_phase_plan: 重跑 phase_plan §六 5 条校验
+     · update_phase_plan: 重跑 phase_plan 六 5 条校验
        （存在性 + 偏序 + 非空 + 与 phases[] 一致 + rationale 必填），
        失败则该项 reject 并写入 rejected_changes
-     · update_execution_order 必须与 blocked_by 拓扑一致
+     · update_execution_order 必须保持 blocked_by 推导的偏序（前置 sub 在前）
   ② 应用 changes 到 pipeline-plan.json + state.json
      · update_phase_plan 通过校验后写入对应子管线 state.json 的 phase_plan
        块，order_validated: true

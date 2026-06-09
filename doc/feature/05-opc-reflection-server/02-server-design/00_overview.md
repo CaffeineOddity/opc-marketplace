@@ -1,6 +1,8 @@
 # 02 server 设计
 
 > opc-reflection-server 的工程实现：13 个 MCP 工具、Evidence Schema、Deterministic Validator、sub-agent 权限白名单、meta-validator、可观测性、可解释性。**零 LLM 依赖**，所有 sub-agent 由 Claude Host 派发。
+>
+> ⚠️ **驱动权契约**：reflection-server **所有工具禁止返回 `flow_next`**。`flow_next` 字段的发起权 100% 归 state-server。reflection-server 通过 `next_step_hint`（使用说明）+ `pending_reflection`（登记契约，含已写盘 artifact 路径）两种方式与 state-server 协作。完整命名约定 / 不变量 / 工具清单 / 契约见 [04-reflection-flow/06_call-sequence-contract.md](../04-reflection-flow/06_call-sequence-contract.md)。
 
 ---
 
@@ -10,7 +12,7 @@
 
 | 组 | 工具 | 说明 |
 |---|---|---|
-| 规划 | `opc_reflect_plan` | 输入 step + context，返回 method 选择 + 历史纠正 + token_budget |
+| 规划 | `opc_reflect_plan` | 输入 step + context，返回 method 选择 + 历史纠正 + max_rounds |
 | 方法 | `opc_reflect_cove` | Chain-of-Verification：拆断言 → 验证问题 → 重写 |
 | 方法 | `opc_reflect_critique` | 派 critic sub-agent，列 objection |
 | 方法 | `opc_reflect_debate` | 派 2+ debater sub-agent，对立立场辩论 |
@@ -30,6 +32,81 @@
 | 纠正 | `opc_corrections_reindex` | 全文索引重建 |
 
 （实际共 17 个，但「13 个工具」是按 reflection 主链路统计，corrections CRUD 算独立子模块；命名见各组完整列表。）
+
+---
+
+## 一·补 通用返回结构（ReflectionResponse）
+
+**所有 reflection-server 工具返回值的统一形态，禁止出现 `flow_next` 字段**：
+
+```typescript
+type ReflectionResponse = {
+  // —— 数据部分（任何工具都有）——
+  verdict?: 'clean' | 'objections_remain' | 'rounds_exceeded'  // 仅 complete 类工具
+  kept_objections?: Objection[]
+  reasoning_trace?: string[]
+  // ...各工具专属数据字段
+
+  // —— 提示部分（任何工具都可选）——
+  next_step_hint?: {
+    suggestion: string              // 一句话提示
+    suggested_tool: string          // 下一个该调的工具
+    suggested_args: object          // 预填的参数（仅含 reflection_id，不再整块搬运反思内容）
+    why: string                     // 为什么这样做
+  }
+
+  // —— 登记契约（仅 complete 类工具发出）——
+  pending_reflection?: {
+    reflection_id: string                 // "rfl-<step>-r<n>-<ulid>"
+    artifact_path: string                 // "opc-logs/reflection/<session_id>/<reflection_id>.json"
+    expires_at: ISO8601                   // 默认 now + 30min
+    must_be_registered_by: 'opc_flow_reflect'  // 当前只支持 flow_reflect 登记
+  }
+}
+```
+
+### 工具发 `pending_reflection` 的对照表
+
+| 工具 | 是否发 pending | 理由 |
+|---|---|---|
+| `opc_reflect_plan` | ❌ 否 | 仅返回方法 + spec，无 artifact 落盘 |
+| `opc_reflect_cove_complete` | ✅ 是 | 反思 artifact 必须登记 |
+| `opc_reflect_critique_complete` | ✅ 是 | 同上 |
+| `opc_reflect_debate_complete` | ✅ 是 | 同上 |
+| `opc_reflect_tot_complete` | ✅ 是 | 同上 |
+| `opc_reflect_record_interventions` | ❌ 否 | pipeline 已 complete，归档失败无伤大雅 |
+| `opc_reflect_on_demand` | ❌ 否 | 用户主动触发，无强依赖 |
+| `opc_reflect_explain` | ❌ 否 | 只读 |
+| `opc_reflect_query_stats` | ❌ 否 | 只读 |
+| `opc_reflect_unlearn_method` | ❌ 否 | CRUD |
+| `opc_corrections_*` | ❌ 否 | CRUD |
+
+### `next_step_hint` 示例
+
+```typescript
+// opc_reflect_critique_complete 返回
+{
+  verdict: "objections_remain",
+  kept_objections: [{ id: "obj-1", text: "...", evidence_ref: "..." }],
+  reasoning_trace: ["...", "..."],
+  next_step_hint: {
+    suggestion: "调 opc_flow_reflect 登记本轮反思（artifact 已写盘），state-server 会决定是否继续",
+    suggested_tool: "opc_flow_reflect",
+    suggested_args: {
+      reflection_id: "rfl-P5-r2-01HXY8"
+    },
+    why: "未登记的反思会在 phase_confirm 时被 registry-guard 拒绝"
+  },
+  pending_reflection: {
+    reflection_id: "rfl-P5-r2-01HXY8",
+    artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+    expires_at: "2026-06-09T11:00:00Z",
+    must_be_registered_by: "opc_flow_reflect"
+  }
+}
+```
+
+完整契约（5 步铁律 + 三层防御）见 [04-reflection-flow/06_call-sequence-contract.md](../04-reflection-flow/06_call-sequence-contract.md)。
 
 ---
 
@@ -76,7 +153,7 @@ type EvidenceArtifact = {
 | V4 coverage | task_criteria_hits 覆盖率、brief→task 映射覆盖率 |
 | V5 discrimination | tag 匹配避免「全候选都过」（区分度 ≥ 阈值） |
 | 兜底 1 coverage-guard | matched_tags / requirements 数 ≥ 最小阈值 |
-| 兜底 2 budget-guard | 反思 token 累计不超 step 上限 |
+| 兜底 2 rounds-guard | 反思轮数不超 step 的 `max_rounds` 上限（token 不再追踪） |
 | 兜底 3 freshness | corrections 引用未过期、knowledge version 满足 |
 
 **关键性质**：所有 validator 是纯 TS 函数，零 LLM 调用，可单测、可复现。
@@ -123,11 +200,77 @@ state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent 
 | sub-agent 超时 | 丢弃，降级到 secondary 方法；记入健康度 |
 | meta-validator reject | 整次反思作废，secondary 接管 |
 | 5 次连续 reject 同方法 | 临时 unlearn 该方法 24h |
-| budget 超限 | 立即终止 secondary，仅采用 primary |
+| rounds 超限 | `verdict: rounds_exceeded` → `flow_next: ask_user`（不再"立即终止 secondary"） |
 | 反思 server 不可达 | state-server 降级到 validator-only + 强制 ask_user |
 | corrections 库读写错误 | 反思继续（不依赖 corrections），仅打 warning |
 
 **永不阻塞主流程**：反思失败的 worst case 是「validator-only + ask_user」，不会卡住 pipeline。
+
+---
+
+## 六·补 reflection-registry-guard 工程锁（与 state-server 的契约执行点）
+
+`pending_reflection` 由本 server 的 `opc_reflect_*_complete` 工具发出（同时写盘 artifact），由 state-server 的 `opc_flow_reflect` 工具登记。中间任何 state-server 写类工具被 registry-guard 拦截。
+
+### `pending_reflection` 生命周期
+
+```
+[创建] opc_reflect_*_complete 调用结束:
+       1. 写盘 artifact = opc-logs/reflection/<session_id>/<reflection_id>.json
+       2. 校验 pending_reflections.length == 0（hard invariant）
+          否则 reject (error: previous_pending_unregistered)
+       3. 返回 pending_reflection {
+            reflection_id, artifact_path,
+            expires_at = now + 30min,
+            must_be_registered_by = "opc_flow_reflect"
+          }
+       → state-server 收到后写入 flow-state.json.pending_reflections[]
+
+[拦截] 任何 state-server 写类工具调用前 registry-guard 校验:
+       if flow_state.pending_reflections.length > 0
+          && callerTool !== pending.must_be_registered_by:
+         → 拒绝执行 + 返回 required_action
+
+[登记] opc_flow_reflect({reflection_id}):
+       → 校验 reflection_id 存在且未过期
+       → 读 artifact_path 抽 verdict / reasoning_trace
+       → 追加到 reflection_log[]
+       → 从 pending_reflections[] 移除
+       → 返回 flow_next
+
+[过期] expires_at 到达:
+       → 下一次 opc_flow_query 自动清理过期项
+       → 标记对应反思日志 incomplete
+       → 不阻塞后续流程（避免死锁）
+```
+
+### 受 reflection-registry-guard 保护的 state-server 工具
+
+> 完整清单（含校验时机 / required_action / 豁免清单 / 命名约定 / 不变量）是 registry-guard 的**单一真相源**，统一维护在 [04-reflection-flow/06_call-sequence-contract.md 七 防御 3 受 reflection-registry-guard 保护的工具清单](../04-reflection-flow/06_call-sequence-contract.md#受-reflection-registry-guard-保护的工具清单唯一真相源)。本文档不再重复列举，避免清单漂移。
+
+### 失败返回示例
+
+```typescript
+opc_phase_confirm({...}) 被调用时存在未登记反思:
+
+→ 返回:
+{
+  error: "pending_reflection_unregistered",
+  message: "存在未登记的反思记录，无法推进 phase_confirm",
+  pending_reflection_id: "rfl-P5-r2-01HXY8",
+  pending_artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+  pending_step_id: "node_selection",
+  required_action: {
+    tool: "opc_flow_reflect",
+    args: {
+      reflection_id: "rfl-P5-r2-01HXY8"
+    },
+    why: "先登记反思记录，再推进流程"
+  }
+}
+```
+
+完整实现伪代码与契约违反场景见 [04-reflection-flow/06_call-sequence-contract.md 三-六](../04-reflection-flow/06_call-sequence-contract.md)。
 
 ---
 
@@ -182,6 +325,8 @@ reasoning_trace 由 sub-agent 在完成时随 objection 一同提交，meta-vali
 
 ## 九、端到端工具调用时序
 
+> ⚠️ 本时序图遵循单驱动者原则：**`flow_next` 只从 state-server 发出**，reflection-server 通过 `next_step_hint` + `pending_reflection`（含已写盘 artifact 路径）协作。完整契约见 [06_call-sequence-contract.md](../04-reflection-flow/06_call-sequence-contract.md)。
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -191,27 +336,42 @@ sequenceDiagram
     participant MS as memory-store
     participant A as Sub-Agent
 
+    Note over C,MS: ① state-server 驱动：发现需要反思
     C->>SS: opc_phase_confirm(selection_evidence)
-    SS->>SS: V1-V5 validator
+    SS->>SS: V1-V5 validator → fail
     SS-->>C: flow_next: opc_reflect_plan
 
+    Note over C,MS: ② reflection-server 返回方法（无 flow_next）
     C->>RS: opc_reflect_plan(P5, ctx)
     RS->>MS: corrections_query(step=P5)
     RS->>RS: 查方法健康度 + 禁用矩阵
-    RS-->>C: { method: M4, secondary: M5(disabled), prior_corrections, budget }
+    RS-->>C: { method: M4, agent_spec, next_step_hint }
 
+    Note over C,MS: ③ Claude 按 next_step_hint 派 sub-agent
     C->>RS: opc_reflect_critique(artifact, enhanced_prompt)
     RS-->>C: critic_spec(allowed_tools=read-only)
     C->>A: Task(critic_spec)
     A->>MS: corrections_query (R/O)
-    A->>RS: 提交 objections + reasoning_trace
+    A-->>C: objections + reasoning_trace
 
+    Note over C,MS: ④ reflection-server 判定结果 + 发 ack token（无 flow_next）
     C->>RS: opc_reflect_critique_complete(objections)
     RS->>RS: meta-validator
     alt 严重 objections kept
-        RS-->>C: flow_next: opc_flow_reflect(seed)
+        RS-->>C: { verdict:objections_remain, next_step_hint, pending_reflection }
     else 无严重
-        RS-->>C: flow_next: opc_phase_confirm_finalize
+        RS-->>C: { verdict:clean, next_step_hint, pending_reflection }
+    end
+
+    Note over C,MS: ⑤ state-server 登记 + 持久化 + 决定下一步（flow_next 回归）
+    C->>SS: opc_flow_reflect({ reflection_id })
+    SS->>SS: 校验 reflection_id + 读 artifact + 登记到 reflection_log[]
+    alt 继续反思
+        SS-->>C: flow_next: opc_reflect_plan (下一轮)
+    else 跳出反思
+        SS-->>C: flow_next: opc_phase_confirm
+    else rounds 耗尽 (rounds_exceeded)
+        SS-->>C: ask_user + reasoning_trace
     end
 ```
 

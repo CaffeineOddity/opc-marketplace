@@ -86,7 +86,7 @@ sequenceDiagram
 
         alt V1-V5 validator 或 meta-validator 发现 objection
             FL-->>C: { step: task_analysis_reflection, round, method: M3-CoVe, next: opc_flow_reflect }
-            loop 反思循环（受 budget-guard 约束）
+            loop 反思循环（受 rounds-guard 约束）
                 C->>C: 按 reflection_plan 重新审视
                 C->>FL: opc_flow_reflect({round, evidence_diff})
                 FL->>FL: 持久化 reflection_log + meta-validator
@@ -125,7 +125,7 @@ sequenceDiagram
     C->>C: tag 交集过滤 → 语义匹配 → scenario 加权 → 排序
     C->>C: 收集 selection_evidence<br/>(matched_tags / scenario_hits /<br/>file_domain_conflicts / blocked_by_graph)
     alt V1-V5 validator 或 meta-validator 发现 objection
-        loop 反思循环（受 budget-guard 约束）
+        loop 反思循环（受 rounds-guard 约束）
             C->>FL: opc_flow_reflect({step: node_selection, round, evidence_diff})
             FL-->>C: 继续反思 / 跳出
         end
@@ -151,7 +151,7 @@ sequenceDiagram
         end
     end
     C->>SS: opc_phase_complete
-    SS-->>C: { next_phase, auto_advance, pipeline_progress: { ready_sub_pipelines } }
+    SS-->>C: { next_phase, auto_advance, pipeline_progress: { next_sub_pipeline } }
 
     Note over C,NR: ── Phase: 05-implement / 06-testing ──
     C->>SS: 类似流程
@@ -188,10 +188,10 @@ flowchart TD
     C2 --> opc_intent_complete[Claude 调 opc_task_analysis_complete<br/>opc_task_analysis_complete 按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
     opc_intent_complete --> C2_SR_DEC{opc_task_analysis_complete 路由判定}
     C2_SR_DEC -->|validator pass + 无严重 objection| C2a
-    C2_SR_DEC -->|validator fail 或 objection 严重| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 evidence_diff<br/>受 budget-guard 约束]
+    C2_SR_DEC -->|validator fail 或 objection 严重| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 evidence_diff<br/>受 rounds-guard 约束]
     C2_SR_LOOP --> C2_SR_RECHECK{反思后 evidence 状态?}
     C2_SR_RECHECK -->|validator pass| C2a
-    C2_SR_RECHECK -->|budget 耗尽 / 仍有 objection| C2_QC[ask_user<br/>opc_flow_reflect 路由 ask_user<br/>附 reasoning_trace]
+    C2_SR_RECHECK -->|rounds 耗尽 / 仍有 objection| C2_QC[ask_user<br/>opc_flow_reflect 路由 ask_user<br/>附 reasoning_trace]
     C2_QC -->|用户确认/修正| C2a
     C2a{opc_task_analysis_complete 复杂度路由}
     C2a -->|low| FAST[opc_task_analysis_complete 路由 opc_quick_dispatch opc_quick_dispatch<br/>Agent 直接执行<br/>+ 自动标记 status=completed]
@@ -222,7 +222,7 @@ flowchart TD
     L2 -->|用户确认| R
     M -->|fail 或 严重 objection| L3[Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 + 路由 M4 Critique]
     L3 --> L4[每轮重新收集 evidence + meta-validator]
-    L4 --> L5{opc_flow_reflect 判定:budget 耗尽或 validator 通过?}
+    L4 --> L5{opc_flow_reflect 判定:rounds 耗尽或 validator 通过?}
     L5 -->|继续| L3
     L5 -->|确认| R
 
@@ -238,7 +238,7 @@ flowchart TD
     Y --> Z{还有下一 phase?}
     Z -->|是, auto_advance=true| G
     Z -->|是, 需确认| ZA[提示用户推进] --> G
-    Z -->|否| ZA2{ready_sub_pipelines 非空?}
+    Z -->|否| ZA2{next_sub_pipeline 非空?}
     ZA2 -->|是| G
     ZA2 -->|否| ZB[opc_pipeline_complete]
 
@@ -263,9 +263,9 @@ flowchart TD
 
 ### 节点选择：evidence + V1-V5 validator + 反思
 
-节点选择不是一次性确认，而是 Claude **收集 selection_evidence**后由 reflection-server 的 V1-V5 validator + meta-validator 判定的过程。核心理念与意图识别一致：**evidence 通过即推进，validator 失败或保留严重 objection 才反思 / 用户介入**。反思循环通过 `opc_flow_reflect`（持久化 evidence_diff + meta-validator 结果），受 budget-guard 约束。
+节点选择不是一次性确认，而是 Claude **收集 selection_evidence**后由 reflection-server 的 V1-V5 validator + meta-validator 判定的过程。核心理念与意图识别一致：**evidence 通过即推进，validator 失败或保留严重 objection 才反思 / 用户介入**。反思循环通过 `opc_flow_reflect`（持久化 evidence_diff + meta-validator 结果），受 rounds-guard 约束。
 
-`selection_evidence` 字段：`matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`。完整 schema 与 V1-V5 规则见 [05-opc-reflection-server/02-server-design/00_overview.md §二/§三](../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
+`selection_evidence` 字段：`matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`。完整 schema 与 V1-V5 规则见 [05-opc-reflection-server/02-server-design/00_overview.md 二/三](../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 
 ```
 初始方案 → 收集 selection_evidence → 分叉:
@@ -273,15 +273,15 @@ flowchart TD
   ├── V1-V5 pass + 中等 objection        → 快速确认，展示方案 + reasoning_trace
   └── V1-V5 fail 或 严重 objection       → Claude 调 opc_flow_reflect 进入反思循环
                                           primary=M4 Critique，secondary=M5 Debate（medium+）
-                                          受 budget-guard 约束，超限降级 ask_user
+                                          受 rounds-guard 约束，超限降级 ask_user
 ```
 
 | 概念 | 说明 |
 |------|------|
-| Evidence 字段 | `matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`（详见 reflection-server §二） |
+| Evidence 字段 | `matched_tags` / `scenario_hits` / `file_domain_conflicts` / `blocked_by_graph`（详见 reflection-server 二） |
 | Validator | V1 schema / V2 referential / V3 evidence-presence / V4 coverage / V5 discrimination + 3 兜底 |
 | 反思方法 | primary M4 Critique（critic sub-agent，只读）；secondary M5 Debate（complexity ≥ medium） |
-| 反思预算 | budget-guard 约束每 step token 上限；超限 → 终止 secondary，仅 primary |
+| 反思预算 | rounds-guard 约束每 step 反思**轮数**上限（token 不再追踪）；达上限 → `verdict: rounds_exceeded` → `ask_user` |
 | 调整方式 | Claude 自行增删 node、调整顺序，每轮重新收集 evidence + opc_flow_reflect 上报 |
 | 最终 | validator pass + 无严重 objection → 自动确认；否则由用户确认，resolver 锁定执行计划 |
 
@@ -321,47 +321,45 @@ opc_flow_query 返回 active=true
 | `opc_flow_*` 推进类 / `opc_pipeline_*` 写类 / `opc_node_*` | ❌ | 任何会改 state 的工具一律禁止 |
 | `opc_knowledge_write` / `opc_corrections_record` | ❌ | 写类禁止 |
 
-完整 schema 与设计原则详见 [02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md §opc_flow_query](../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md#opc_flow_query)。
+完整 schema 与设计原则详见 [02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md opc_flow_query](../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md#opc_flow_query)。
 
 ---
 
-## 六、拆分管线并发执行
+## 六、拆分管线串行执行
 
-`opc_pipeline_create` 一次创建 N 个 `sub_pipelines`，每个 sub 都要跑完整的 9 阶段循环。执行策略：**并发优先，依赖串行**。
+`opc_pipeline_create` 一次创建 N 个 `sub_pipelines`，每个 sub 都要跑完整的 9 阶段循环。执行策略：**严格按 `execution_order` 串行，`blocked_by` 阻塞未就绪的 sub**。
 
 ### 调度规则
 
 | 条件 | 策略 |
 |---|---|
-| `sub.blocked_by = []` | **默认并发**——Host 在同一响应里同时发起多个 `opc_phase_start` |
-| `sub.blocked_by = [...]` 非空 | **严格串行**——前置 sub 全部 `completed` 才进入 ready |
+| 所有 sub 默认 | **严格串行**——按 `execution_order` 顺序依次启动，同一时刻只有一条 sub 在执行 |
+| `sub.blocked_by = [...]` 非空 | 前置 sub 全部 `completed` 才进入下一条 |
 
 ### 时序
 
 ```
 Host → opc_pipeline_status()
-       ← ready_sub_pipelines: [sub-A, sub-B]
-            + concurrency_hint: { ready_count: 2, recommended_action: "parallel" }
+       ← next_sub_pipeline: { id: "sub-A", reason: "execution_order 顺序第一位" }
 
-Host → 同一响应内并发:
-       opc_phase_start(sub-A)  |  opc_phase_start(sub-B)
+Host → opc_phase_start(sub-A) → ... → opc_phase_complete(sub-A 的最后 phase)
+       ← pipeline_progress: { next_sub_pipeline: { id: "sub-B", reason: "..." } }
 
-Host → 各 sub 的 phase/node 循环并行推进
-       任一 sub 完成 opc_phase_complete → 重检 ready
+Host → opc_phase_start(sub-B) → ...
 ```
 
-### 并发安全
+### 串行安全
 
-| 资源 | 并发保障 |
+| 资源 | 串行保障 |
 |---|---|
-| `state.json` | 按 `sub_pipeline_id` 分片存储，互不冲突 |
-| `pipeline-plan.json` 聚合状态 | owner.pid + 原子写保护 |
-| knowledge 同 unit 跨 sub 写 | 单文件原子写 + `version+1`，冲突时后写者 `version_conflict` 错误，sub-agent 重试合并 |
+| `state.json` | 同一时刻只有一条 sub 在写，无竞争 |
+| `pipeline-plan.json` 聚合状态 | 单写者，无并发写问题 |
+| knowledge 同 unit 跨 sub 写 | 串行执行天然保证顺序，version+1 仅做信息性记录 |
 | 跨 sub 依赖未在 `blocked_by` 表达 | 由 `_refs + min_version` 在 `opc_node_start` 时拦截 |
 
 ### MCP 协议支持
 
-MCP 协议本身是请求-响应的，**并发能力靠 Host (Claude) 行为约定**——`concurrency_hint.recommended_action=parallel` 时 Claude 应在同一响应里发起多个工具调用，state-server 通过分片存储和原子写保证并发安全。完整规约详见 [02-opc-state-server/02-pipeline/07_dependency-parallel.md](../02-opc-state-server/02-pipeline/07_dependency-parallel.md)。
+MCP 协议是请求-响应模型，**天然适合串行调用**——`opc_phase_complete` 返回 `next_sub_pipeline` 后，Claude 在下一轮调 `opc_phase_start` 即可。无需 Host 并发能力假设，无需并发写保护，状态空间线性可预测。完整规约详见 [02-opc-state-server/02-pipeline/07_dependency-parallel.md](../02-opc-state-server/02-pipeline/07_dependency-parallel.md)。
 
 ---
 

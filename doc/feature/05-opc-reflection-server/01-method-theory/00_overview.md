@@ -80,7 +80,7 @@ state-server 在 `opc_reflect_plan` 时按下表自动选方法。primary 必跑
 **规则**：
 - primary 失败（meta-validator 拒收）→ 触发 secondary
 - secondary 失败 → fallback 到「validator-only + 强制 ask_user」
-- 任何方法都受 token_budget 约束，超预算立即终止
+- 任何方法都受 `max_rounds` 轮次约束，达到上限 → `verdict: rounds_exceeded` → `flow_next: ask_user`（token 不再追踪）
 
 ---
 
@@ -97,7 +97,7 @@ flowchart TD
     Bad -->|否| Plan[输出 reflection_plan]
 
     Unlearn --> Plan
-    Plan --> Budget[分配 token_budget<br/>primary 60% / secondary 40%]
+    Plan --> Budget[设定 max_rounds<br/>按 phase × complexity 查表]
     Budget --> Return([返回 plan + enhanced_prompt])
 ```
 
@@ -149,7 +149,7 @@ corrections 三层存储 + 三层模型 + 4 个膨胀控制详见 [03-correction
 | 01_method-catalog.md | 5 种纳入方法的完整定义（输入 / 输出 / 适用 / 失败模式） |
 | 02_step-method-mapping.md | 8 step × 5 方法矩阵 + 决策树细节 |
 | 03_failure-modes.md | 4 类失败模式的诊断与缓解 |
-| 04_composition-rules.md | primary / secondary / 禁用矩阵 + token_budget 分配 |
+| 04_composition-rules.md | primary / secondary / 禁用矩阵 + max_rounds 配置 |
 
 ---
 

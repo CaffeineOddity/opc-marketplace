@@ -7,7 +7,7 @@
 
 ## 步骤路由类工具
 
-本篇覆盖 **6 个步骤推进类工具**——它们按 reflection-server 的 evidence + V1-V5 validator 结果 / `intent` / `complexity` 把流程从一个步骤路由到下一个。完整工具速览见 [入口与生命周期篇 §流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览)。
+本篇覆盖 **6 个步骤推进类工具**——它们按 reflection-server 的 evidence + V1-V5 validator 结果 / `intent` / `complexity` 把流程从一个步骤路由到下一个。完整工具速览见 [入口与生命周期篇 流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览)。
 
 > reflection-server 的 P1-P8 反思位点、evidence schema、V1-V5 + meta-validator、primary/secondary 方法表见 [05-opc-reflection-server 总览](../../05-opc-reflection-server/00_index.md)。
 
@@ -17,7 +17,8 @@
 | [`opc_task_analysis_complete`](#opc_task_analysis_complete) | 按 P2 task_analysis_evidence + complexity + modify_unit_count 三路分流 |
 | [`opc_decomposition_complete`](#opc_decomposition_complete) | 按 P3 decomposition_evidence 路由：validator pass → 简报；fail → 反思 |
 | [`opc_brief_complete`](#opc_brief_complete) | 从 accumulated 推导 args，返回 next: opc_pipeline_create |
-| [`opc_flow_reflect`](#opc_flow_reflect) | 持久化反思日志（按 step_id 分流到会话级或管线级；记录 evidence_diff + meta-validator 结果） |
+| [`opc_flow_reflect`](#opc_flow_reflect) | 登记 reflection-server 已写盘的反思记录（按 `reflection_id` 索引），按 verdict 决定继续/跳出/ask_user |
+| [`opc_flow_user_reply`](#opc_flow_user_reply) | A3 闭环登记口：回灌用户对 ask_user 的答复，按 step_id 路由续上 |
 | [`opc_quick_dispatch`](#opc_quick_dispatch) | low 复杂度快速通道：返回 agent_hint + knowledge_context，流程自动 complete |
 
 ---
@@ -26,9 +27,9 @@
 
 **职责**：按 intent + P1 intent_evidence 通过 reflection-server V1-V5 validator + meta-validator 路由到下一步；question/chat 时内部自动标记流程终结。
 
-**输入**：`{intent, intent_evidence, reasoning}`，其中 `intent_evidence` schema 包含 `task_criteria_hits[]` / `chat_signals[]` / `user_quotes[]`（详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+**输入**：`{intent, intent_evidence, reasoning}`，其中 `intent_evidence` schema 包含 `task_criteria_hits[]` / `chat_signals[]` / `user_quotes[]`（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
-> 本步骤走 reflection-server **P1 反思位点**，primary 方法 = M3 CoVe，secondary = M4 Critique。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> 本步骤走 reflection-server **P1 反思位点**，primary 方法 = M3 CoVe，secondary = M4 Critique。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 **路由表**：
 
@@ -36,7 +37,7 @@
 |------------|-----------|------------|---------|
 | `task` | pass + 无严重 objection | `{tool: "opc_task_analysis_complete"}` + prerequisites:[opc_knowledge_list] | 否 |
 | `task` | pass + 中等 objection | `{tool: "opc_task_analysis_complete"}` + step_instruction 提示向用户简短确认（附 reasoning_trace） | 否 |
-| `task` | fail 或 严重 objection | `{action: "reflect"}` + 进入 P1 反思（primary=M3 CoVe，secondary=M4 Critique）；budget 耗尽 → ask_user | 否 |
+| `task` | fail 或 严重 objection | `{action: "reflect"}` + 进入 P1 反思（primary=M3 CoVe，secondary=M4 Critique）；rounds 耗尽 → ask_user | 否 |
 | `project_question` | pass | `{action: "respond_with_knowledge"}` + prerequisites:[opc_knowledge_search] | **是**（内部自动标记 flow-state.status=completed） |
 | `general_question` / `chat` | 任意 | `{done: true, action: "respond_normally"}` | **是**（同上） |
 
@@ -49,9 +50,9 @@
 **输入**：`{analysis_result, task_analysis_evidence}`，其中：
 - `analysis_result.knowledge_plan: [{path, operation: "create"|"update"|"read"}]`
 - `analysis_result.phase_selection_rationale: string`（必填，写入 state.json.phase_plan.selection_rationale）
-- `task_analysis_evidence` schema 包含 `requirements[]` / `dependencies[]` / `risks[]` / `knowledge_plan` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+- `task_analysis_evidence` schema 包含 `requirements[]` / `dependencies[]` / `risks[]` / `knowledge_plan` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
-> 本步骤走 reflection-server **P2 反思位点**，primary 方法 = M3 CoVe，secondary = M2 Reflexion。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> 本步骤走 reflection-server **P2 反思位点**，primary 方法 = M3 CoVe，secondary = M2 Reflexion。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 **路由逻辑**：
 
@@ -66,7 +67,7 @@
 分支 1: V1-V5 validator + meta-validator 判定
   ├── pass + 无严重 objection      → 跳过反思 → 进入分支 2
   ├── pass + 中等 objection        → 跳过反思 → 进入分支 2，step_instruction 附 reasoning_trace
-  └── fail 或 严重 objection       → 返回 opc_flow_reflect 指令（primary=M3 CoVe，secondary=M2 Reflexion，受 budget-guard 约束）
+  └── fail 或 严重 objection       → 返回 opc_flow_reflect 指令（primary=M3 CoVe，secondary=M2 Reflexion，受 rounds-guard 约束）
 
 分支 2: 复杂度/拆分判定（仅 validator 通过或反思后到达）
   ├── complexity = low → 返回 opc_quick_dispatch 指令（处理后流程自动 complete）
@@ -80,7 +81,7 @@
 
 **职责**：按 P3 decomposition_evidence 通过 reflection-server V1-V5 validator + meta-validator 路由：通过 → 简报；失败 → 反思。
 
-**输入**：`{sub_pipelines, execution_order, decomposition_evidence}`，其中 `decomposition_evidence` schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+**输入**：`{sub_pipelines, execution_order, decomposition_evidence}`，其中 `decomposition_evidence` schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
 > 本步骤走 reflection-server **P3 反思位点**，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 时启用）。
 
@@ -90,7 +91,7 @@
 |------|--------|--------|
 | pass + 无严重 objection | brief_generation | "拆分方案 evidence 通过验证，开始生成 brief" |
 | pass + 中等 objection | brief_generation | "拆分方案 evidence 部分通过，展示方案 + reasoning_trace 后开始生成 brief" |
-| fail 或 严重 objection | reflect | "拆分 evidence 未通过验证，进入 P3 反思（primary=M6 ToT，secondary=M5 Debate）；budget 耗尽 → ask_user" |
+| fail 或 严重 objection | reflect | "拆分 evidence 未通过验证，进入 P3 反思（primary=M6 ToT，secondary=M5 Debate）；rounds 耗尽 → ask_user" |
 
 ---
 
@@ -113,7 +114,7 @@
             knowledge_unit: analysis.knowledge_unit, blocked_by: []}]
 · execution_order:
     有 decomposition → 用 decomposition.execution_order
-    无 → [{group: 1, parallel: ["sub-1"]}]
+    无 → [{group: 1, sub_pipeline_ids: ["sub-1"]}]
 ```
 
 **返回示例**：
@@ -129,7 +130,7 @@
       "complexity": "medium",
       "knowledge_unit": ["user-auth"],
       "sub_pipelines": [{"id": "sub-1", "knowledge_unit": ["user-auth"], "blocked_by": []}],
-      "execution_order": [{"group": 1, "parallel": ["sub-1"]}],
+      "execution_order": [{"group": 1, "sub_pipeline_ids": ["sub-1"]}],
       "brief_content": "<上一步收到的 brief 全文>"
     }
   },
@@ -141,38 +142,188 @@
 
 ### opc_flow_reflect
 
-**职责**：持久化反思日志，按 step_id 分流到会话级或管线级存储；按 reflection-server V1-V5 validator + meta-validator 结果判定是否跳出。
+**职责**：登记 reflection-server 已写盘的反思 artifact（按 `reflection_id` 索引），追加到 `flow-state.json.reflection_log[]`，按 step_id 分流到会话级或管线级指针；按 artifact 中的 verdict + rounds-guard 决定是否跳出反思。
 
-**输入**：`{step_id, round, revised_result, evidence_diff, validator_result, objections_kept_by_meta, notes, pipeline_id?, sub_pipeline_id?, phase?}`
+> ⚠️ **驱动权契约**：`opc_flow_reflect` 是 reflection 链路里唯一能返回 `flow_next` 的工具。它是 state-server 与 reflection-server 协作的**登记口**——`opc_reflect_*_complete` 发出的 `pending_reflection.reflection_id` 必须在这里被登记，否则后续受 registry-guard 保护的写工具都会被拒绝。完整命名约定 / 不变量 / 工具清单 / 契约见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
 
-- `evidence_diff: {added: [...], modified: [...], removed: [...]}` — 相对上一轮 evidence_artifact 的差量
-- `validator_result: {V1, V2, V3, V4, V5}` — 各项 `"ok"|"fail"|"warn"`
-- `objections_kept_by_meta: number` — meta-validator 处理后保留的严重 objection 数量
+**输入**：
 
-> evidence schema、validator 规则、primary/secondary 方法选择见 [05-opc-reflection-server/02-server-design/00_overview.md §二/§三](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema) + [01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+```typescript
+{
+  reflection_id: string,                   // ⭐ 来自 opc_reflect_*_complete.pending_reflection.reflection_id
+  step_id: 'intent_analysis' | 'task_analysis' | 'task_decomposition'
+         | 'brief_generation' | 'node_selection' | 'node_execution'
+         | 'phase_completion' | 'phase_advance',  // 完整 8 项枚举见 07_three-server-seam-matrix.md 3.1
+  pipeline_id?: string,                    // step_id ∈ {node_selection, node_execution, phase_completion, phase_advance} 时必填
+  sub_pipeline_id?: string,                // 同上
+  phase?: string,                          // 同上
+  notes?: string
+}
+```
+
+- `reflection_id` — reflection-server 已写盘 artifact 的稳定 ID（形如 `rfl-P5-r2-01HXY8`）。state-server 据此从 `flow-state.pending_reflections[]` 找到 pending 项，读 `artifact_path` 拿反思全文。缺失 / 不匹配 → reject (`error: missing_or_invalid_reflection_id`)
+- **不再有 `ack_token` / `reflect_record` / `evidence_diff` 入参**：反思内容物理在 artifact 文件里，state-server 自己读，Claude 不再整块搬运。`round` 字段由 state-server 按 `reflection_log` 现有长度推导，不接受入参。
+
+> 反思内容物 schema（artifact 文件里的字段如 `verdict / kept_objections / reasoning_trace / evidence_diff / fp_rate`）由 reflection-server 决定，见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。完整命名约定 + 不变量 + 5 步铁律见 [06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
 
 **行为**：
 
 ```
-按 step_id 分流持久化:
-  ├── step_id = "task_analysis"  → 写入 flow-state.json.reflection_log[]
-  │     · round 字段忽略入参，按 reflection_log.length 推导（幂等：重复提交同 round 覆盖最后一条）
-  │     · 不需要 pipeline_id / sub_pipeline_id / phase
-  └── step_id = "node_selection" → 必须带 pipeline_id + sub_pipeline_id + phase
-        · 写入 state.json.phases[].reflection_log[]
-        · 同时在 flow-state.json 留指针 { pipeline_id, sub, phase, log_entry_id }
-  ↓
-判定（V1-V5 validator + meta-validator 结果驱动）:
-  ├── validator_result 全部 ok + objections_kept_by_meta == 0  → 跳出反思，按上层 step 继续
-  ├── budget-guard 触发（round 达上限 或 token 超限）          → 强制确认（返回 ask_user）+ 附 reasoning_trace
-  └── 继续反思 → 返回下一轮反思指令
-        · primary 方法用尽 → 切换 secondary 方法（按 step 决策表）
-        · secondary 仍未通过 → 下一轮继续 primary 直至 budget 耗尽
+① registry-guard 校验:
+   读 flow-state.json.pending_reflections[]
+   ├── 入参 reflection_id 不在 pending_reflections → reject (error: missing_or_invalid_reflection_id)
+   ├── pending.expires_at 已过 → reject (error: reflection_id_expired)
+   └── 命中 → 进入②
+
+② 读 artifact:
+   读 pending.artifact_path
+   ├── 文件不存在 → reject (error: artifact_missing, artifact_path)
+   ├── JSON 解析失败 / 缺关键字段 (verdict / reasoning_trace) → reject (error: artifact_invalid)
+   └── 合法 → 抽出 {verdict, kept_objections, reasoning_trace, evidence_diff, method}
+
+③ 按 step_id 分流登记:
+   ├── step_id ∈ {intent_analysis, task_analysis, task_decomposition, brief_generation}
+   │     → 追加到 flow-state.json.reflection_log[]
+   │        {reflection_id, artifact_path, step_id, verdict, registered_at}
+   │     · 不需要 pipeline_id / sub_pipeline_id / phase
+   └── step_id ∈ {node_selection, node_execution, phase_completion, phase_advance}
+        → 必须带 pipeline_id + sub_pipeline_id + phase（+ node_execution 时带 node）
+        · 主存储：state.json.phases[<phase>].reflection_log[]
+        · 同时在 flow-state.json.reflection_log[] 留指针
+          {reflection_id, artifact_path, pipeline_pointer_ref, log_entry_id}
+
+④ 从 pending_reflections[] 移除该项（hard invariant 校验：移除后 length == 0）
+
+⑤ 路由判定（基于 artifact.verdict + rounds-guard）:
+   ├── verdict=clean                          → flow_next: 上层 step 继续工具
+   │                                            （如 node_selection → opc_phase_confirm）
+   ├── verdict=objections_remain + 未达 max_rounds → flow_next: opc_reflect_plan
+   │                                                  （下一轮反思；reflection-server 内部决定 method 切换）
+   └── verdict=rounds_exceeded（达到 max_rounds 仍 objections_remain）
+                                              → flow_next: ask_user + reasoning_trace
+                                                （A3 闭环：写 pending_user_question，Claude 显示给用户后调 opc_flow_user_reply 回灌）
+```
+
+**返回**：
+
+```typescript
+{
+  registered: true,
+  reflection_id: string,
+  artifact_path: string,
+  log_entry_id: string,
+  flow_next: {
+    tool: 'opc_phase_confirm' | 'opc_reflect_plan' | ...,
+    args?: object,
+    why: string
+  } | { action: 'ask_user', reasoning_trace: string[] }
+}
 ```
 
 **反思日志位置分流原因**：
-- 任务分析反思是会话级一次性事件，存 flow-state.json
-- 节点选择反思可发生在多个 phase，存 state.json 才能随 phase_reset 回退
+- P1–P4 (会话级) 反思一次性事件，主存储 flow-state.json
+- P5–P8 (管线级) 反思可发生在多个 phase，主存储 state.json 才能随 phase_reset 回退；flow-state 留指针便于全局排查
+
+---
+
+### opc_flow_user_reply
+
+**职责**：A3 ask_user 回灌闭环的**唯一登记口**——接收 Claude 转译后的用户答复，写入 L1 user_interventions，应用 accumulated_patch，清 pending_user_question，按触发 step 路由 flow_next 续上。
+
+> ⚠️ **驱动权契约**：与 `opc_flow_reflect` 平级，是 ask_user 路径里**唯一能返回 flow_next 的工具**。`opc_flow_reflect` 触发 `rounds_exceeded` 后写入的 `pending_user_question` 必须在这里被回灌，否则后续受 pending-question-guard 保护的写工具都会被拒绝。完整闭环契约见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md 八·补 ask_user 回灌闭环](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#八补-ask_user-回灌闭环a3-契约)。
+
+**输入**：
+
+```typescript
+{
+  question_id: string,                  // ⭐ 来自 flow-state.pending_user_question.question_id
+  user_reply: string,                   // 用户原话（保真存档供 distiller 提炼）
+  resolution: {                         // Claude 把用户原话转译为结构化更新
+    accumulated_patch?: object,         // 对 flow-state.accumulated 字段级 patch
+                                        //   例：{complexity: "high", knowledge_unit: [..., "audit"]}
+    objections_resolved?: string[],     // 用户答复显式解决的 objection id
+                                        //   （取自 pending_user_question.kept_objections[].id）
+    objections_dismissed?: string[],    // 用户决定"忽略"的 objection id
+    selected_nodes?: string[],          // step_id=node_selection 时，用户裁定的节点列表
+    advance_decision?: 'advance' | 'reset',  // step_id=phase_advance 时，用户裁定推进或回退
+    notes?: string                      // 可选解释
+  }
+}
+```
+
+- `question_id` — flow-state.pending_user_question 的稳定 ID。缺失 / 不匹配 → reject (`error: missing_or_invalid_question_id`)
+- `resolution` — Claude 必须把用户自然语言答复转译为结构化字段，state-server 不做 LLM 解析
+
+**行为**：
+
+```
+① pending-question-guard 校验:
+   读 flow-state.json.pending_user_question
+   ├── null → reject (error: no_pending_question)
+   ├── question_id 不匹配 → reject (error: missing_or_invalid_question_id)
+   ├── pending.expires_at 已过 → reject (error: question_id_expired)
+   └── 命中 → 进入②
+
+② pending_reflections 健全校验:
+   if pending_reflections.length != 0:
+     → reject (error: invariant_violation_pending_reflection_remains)
+     （rounds_exceeded 触发时上一轮反思必已登记）
+
+③ 写 L1 user_interventions[]:
+   追加 {
+     intervention_id: "intv-<ulid>",
+     trigger: "ask_user_rounds_exceeded",
+     step_id: pending.step_id,
+     question_id: pending.question_id,
+     question_summary: pending.reasoning_trace[0],
+     user_reply: <入参 user_reply>,
+     resolution: <入参 resolution>,
+     linked_reflection_artifacts: pending.context_artifacts,
+     at: now
+   }
+
+④ 应用 resolution.accumulated_patch 到 flow-state.accumulated（字段级 merge）
+
+⑤ 清 pending_user_question = null
+
+⑥ 路由 flow_next（按 pending.step_id）:
+   见 [06_call-sequence-contract.md 八·补 flow_next 路由表](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#flow_next-路由表按触发-ask_user-的-step_id)
+   每条路由都附带 _skip_reflection_once: true，避免立刻又走 rounds-guard 形成 ping-pong
+```
+
+**返回**：
+
+```typescript
+{
+  intervention_recorded: true,
+  intervention_id: string,
+  question_id: string,
+  accumulated_updated: object,          // 实际写入的 patch（含 merge 后的全字段）
+  flow_next: {
+    tool: 'opc_task_analysis_complete' | 'opc_phase_confirm' | ...,
+    args: object,                       // 含 _skip_reflection_once: true
+    why: string
+  }
+}
+```
+
+**失败返回示例**：
+
+```typescript
+// 场景：Claude 跳过 opc_flow_user_reply 直接调 opc_phase_confirm
+{
+  error: "pending_user_question",
+  message: "存在未回灌的用户提问，无法推进 phase_confirm",
+  question_id: "uq-P5-r2-01HXY8",
+  asked_at: "...",
+  step_id: "node_selection",
+  required_action: {
+    tool: "opc_flow_user_reply",
+    args: { question_id: "uq-P5-r2-01HXY8" },
+    why: "先把用户答复回灌到流程，再推进"
+  }
+}
+```
 
 ---
 

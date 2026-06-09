@@ -40,7 +40,7 @@ opc_phase_complete(sub-1, 最后 phase) → {
   next_phase: null,
   pipeline_progress: {
     current_sub: "sub-1", current_sub_status: "completed",
-    ready_sub_pipelines: ["sub-2"]
+    next_sub_pipeline: {id: "sub-2", reason: "blocked_by 全 completed"}
   },
   flow_next: { tool: "opc_phase_start", args: {sub_pipeline_id: "sub-2", phase: "04-implement-design"} }
 }
@@ -48,7 +48,7 @@ opc_phase_complete(sub-1, 最后 phase) → {
 Claude 按 flow_next 启动 sub-2 → ... → opc_pipeline_complete
 ```
 
-**关键改进**：`opc_phase_complete` 返回 `pipeline_progress.ready_sub_pipelines` + `flow_next`，Claude 不需要猜下一步该启动哪条子管线。
+**关键改进**：`opc_phase_complete` 返回 `pipeline_progress.next_sub_pipeline` + `flow_next`，Claude 不需要猜下一步该启动哪条子管线。
 
 **结论**：✓ 无缺口。
 

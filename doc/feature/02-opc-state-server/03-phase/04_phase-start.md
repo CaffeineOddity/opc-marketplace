@@ -14,7 +14,7 @@ opc_phase_start → 扫描节点 → 匹配排序 → 收集 selection_evidence
 判定分叉:
   V1-V5 pass + 无严重 objection  → 自动确认（跳过用户）
   V1-V5 pass + 中等 objection    → 快速确认（一键通过，附 reasoning_trace）
-  V1-V5 fail 或 严重 objection   → 反思循环（Claude 调 opc_flow_reflect 持久化 + budget-guard 兜底）
+  V1-V5 fail 或 严重 objection   → 反思循环（Claude 调 opc_flow_reflect 持久化 + rounds-guard 兜底）
 
 每个阶段层工具返回里附带 flow_next 字段，告诉 Claude 下一步该调什么工具。
 反思循环统一走 opc_flow_reflect，与任务分析反思共享日志格式（差异：node_selection 反思持久化到 state.json.phases[].reflection_log，并在 flow-state.json 留指针）。
@@ -58,13 +58,13 @@ opc_phase_start → 扫描节点 → 匹配排序 → 收集 selection_evidence
     // ... 全部符合条件的节点
   ],
   reflection_budget_hint: {
-    max_rounds: 2,                 // budget-guard 上限（按 phase + complexity 配置）
+    max_rounds: 2,                 // rounds-guard 上限（按 phase + complexity 配置）
     primary_method: "M4-Critique",
     secondary_method: "M5-Debate"  // 仅 complexity ≥ medium 启用
   },
   methodology: {
     docs: ["prompts/phase-execution.md", "prompts/reflection-node-selection.md"],
-    ref: "§三 selection_evidence schema + §四 三种路径 + 05-opc-reflection-server §二/§三",
+    ref: "三 selection_evidence schema + 四 三种路径 + 05-opc-reflection-server 二/三",
     summary: "语义匹配 + Scenario 对齐 + 覆盖完整 + 无冲突 → 收集 selection_evidence 提交 V1-V5"
   },
   flow_next: {
@@ -79,7 +79,7 @@ Claude 拿到后自行语义匹配排序 + 收集 evidence，不依赖 state-ser
 
 ## 三、selection_evidence schema
 
-节点排序完成后，Claude 收集 `selection_evidence` 提交给 reflection-server P5 验证（详见 [05-opc-reflection-server/02-server-design/00_overview.md §二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+节点排序完成后，Claude 收集 `selection_evidence` 提交给 reflection-server P5 验证（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
 | 字段 | 说明 |
 |------|------|
@@ -89,7 +89,7 @@ Claude 拿到后自行语义匹配排序 + 收集 evidence，不依赖 state-ser
 | `blocked_by_graph` | 输出→输入推导出的依赖图（V2 referential 依据） |
 | `coverage_gaps[]` | task_tags 中未被任何选中 node 覆盖的标签（V4 coverage 触发项） |
 
-> V1-V5 验证规则、primary/secondary 方法选择见 [05-opc-reflection-server/02-server-design/00_overview.md §三](../../05-opc-reflection-server/02-server-design/00_overview.md#三validators) + [01-method-theory/00_overview.md §五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> V1-V5 验证规则、primary/secondary 方法选择见 [05-opc-reflection-server/02-server-design/00_overview.md 三](../../05-opc-reflection-server/02-server-design/00_overview.md#三validators) + [01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
 ---
 
@@ -113,7 +113,7 @@ else (V1-V5 fail 或 严重 objection):
       Claude 逐项调整（缺漏/多余/合并拆分），每轮重新收集 evidence + opc_flow_reflect 上报
       判定:
         validator_result 全部 ok + objections_kept_by_meta == 0 → 跳出，调 opc_phase_confirm
-        budget-guard 触发（round 达 max_rounds 或 token 超限） → 强制确认（ask_user，附 reasoning_trace）
+        rounds-guard 触发（reflection_log[step].length == max_rounds 且仍 objections_remain） → 强制确认（ask_user，附 reasoning_trace）
 ```
 
 **路径示例：**
@@ -135,7 +135,7 @@ else (V1-V5 fail 或 严重 objection):
     - 多余：是否有 file_domain_conflicts 触发的节点应该删？
     - 合并/拆分：相似节点合并？过大节点拆分？
   每轮反思后重新收集 evidence + opc_flow_reflect 上报 evidence_diff
-  达到 budget-guard 上限后强制确认
+  达到 rounds-guard 上限后强制确认
 ```
 
 ---
@@ -179,7 +179,7 @@ Claude 在 `opc_phase_confirm` 前内部生成；evidence_artifact 由 reflectio
           → opc_flow_reflect(round=2, evidence_diff={added:["database-schema"]}, validator_result={V1-V5:"ok"}, objections_kept_by_meta=1)
           → V1-V5 全 ok + meta-validator 保留 1 条非严重 objection → 路径 B 快速确认
 
-调整仍通过 `opc_phase_adjust(pipeline_id, sub_id, phase, nodes: [...])` 重新生成预览。与旧设计不同的是，**大部分常规任务的调整由 Claude 在反思循环中自行完成**，用户只在严重 objection 或 budget 耗尽时介入。
+调整仍通过 `opc_phase_adjust(pipeline_id, sub_id, phase, nodes: [...])` 重新生成预览。与旧设计不同的是，**大部分常规任务的调整由 Claude 在反思循环中自行完成**，用户只在严重 objection 或 rounds 耗尽时介入。
 ```
 
 ---

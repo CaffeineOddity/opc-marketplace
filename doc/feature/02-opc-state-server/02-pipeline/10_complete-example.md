@@ -47,7 +47,7 @@
 ⑪ opc_brief_complete → 返回预填的 pipeline_create 参数
 ⑫ Claude → opc_pipeline_create → 写入 pipeline-plan.json
 ⑬ 返回 flow_next → opc_knowledge_open → 返回 flow_next → 进入阶段
-⑭ 按 execution_order 执行: Group1(sub-1∥sub-2) → sub-3 → sub-4
+⑭ 按 execution_order 串行执行: sub-1 → sub-2 → sub-3 → sub-4
 ⑮ 全部 completed → opc_pipeline_complete
 ```
 

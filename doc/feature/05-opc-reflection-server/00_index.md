@@ -31,6 +31,7 @@ opc-reflection-server 把 5 种学术上验证过的反思方法封装成标准�
 - [02 server 设计](02-server-design/00_overview.md) — 13 个工具 + evidence schema + validator + sub-agent 权限 + 可靠性 + 可观测性
 - [03 corrections 存储](03-corrections-store/00_overview.md) — 三层存储 + 三层模型目录 + 4 个膨胀控制 + seed-corrections 冷启动 + schema 演化
 - [04 反思流程](04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户介入 + 用户自治 + meta-reflection + phase_reset 交互
+- [04·补 三 server 接缝矩阵](04-reflection-flow/07_three-server-seam-matrix.md) — **P1–P8 × 触发器/evidence/方法/ack/持久化/knowledge/降级 整合表**（取代原本散落在 4 篇文档的引用）
 
 ---
 
@@ -57,6 +58,8 @@ opc-reflection-server 把 5 种学术上验证过的反思方法封装成标准�
 
 ## 五、端到端时序（反思链路全景）
 
+> ⚠️ 本时序图遵循单驱动者原则：**`flow_next` 只从 state-server 发出**。reflection-server 通过返回值 `next_step_hint`（数据层提示）+ `pending_reflection`（登记契约，含已写盘 artifact 路径）与 state-server 协作。完整契约见 [04-reflection-flow/06_call-sequence-contract.md](04-reflection-flow/06_call-sequence-contract.md)。
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -74,12 +77,12 @@ sequenceDiagram
         SS-->>C: reject + 要求补 evidence
     end
 
-    Note over C,U: ② 查询反思方法 + 历史纠正
+    Note over C,U: ② 查询反思方法 + 历史纠正（reflection 不发 flow_next）
     SS-->>C: flow_next: opc_reflect_plan
     C->>RS: opc_reflect_plan(step_id, context)
     RS->>MS: 检索 corrections by step + keywords
     MS-->>RS: hot prior corrections
-    RS-->>C: { recommended_methods, prior_corrections,<br/>enhanced_prompts, theory_docs, token_budget }
+    RS-->>C: { recommended_methods, prior_corrections, enhanced_prompts,<br/>theory_docs, max_rounds, next_step_hint }
 
     Note over C,U: ③ 执行反思方法（按 primary→secondary 顺序）
     C->>RS: opc_reflect_critique(artifact, enhanced_prompt)
@@ -88,22 +91,33 @@ sequenceDiagram
     A->>MS: opc_corrections_query (只读)
     A-->>C: { objections, reasoning_trace }
 
+    Note over C,U: ④ reflection-server 发 ack token（无 flow_next）
     C->>RS: opc_reflect_critique_complete(objections)
     RS->>RS: meta-validator (检查 objection 格式 + 映射)
     alt 严重 objections
-        RS-->>C: flow_next: opc_flow_reflect(seed)
-        Note over C: 强制 evidence_diff 否则 reject
+        RS-->>C: { verdict:objections_remain, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
     else 无 objections
-        RS-->>C: flow_next: opc_phase_confirm_finalize
+        RS-->>C: { verdict:clean, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
     end
 
-    Note over C,U: ④ 用户介入（如触发 ask_user）
+    Note over C,U: ⑤ state-server 登记 + 持久化 + 决定下一步
+    C->>SS: opc_flow_reflect({ reflection_id })
+    SS->>SS: 校验 reflection_id + 读 artifact + 登记到 reflection_log[]
+    alt verdict=clean
+        SS-->>C: flow_next: opc_phase_confirm (跳出反思)
+    else verdict=objections_remain
+        SS-->>C: flow_next: opc_reflect_plan (下一轮)
+    else rounds 耗尽 (rounds_exceeded)
+        SS-->>C: ask_user + reasoning_trace
+    end
+
+    Note over C,U: ⑥ 用户介入（如触发 ask_user）
     C->>U: ask_user
     U-->>C: 纠正意见
     C->>SS: opc_flow_revise / opc_pipeline_replan
     SS->>SS: 写 user_interventions[] 到 flow-state.json (L1)
 
-    Note over C,U: ⑤ Pipeline 完成时归档
+    Note over C,U: ⑦ Pipeline 完成时归档
     C->>SS: opc_pipeline_complete
     SS-->>C: flow_next: opc_reflect_record_interventions
     C->>RS: opc_reflect_record_interventions(pipeline_id)
@@ -112,7 +126,7 @@ sequenceDiagram
     A-->>RS: 完成
     RS->>MS: 写 ~/.opc/global-corrections.jsonl (L3)
 
-    Note over C,U: ⑥ Meta-reflection（pipeline 级总结）
+    Note over C,U: ⑧ Meta-reflection（pipeline 级总结）
     RS->>RS: 评估本次反思方法选择是否合适
     RS->>MS: 写 meta-reflections/
     RS-->>C: manifest.md 含反思开销 + 新增教训
@@ -124,17 +138,17 @@ sequenceDiagram
 
 | # | 设计点 | 文档位置 |
 |---|---|---|
-| 1 | 不让 LLM 自评，强制 evidence artifact | 02-server-design §evidence-schema |
-| 2 | Deterministic validator 兜底（V1-V5 / coverage / discrimination / budget） | 02-server-design §validators |
+| 1 | 不让 LLM 自评，强制 evidence artifact | 02-server-design evidence-schema |
+| 2 | Deterministic validator 兜底（V1-V5 / coverage / discrimination / budget） | 02-server-design validators |
 | 3 | 5 种反思方法（CoVe / Critique / Debate / Reflexion / ToT） | 01-method-theory |
-| 4 | 按 step 自动选方法（primary + secondary 组合） | 01-method-theory §决策表 |
-| 5 | 反思 sub-agent 权限白名单（只读） | 02-server-design §agent-权限 |
-| 6 | 反思器自身失败处理（meta-validator + 健康度监控 + fallback） | 02-server-design §可靠性 |
-| 7 | 反思开销可观测（tokens / 延迟 / agent 数） | 02-server-design §可观测性 |
-| 8 | 反思可解释（reasoning_trace + opc_reflect_explain） | 02-server-design §可解释性 |
+| 4 | 按 step 自动选方法（primary + secondary 组合） | 01-method-theory 决策表 |
+| 5 | 反思 sub-agent 权限白名单（只读） | 02-server-design agent-权限 |
+| 6 | 反思器自身失败处理（meta-validator + 健康度监控 + fallback） | 02-server-design 可靠性 |
+| 7 | 反思开销可观测（tokens / 延迟 / agent 数） | 02-server-design 可观测性 |
+| 8 | 反思可解释（reasoning_trace + opc_reflect_explain） | 02-server-design 可解释性 |
 | 9 | 用户纠正三层存储（L1 flow-state / L2 corrections / L3 global） | 03-corrections-store |
 | 10 | corrections 复用知识三层模型 + 4 个膨胀控制 | 03-corrections-store |
-| 11 | Seed corrections（冷启动） + schema 演化 | 03-corrections-store §seed |
+| 11 | Seed corrections（冷启动） + schema 演化 | 03-corrections-store seed |
 | 12 | 用户自治（reflection_intensity / skip / on_demand）+ meta-reflection | 04-reflection-flow |
 
 ---
@@ -145,7 +159,7 @@ state-server 调用 reflection-server 的所有入口（13 个工具汇总）：
 
 | 阶段 | state-server 触发 | reflection-server 响应 |
 |---|---|---|
-| evidence 通过 validator 后 | flow_next: opc_reflect_plan | 返回方法 + 历史纠正 + token_budget |
+| evidence 通过 validator 后 | flow_next: opc_reflect_plan | 返回方法 + 历史纠正 + max_rounds |
 | 执行反思方法 | opc_reflect_cove / critique / debate | 返回 sub-agent spec |
 | 反思完成 | opc_reflect_*_complete | 返回路由 + meta-validator 结果 |
 | 用户跳过 | opc_flow_skip_reflection | 记录 skip，可能触发降级建议 |

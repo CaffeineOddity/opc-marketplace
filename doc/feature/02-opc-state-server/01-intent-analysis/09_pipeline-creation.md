@@ -31,13 +31,13 @@ opc_decomposition_complete `opc_brief_complete` 收到 brief 内容后，**不�
         "knowledge_unit": ["user-auth"],
         "blocked_by": []
       }],
-      "execution_order": [{"group": 1, "parallel": ["sub-1"]}]
+      "execution_order": [{"group": 1, "sub_pipeline_ids": ["sub-1"]}]
     }
   }
 }
 ```
 
-> `suggested_phases` + `phase_selection_rationale` 由 state-server 落盘成每条子管线 `state.json` 的 `phase_plan` 块：`available` 由 state-server 扫描 `phases/` 目录得出；`selected = suggested_phases`；`selected_by = "task_analysis"`（若是 decomposition 拆出的子管线则为 `"task_decomposition"`）；`selection_rationale = phase_selection_rationale`。写入前必须通过偏序与一致性校验（详见 [04_state-json.md §六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)），任意一条 fail 则 reject 并要求重新分析。
+> `suggested_phases` + `phase_selection_rationale` 由 state-server 落盘成每条子管线 `state.json` 的 `phase_plan` 块：`available` 由 state-server 扫描 `phases/` 目录得出；`selected = suggested_phases`；`selected_by = "task_analysis"`（若是 decomposition 拆出的子管线则为 `"task_decomposition"`）；`selection_rationale = phase_selection_rationale`。写入前必须通过偏序与一致性校验（详见 [04_state-json.md 六](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic)），任意一条 fail 则 reject 并要求重新分析。
 
 `opc_pipeline_create` 完成后返回里也带 `flow_next` 字段，指引 Claude 调 `opc_knowledge_open`：
 
@@ -84,13 +84,13 @@ Claude 按 `pipeline_create` 返回的 flow_next 指引调用 `opc_knowledge_ope
   },
   "methodology": {
     "docs": ["prompts/phase-execution.md"],
-    "ref": "§十 阶段执行循环",
+    "ref": "十 阶段执行循环",
     "summary": "phase_start → 自省排序 → 反思 → phase_confirm → 逐 node 执行 → phase_complete"
   }
 }
 ```
 
-操作逻辑非常简单。完整工具规范见 [03-2 知识 MCP API](../../03-opc-knowledge-server/02-knowledge-api/00_overview.md) §2.1 `opc_knowledge_open`。
+操作逻辑非常简单。完整工具规范见 [03-2 知识 MCP API](../../03-opc-knowledge-server/02-knowledge-api/00_overview.md) 2.1 `opc_knowledge_open`。
 
 ---
 

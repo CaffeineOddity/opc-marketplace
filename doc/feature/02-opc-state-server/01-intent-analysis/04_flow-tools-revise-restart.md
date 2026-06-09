@@ -7,13 +7,32 @@
 
 ## 修订/重启类工具
 
-本篇覆盖 **2 个纠错类工具 + 所有流程工具共享的前置校验逻辑**。完整工具速览见 [入口与生命周期篇 §流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览)。
+本篇覆盖 **2 个纠错类工具 + 所有流程工具共享的前置校验逻辑**。完整工具速览见 [入口与生命周期篇 流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览)。
 
 | 工具 | 一句话职责 |
 |------|----------|
 | [`opc_flow_revise`](#opc_flow_revise) | 局部修订 accumulated 字段，自动判定是否回溯 |
 | [`opc_flow_restart`](#opc_flow_restart) | 从指定步骤重做，保留前置 accumulated，可附补充输入 |
 | [工具调用前置校验](#工具调用前置校验) | owner.pid + current_step 校验，避免乱序 |
+
+---
+
+## 三种"用户回灌入口"对比
+
+容易混淆的三个工具——根据**"谁先开口"**和**"在哪个流程位"**区分：
+
+| 工具 | 谁先开口 | 适用场景 | 是否走 pending-question-guard | 是否清 pending_user_question |
+|---|---|---|---|---|
+| **`opc_flow_user_reply`**（[详见 03 步骤路由篇](03_flow-tools-step-routing.md#opc_flow_user_reply)） | **state-server 主动**（反思 rounds_exceeded 触发 ask_user） | A3 闭环：反思跑满轮数仍未收敛，state-server 写 `pending_user_question` 后等用户答 | ✅ 唯一登记口（豁免自身） | ✅ 是 |
+| **`opc_flow_revise`** | **用户主动** | 用户在流程任意时刻发现累积参数错了，主动修改（如 "complexity 应该是 high"） | ❌ 豁免（用户纠错通道永远放行） | ❌ 否（即使有 pending question，revise 也不消费） |
+| **`opc_flow_restart`** | **用户主动** | 用户要求重做某个步骤（如 "重新分析任务"） | ❌ 豁免（同上） | ❌ 否 |
+
+**关键差别**：
+- `opc_flow_user_reply` **只能在 state-server 问过之后用**——没有 `pending_user_question` 时调它会被 reject (`no_pending_question`)
+- `opc_flow_revise` / `opc_flow_restart` **任何时候都能用**，不受任何 guard 锁——用户随时可以纠错或重做
+- 若同时存在 `pending_user_question` 与用户的主动 revise，**revise 不自动清 pending_user_question**——用户答完原问题再走 revise；或显式调 `opc_flow_abort` 跑路。这是有意的隔离：避免用户答 X 时被反思的 Y 问题"截胡"
+
+> 完整 A3 闭环契约（5 步流程 + 不变量 + 路由表 + 失败示例）见 [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md 八·补](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#八补-ask_user-回灌闭环a3-契约)。
 
 ---
 

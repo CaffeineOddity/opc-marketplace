@@ -51,7 +51,7 @@ sequenceDiagram
     F-->>C: task_decomposition
     C->>F: opc_decomposition_complete
     C->>P: sub_pipelines + execution_order
-    P-->>C: ready_sub_pipelines (按 blocked_by 拓扑)
+    P-->>C: next_sub_pipeline (按 execution_order 顺序)
 
     Note over U,KS: 场景 8：管线恢复
     U->>C: (断电重连)
@@ -148,11 +148,11 @@ flowchart TD
 | # | 测试 | 原问题 | 已修复方式 |
 |---|------|--------|-----------|
 | 1 | #3 | low 复杂度时 Agent 缺知识引导 | opc_quick_dispatch 返回 agent_hint + knowledge_context + dispatch_context；流程内部 status=completed |
-| 2 | #6 | 跨子管线的 ready 检测无通知 | `opc_phase_complete` 返回 `pipeline_progress.ready_sub_pipelines` + `flow_next` |
+| 2 | #6 | 跨子管线的 next 检测无通知 | `opc_phase_complete` 返回 `pipeline_progress.next_sub_pipeline` + `flow_next` |
 | 3 | #7 | 子管线失败对 downstream 的影响 | state-manager 聚合规则：blocked_by 全 completed 且 upstream 无 failed |
 | 4 | #8 | crash 导致的脏 in_progress 状态 | opc_flow_recover 自动 timeout 检测，标记 failed |
 | 5 | #4 | 并行场景误解锁下游 | unblocked_nodes 严格语义（blocked_by 全 completed 才返回） |
-| 6 | #5 | auto_advance 计算规则不明 | 公式落地到 `phase/08_tools-and-automation.md §自动机制` |
+| 6 | #5 | auto_advance 计算规则不明 | 公式落地到 `phase/08_tools-and-automation.md 自动机制` |
 | 7 | 全部 | 反思循环零持久化 | opc_flow_reflect 按 step_id 分流：task→flow-state；node_selection→state.json + flow-state 指针 |
 | 8 | 全部 | pipeline 文档链无硬跳转 | MCP 状态机驱动 + methodology 引用 |
 | 9 | 全部 | hook 重复触发会覆盖流程 | hook 改为提示调 opc_flow_query，由 query + Claude 决策 9 种延续模式 |
@@ -185,7 +185,7 @@ flowchart TD
 | # | 问题 | 建议 |
 |---|------|------|
 | 1 | `opc_knowledge_write` 不更新 _refs | 加 `refs?: string[]` 参数显式声明 |
-| 2 | 多 session 并发写同一 knowledge | 加 `expected_version?` 乐观锁 |
+| 2 | ~~多 session 并发写同一 knowledge~~ | 串行执行下不存在此问题，已关闭 |
 | 3 | project_question 升级 task 上下文丢失 | 缓存 last-query.json |
 | 4 | knowledge_open 跨子管线聚合策略 | 当前选 A（聚合 open 所有 unit），文档已明确 |
 | 5 | sub-agent 工具权限校验 | kit 的 agents/*.md 强制声明必备工具集 |
