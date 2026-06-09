@@ -170,6 +170,10 @@ flowchart TD
 | 15 | #11 | 反思 pending 未登记可被推进 | reflection-registry-guard 拦截后 9 项保护清单工具，返回 PENDING_REFLECTION |
 | 16 | #12 | 反思死循环耗尽预算 | A3 闭环：rounds_exceeded → pending_user_question → `opc_flow_user_reply` → `_skip_reflection_once` |
 | 17 | #13 | 长管线无法中途插队子任务 | `opc_pipeline_lifecycle({action:"replan", add_sub_pipeline, execution_priority:"immediate"})` + node 边界 paused + 自动 resume |
+| 18 | A1 | HTTP/SSE 模式下 owner.pid + kill 探活失效 | C6 落地：`Mcp-Session-Id` 作主归属键 + heartbeat ledger 替代 kill 探活 + session/project 双层 advisory lock（详见 [06-host-contract/00_overview.md 2.7-pre C6](../../06-host-contract/00_overview.md#27-prec6httpsse-模式-session-归属与孤儿恢复a1)） |
+| 19 | A2 | V4/V5 未验前 `OPC_HOOK_INTENSITY=loud` 默认不安全 | C5 修订：v1 默认 `quiet`（关键词命中或已有活跃流程时才注入），V4/V5 PoC 通过后再考虑提升默认（详见 [06-host-contract/00_overview.md 2.6](../../06-host-contract/00_overview.md#26-c5hook-注入策略)） |
+| 20 | A3 | distiller sub-agent 提示词与 L1→L2 通路无落地 | 新增 [05-opc-reflection-server/03-corrections-store/05_distiller-agent.md](../../05-opc-reflection-server/03-corrections-store/05_distiller-agent.md)：输入/输出 schema + 提示词模板 + 相似度合并阈值 0.72 + 失败模式可观测 |
+| 21 | A4 | kit 装完未重启时链路深处才报 "Agent type not found" | 新增 `.opc/installed-kits.json` + `opc_flow_query` 启发式对账，预报 `KIT_PROBABLY_NOT_LOADED` 警告；`opc_pipeline_create` 预检直接 reject `KIT_NOT_LOADED_PRE_FLIGHT`（详见 [06-host-contract/00_overview.md 2.7.5](../../06-host-contract/00_overview.md#275-server-端-kit-未加载-主动检测a4)） |
 
 ---
 

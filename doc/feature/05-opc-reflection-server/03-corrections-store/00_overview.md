@@ -210,15 +210,15 @@ flowchart TD
 
 ---
 
-## 九、子文档导航（占位）
+## 九、子文档导航
 
-| 子文档 | 内容 |
-|------|------|
-| 01_storage-layers.md | L1/L2/L3 完整定义 + 字段映射 |
-| 02_schema-and-evolution.md | correction `.md` schema + version 演化 |
-| 03_expansion-controls.md | C1–C4 控制策略 + 调优参数 |
-| 04_seed-corrections.md | 冷启动 seed 库结构 + 升级流程 |
-| 05_distiller-agent.md | distiller sub-agent 输入 / 输出 / 提示词模板 |
+| 子文档 | 状态 | 内容 |
+|------|------|------|
+| 01_storage-layers.md | 占位 | L1/L2/L3 完整定义 + 字段映射 |
+| 02_schema-and-evolution.md | 占位 | correction `.md` schema + version 演化 |
+| 03_expansion-controls.md | 占位 | C1–C4 控制策略 + 调优参数 |
+| 04_seed-corrections.md | 占位 | 冷启动 seed 库结构 + 升级流程 |
+| [05_distiller-agent.md](05_distiller-agent.md) | ✅ 已落地（A3）| distiller sub-agent 输入 / 输出 / 提示词模板 + 合并策略 + 失败处理 |
 
 ---
 

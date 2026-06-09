@@ -16,17 +16,22 @@
 | `Task` 工具 spawn 的 sub-agent 是否继承 MCP 连接、是否能 enforce `allowed_tools`，整个反思架构都建在这个假设上但从未明确 | 反思 sub-agent 的权限白名单（`02-server-design/00_overview.md 五`）可能根本无法落地 |
 | `UserPromptSubmit` hook 注入"先调 opc_flow_query" vs Claude 默认行为的优先级 | 用户问"你好"也要绕一圈 query，性价比可疑 |
 | `opc_node_start.dispatch_instruction` 把 `dispatch_context` 传给 sub-agent 的机制，Host 端是 Task 工具 prompt 拼接还是别的 | sub-agent 调 `opc_knowledge_write` 时能否带上正确的 metadata，决定了产物可追溯性 |
+| **A1**：HTTP/SSE 模式下 `owner.pid` + `kill(pid,0)` 探活失效（pid 在另一台机器上） | 远程部署 / 容器部署的 session 归属与孤儿恢复整体不工作；marketplace 无法官方支持非 stdio 部署 |
+| **A2**：V4/V5 未验前 `OPC_HOOK_INTENSITY=loud` 作为默认值不安全（hook 优先级与 token 累积风险都未知） | 短对话被强制走 flow_query，长 session token 可能被悄悄吃掉 |
+| **A3**：distiller sub-agent 的提示词模板尚未落地 | L1 → L2 教训沉淀整条链路是空壳，corrections store 永远为空 |
+| **A4**：用户装完 kit 后未重启 session 时，链路深处才报 `Agent type not found`，定位成本高 | 安装失败误判 / 用户体验割裂 |
 
-### 1.2 本章覆盖的 6 个契约点
+### 1.2 本章覆盖的 7 个契约点
 
 | # | 契约点 | 决议 |
 |---|---|---|
 | C1 | session_id 来源 | pid 派生：`session_id = "sess-" + <claude_code_pid> + "-" + <unix_ts>` |
-| C2 | MCP server 拿到 Claude Code pid 的方式 | stdio 模式用 `process.ppid`；HTTP/SSE 模式由 Claude 在首次 `opc_flow_query` 时传 `claude_pid` 参数 |
+| C2 | MCP server 拿到 Claude Code pid 的方式 | stdio 模式用 `process.ppid`；HTTP/SSE 模式走 `Mcp-Session-Id` header + 显式 `claude_pid` 参数，**owner.pid 探活降级为 heartbeat 探活**（详见 2.8） |
 | C3 | sub-agent 与 MCP server 的连接继承 | Task spawn 的 sub-agent **完全继承**父 conversation 的 MCP 连接，且命中**父进程的 server 实例**（同 session 内 sub-agent 共享同一 MCP server 进程）— ✅ **已验证**（2026-06-10 PoC，详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)） |
 | C4 | `allowed_tools` 白名单的 enforce 责任 | Host 在 Task spawn 时**直接从工具列表裁剪**（未白名单工具对 sub-agent **不可见**，报错 `No such tool available`，非运行时拒绝）；OPC server 仍按角色做二次校验作为双保险 — ✅ **已验证**（同上，比预期更强） |
 | C4-推论 | kit 加载边界 | `.claude/agents/*.md` 与 `.mcp.json` 仅在 Claude Code session **启动时**扫描，运行中安装/更新 kit 不会被发现 — ✅ **已验证** |
-| C5 | Hook 注入与 Claude 默认行为的冲突解决 | UserPromptSubmit 只对**非 `/` 前缀**消息生效；提供 `OPC_HOOK_INTENSITY=quiet\|loud` 让用户调档 |
+| C5 | Hook 注入与 Claude 默认行为的冲突解决 | UserPromptSubmit 只对**非 `/` 前缀**消息生效；提供 `OPC_HOOK_INTENSITY=quiet\|loud\|off` 三档；**v1 默认 quiet**（V4/V5 PoC 通过后再考虑提升） |
+| C6 | HTTP/SSE 模式下的 session 归属与孤儿恢复 | `Mcp-Session-Id` header 作为主归属键 + heartbeat ledger 替代 `kill(pid, 0)` 探活；详见 2.8（A1）|
 
 ### 1.3 非目标
 
@@ -185,15 +190,116 @@ allowed_tools ──┤
 
 ### 2.6 C5：Hook 注入策略
 
-| 配置 | 行为 |
-|---|---|
-| `OPC_HOOK_INTENSITY=loud`（默认） | 每条非 `/` 前缀消息都注入"先调 opc_flow_query" |
-| `OPC_HOOK_INTENSITY=quiet` | 仅在以下情况注入：① 检测到关键词（task/实现/修复/重构/...）；② 当前已有 active 流程 |
-| `OPC_HOOK_INTENSITY=off` | 完全不注入，Claude 自行决定（适合熟练用户） |
+| 配置 | 行为 | v1 默认 |
+|---|---|---|
+| `OPC_HOOK_INTENSITY=loud` | 每条非 `/` 前缀消息都注入"先调 opc_flow_query" | ❌ **暂不默认**（待 V4/V5 PoC 通过） |
+| `OPC_HOOK_INTENSITY=quiet` | 仅在以下情况注入：① 检测到关键词（task/实现/修复/重构/...）；② 当前已有 active 流程 | ✅ **v1 默认** |
+| `OPC_HOOK_INTENSITY=off` | 完全不注入，Claude 自行决定（适合熟练用户） | — |
+
+**为什么 v1 默认 quiet（A2 修订）**：
+- V4（hook 与 system prompt 优先级冲突）与 V5（hook 文本是否累积进 user message history）尚未通过 PoC
+- 在未验明前默认 `loud` 有两个风险：(a) 大量短对话被强制走 flow_query 一圈，性价比可疑；(b) 若 V5 失败（hook 文本累积），长 session 会无谓消耗 token
+- 因此 v1 默认 `quiet`：只在关键词命中或已有活跃流程时注入。验完 V4/V5 后若结果良好，再考虑把默认改为 `loud`
+- 用户可手动 `export OPC_HOOK_INTENSITY=loud` 提前体验
 
 **`/` 前缀豁免**：用户输入以 `/` 开头视为 slash 命令（如 `/opc-status`），hook 跳过注入。
 
+**quiet 模式关键词清单**（v1 初版，可在 `.opc/config.json` 覆盖）：
+```
+中文：任务 / 实现 / 修复 / 重构 / 加 / 改 / 新增 / 优化 / 设计 / 写 / 调试 / 上线
+英文：implement / fix / refactor / add / update / build / debug / deploy / design / write
+```
+
+匹配规则：大小写不敏感 + 出现任一即触发 + active 流程时无视关键词强制注入。
+
 **实现位置**：`platform/opc-orchestrator/bin/opc-hook.sh`（详见 `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 高级形态`）。
+
+### 2.7-pre C6：HTTP/SSE 模式 session 归属与孤儿恢复（A1）
+
+**问题陈述**：
+- C1/C2 的 `owner.pid` + `kill(pid, 0)` 探活只在 stdio 模式成立——MCP server 是 claude 直接 spawn 的子进程，ppid 就是 claude
+- HTTP/SSE 模式下：MCP server 通常是独立部署的 daemon（容器/远程主机），多个 claude client 通过 HTTP 连同一台 server。此时：
+  - `process.ppid` 指向 init / systemd，**不是 claude**
+  - `kill(pid, 0)` 探活的 pid 在另一台机器上，**根本拿不到**
+  - 多个 claude 实例可能共用同一 MCP server，session 归属必须靠协议层标识
+
+**决议**：HTTP/SSE 模式下 owner 模型整体替换，分两层：
+
+#### 一·主归属键：`Mcp-Session-Id` header
+
+| 字段 | 来源 | 性质 |
+|---|---|---|
+| `Mcp-Session-Id` | MCP HTTP transport 规范要求每个 client 在首次握手后保留 server 返回的 session id；后续每次请求附在 header 上 | 协议级、跨进程稳定 |
+| `claude_pid` + `claude_started_at` | Claude 在首次 `opc_flow_query()` 时显式传入（与 C2 既有方案一致） | 进程级，仅用于本地 ops 调试 |
+
+**派生规则**：
+```
+HTTP/SSE 模式:
+  session_id = "sess-http-" + sha256(Mcp-Session-Id).slice(0, 12) + "-" + <unix_ts>
+
+  flow-state.json.owner = {
+    transport:     "http" | "sse",
+    mcp_session_id: <Mcp-Session-Id 原值>,   // 主归属键
+    claude_pid:     <如有>,                  // 仅作 ops 辅助，不参与探活
+    claude_host:    <client IP 或 UA, 来自 X-Forwarded-For/User-Agent>,
+    last_heartbeat: <unix_ts>                // 替代 kill(pid,0)
+  }
+```
+
+#### 二·探活机制：heartbeat ledger 替代 `kill(pid, 0)`
+
+```
+opc-state-server 启动 HTTP/SSE 模式时:
+  ① 监听 MCP 协议级断开事件（client disconnect / session close）
+     断开 → 立即把 owner.status 置为 "disconnected"，记 disconnected_at
+  ② 每次收到该 Mcp-Session-Id 的任意工具调用 → 刷新 owner.last_heartbeat
+  ③ 后台 reaper 每 30s 扫一遍：
+       last_heartbeat 距今 > HEARTBEAT_TIMEOUT（默认 120s）
+       且 status != active
+       → 标记 orphan_candidate
+  ④ opc_flow_query() 返回 orphan_candidate 列表给 Claude 决策
+
+opc_flow_recover(orphan_session_id, transport_proof) 内部:
+  HTTP/SSE 模式:
+    ① 校验调用方携带的 Mcp-Session-Id ≠ orphan 的 mcp_session_id
+       （防止同 session 自我接管）
+    ② 校验 orphan 的 last_heartbeat 距今 > HEARTBEAT_TIMEOUT
+    ③ owner 字段整体替换为新 client 的归属信息
+    ④ session_id 字段保持原值
+```
+
+| 默认参数 | 值 | 可调位置 |
+|---|---|---|
+| `HEARTBEAT_TIMEOUT` | 120s | `.opc/config.json` 或 env `OPC_HEARTBEAT_TIMEOUT_SEC` |
+| `REAPER_INTERVAL` | 30s | 同上 `OPC_REAPER_INTERVAL_SEC` |
+| `DISCONNECT_GRACE` | 10s | 协议断开后等待重连的宽限期，避免网络抖动误判 |
+
+#### 三·并发隔离：HTTP/SSE 模式下的写锁
+
+stdio 模式假设"一个 claude = 一个 server 实例"天然串行；HTTP/SSE 模式下**多 client 共享一个 server**，必须显式加锁：
+
+```
+所有写类工具（opc_*_complete / opc_node_finish / opc_knowledge_write / ...）入口:
+  ① 取 session 级 advisory lock（基于 session_id）
+  ② 持锁内执行 → 写文件 → 释放锁
+  ③ 同 session 的并发写串行；不同 session 的写并行
+
+corrections / knowledge 全局写（如 L3 promote）:
+  额外取 project 级 advisory lock，跨 session 串行
+```
+
+**实现细节**：用 `proper-lockfile` 包基于文件锁实现；锁文件放 `.opc/sessions/<id>/.lock` 与 `.opc/.global-lock`。
+
+#### 四·v1 默认部署策略
+
+| 部署形态 | 推荐 transport | 理由 |
+|---|---|---|
+| 单机 + 单 Claude Code | stdio | 最简单，C1/C2 完整覆盖 |
+| 单机 + 多个 Claude Code 同项目 | stdio + 项目级 advisory lock | 串行化即可，复杂度低 |
+| 远程 server / 容器内 server | **HTTP，默认不开**——OPC marketplace v1 不官方支持；需要的用户自配并接受 C6 全部约束 | HTTP 模式 PoC 待补 V6（见验证清单） |
+| SaaS 多租户 | 当前 **不支持**——OPC 不解决多租户隔离 | 设计目标外 |
+
+**对外文档措辞**：marketplace README 在"安装"章节明确写"v1 仅官方支持 stdio 模式；HTTP/SSE 处于 experimental 状态，关键契约 V6 未验证完成前不建议生产使用"。
 
 ### 2.7 C4-推论的工程化：kit-install UX 约定
 
@@ -244,21 +350,86 @@ C4-推论的边界很重要：
 - corrections 是 OPC server **运行时读的数据文件**，不是 Host 加载的注册表，所以 distiller 把内容写进去就立刻生效——这是 OPC v1 的可行性前提
 - 如果未来 corrections 演变成"动态 sub-agent 模板"（即每条 correction 想生成一个新的 `.claude/agents/<role>.md`），那条路会撞 C4-推论而必须重启。届时设计要回头来这里加一节"动态 agent 生成的处理方案"。当前 v1 不走这条路
 
+#### 2.7.5 server 端 "kit 未加载" 主动检测（A4）
+
+**问题**：用户装完 kit 但忘了重启，下一次进入 task 链路时 Claude 调 `Task subagent_type=backend-engineer` 会拿到 Host 返回的 `Agent type 'backend-engineer' not found`——这条报错对普通用户不友好，且发生在链路深处，定位成本高。
+
+**决议**：opc-state-server 在 `opc_flow_query()` / `opc_pipeline_create()` 两个关键入口主动做"已装 kit 与运行时可见性"的对账，提前给出可读提示。
+
+```
+opc_flow_query() 增量逻辑（kit 健康检查）:
+  ① 读 .opc/installed-kits.json（opc-kit install 时维护的清单）
+       结构: { kits: [{ name, version, agents: [...], mcp_servers: [...], installed_at }] }
+  ② 对每个已装 kit:
+       检查 .claude/agents/<agent>.md 在磁盘存在 ✓
+       检查 .mcp.json 包含 mcp_servers 中的每一项 ✓
+  ③ 计算 "应可见 vs 实际可见":
+       由于 server 自身无法直接探测 Claude 当前 session 加载状态,
+       使用启发式: 比较 .claude/agents/ mtime 与当前 session 启动时间
+       - mtime > session_started_at → 该 kit 文件在 session 启动后才落盘,几乎肯定未加载
+  ④ 若检测到不一致:
+       返回 _warnings: [{
+         level: "warning",
+         code: "KIT_PROBABLY_NOT_LOADED",
+         kit: "<kit-name>",
+         affected_agents: [...],
+         affected_mcp_servers: [...],
+         remediation: "Exit current `claude` session and re-run `claude` in this directory.",
+         installed_at: "...",
+         session_started_at: "..."
+       }]
+  ⑤ 同时写入 suggested_actions[]:
+       { action: "restart_session", reason: "kit_not_loaded", details: {...} }
+
+opc_pipeline_create() 增量逻辑:
+  ① 解析 pipeline plan 中所有 phase/node 引用的 subagent_type
+  ② 与 .opc/installed-kits.json 中声明的 agents 取交集
+  ③ 若有 subagent_type ∈ 已装 kit 但 kit 加载时间晚于 session 启动时间:
+       reject pipeline 创建,返回:
+       { code: "KIT_NOT_LOADED_PRE_FLIGHT",
+         message: "Required agents are installed but not yet loaded by Claude Code.",
+         required_agents: [...],
+         remediation: "<同上>" }
+       注: 此 reject 早于 Claude 真的去 Task spawn,避免半路崩
+```
+
+**session_started_at 取值**：
+- stdio 模式：`process.ppid` 进程的 `start_time`（通过 `ps -o lstart -p <ppid>` 或 `/proc/<ppid>/stat`）
+- HTTP/SSE 模式：第一次见到 `Mcp-Session-Id` 的时间（由 server 自己记录）
+
+**`.opc/installed-kits.json` 维护责任**：
+- `opc-kit install <name>` 写入或更新一条 entry，含 `installed_at: <现在>` 和该 kit 提供的 agents/mcp_servers 清单
+- `opc-kit remove <name>` 删除对应 entry
+- `opc-kit update <name>` 更新 `installed_at`
+- 失败回滚（写文件成功但 entry 写失败）时，自动清理已写入的 `.claude/agents/*.md`，保持原子性
+
+**与 2.7.1 安装器输出契约的配合**：
+- 安装器输出"Restart required"提示（用户视角）
+- server 端 KIT_PROBABLY_NOT_LOADED 警告（Claude / 链路视角）
+- 两者覆盖不同失败模式：用户没看安装器输出 / 用户重启了但项目目录里又装了新 kit
+
+**降级与边界**：
+- 检测是启发式（基于 mtime vs session_started_at），不可能 100% 准确
+- 若 false positive（kit 确实加载了但 mtime 比较失败）：警告级别，不阻塞 `opc_flow_query`；只在 `opc_pipeline_create` 时变 reject——而后者一旦真去 Task spawn 就会立刻拿到 "Agent type not found"，所以 false positive 的代价就是用户手动按提示重启一次
+- 若 false negative（kit 没加载但检测放行）：链路继续走到 Task spawn 时拿到原始报错——退化到原状态，没变差
+
 ---
 
 ## 三、验证清单
 
-实施 OPC 前的 5 项 Host 行为验证。**V1 / V2 / V3 已通过 PoC 验证**，余下 V4 / V5 在工程实施初期补做。
+实施 OPC 前的 Host 行为验证。**V1 / V2 / V3 已通过 PoC 验证**，余下 V4–V7 在工程实施初期补做。
 
 | # | 验证项 | 状态 | 验证方式 / 结果 |
 |---|---|---|---|
 | V1 | `process.ppid` 在 stdio MCP server 中等于 spawn 该 server 的 Claude Code 进程，且 `kill(pid, 0)` 探活语义正确 | ✅ **PASS** | 2026-06-10 PoC：`report_pid` 工具返 `server_ppid=43990`，`ps` 验证 ppid 是 `claude` 进程；headless 退出后 `kill -0 43990` 立刻 ESRCH。**caveat**：ppid 指向 spawn 该 server 的 claude，不是顶层 host claude（嵌套场景下两者不同）。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
 | V2 | Task spawn 的 sub-agent 能调父 conversation 注册的 MCP 工具 | ✅ **PASS** | 2026-06-10 PoC：`poc-v2-writer` sub-agent 调 `mcp__poc-host-contract__poc_echo_write` 成功写出 `artifacts/proof-1781020775701-jp9l68.txt`，`server_pid=43275` 与父进程关联。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
 | V3 | Task `tools` 白名单被 Host 强制 | ✅ **PASS（更强）** | 2026-06-10 PoC：`poc-v3-reader` 调未白名单的写工具直接报 `Error: No such tool available`——未白名单工具**不可见**，比"运行时拒绝"更彻底 |
-| V4 | UserPromptSubmit hook 与 system prompt 优先级 | ⏳ 待 PoC | spike 让 hook 注入与 system 冲突的指令，看 Claude 服从哪个。失败 → 调整 hook 文本措辞或改用 SessionStart |
-| V5 | hook 注入文本是否进入 user message history（影响 token） | ⏳ 待 PoC | 检查 long context 后历史里 hook 文本是否累积。累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
+| V4 | UserPromptSubmit hook 与 system prompt 优先级 | ⏳ **待 PoC（阻塞 `loud` 默认）** | spike 让 hook 注入与 system 冲突的指令，看 Claude 服从哪个。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。失败 → 调整 hook 文本措辞或改用 SessionStart |
+| V5 | hook 注入文本是否进入 user message history（影响 token） | ⏳ **待 PoC（阻塞 `loud` 默认）** | 检查 long context 后历史里 hook 文本是否累积。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
+| V6 | HTTP/SSE 模式下 `Mcp-Session-Id` 跨请求稳定 + 协议级 disconnect 事件可监听 | ⏳ **待 PoC（阻塞 HTTP/SSE 官方支持）** | spike：启动 streamable-http transport，开两个 client 连同一 server；验证：① 同一 client 多次请求 `Mcp-Session-Id` 一致 ② client 强行断开后 server 能在 `DISCONNECT_GRACE` 内感知 ③ heartbeat ledger reaper 能正确将 owner 标 orphan。详见 2.7-pre C6（A1）|
+| V7 | `.opc/installed-kits.json` 中 mtime 与 session_started_at 的对账启发式准确度 | ⏳ **待 PoC（阻塞 KIT_PROBABLY_NOT_LOADED 警告）** | spike：①  session 启动后装 kit → 验证 `opc_flow_query` 返回 KIT_PROBABLY_NOT_LOADED ② session 启动前装 kit → 验证不误报 ③ 测 false positive 率 < 5%。详见 2.7.5（A4）|
 
-V1/V2/V3 完整复现指令与原始返回见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)。后续 V4/V5 验证结果按需追加到 `doc/feature/06-host-contract/01_validation-log.md`。
+V1/V2/V3 完整复现指令与原始返回见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)。后续 V4–V7 验证结果按需追加到 `doc/feature/06-host-contract/01_validation-log.md`。
 
 ---
 
@@ -292,13 +463,15 @@ session_id 由 Claude Code pid + 启动 ts 派生，详见
 
 ---
 
-## 六、子文档导航（占位）
+## 六、子文档导航
 
-| 子文档 | 内容 |
-|---|---|
-| 01_validation-log.md | PoC 阶段 V1–V5 验证结果记录 |
-| 02_subagent-fallback-plans.md | C3 降级方案（代理模式 / 延迟写入）的详细工程规范 |
-| 03_kit-agent-conventions.md | 每个 kit 的 `agents/*.md` 必须声明的字段规范（含 `allowed_tools` 强制）|
+| 子文档 | 状态 | 内容 |
+|---|---|---|
+| 01_validation-log.md | 占位 | PoC 阶段 V1–V7 验证结果记录 |
+| 02_subagent-fallback-plans.md | 占位 | C3 降级方案（代理模式 / 延迟写入）的详细工程规范 |
+| 03_kit-agent-conventions.md | 占位 | 每个 kit 的 `agents/*.md` 必须声明的字段规范（含 `tools` 强制）|
+| 04_http-sse-deployment.md | 占位（A1 落地后补） | HTTP/SSE 模式部署指南：Mcp-Session-Id 配置、heartbeat 参数、advisory lock 实施 |
+| 05_installed-kits-registry.md | 占位（A4 落地后补） | `.opc/installed-kits.json` schema + 维护责任 + 对账启发式调参 |
 
 ---
 
