@@ -47,3 +47,75 @@ export type {
   UserIntervention,
   PipelinePointer,
 } from "./flow-state.js";
+
+export {
+  PipelineServer,
+  PipelineConflictError,
+  aggregatePipelineStatus,
+} from "./pipeline-server.js";
+export type {
+  PipelineServerOptions,
+  PipelineCreateRequest,
+  PipelineCreateResponse,
+  PipelineStatusRequest,
+  PipelineStatusResponse,
+  PipelineReplanRequest,
+  PipelineReplanResponse,
+  SubPipelineCreateSpec,
+  AddSubPipelineSpec,
+} from "./pipeline-server.js";
+export {
+  loadPipelinePlan,
+  savePipelinePlan,
+  pipelinesDir,
+  pipelineDir,
+  pipelinePlanPath,
+  subPipelineDir,
+  PipelineNotFoundError,
+  PIPELINES_SUBDIR,
+  PIPELINE_PLAN_FILENAME,
+  SUB_PIPELINES_SUBDIR,
+} from "./pipeline-plan.js";
+export type {
+  PipelinePlan,
+  PipelineStatus,
+  SubPipeline,
+  SubPipelineStatus,
+  ExecutionGroup,
+  ExecutionPriority,
+  ReplanEntry,
+  PipelineComplexity,
+  PipelineOwner,
+  PausedAt,
+} from "./pipeline-plan.js";
+export {
+  loadStateJson,
+  saveStateJson,
+  newStateJson,
+  writeBrief,
+  statePath,
+  briefPath,
+  STATE_FILENAME,
+  BRIEF_FILENAME,
+  SubPipelineStateNotFoundError,
+} from "./state-json.js";
+export type {
+  StateJson,
+  PhaseState,
+  PhasePlan,
+  PhaseSelectedBy,
+  NodeState,
+  NodeStatus,
+  PhaseStatus,
+  SubStateStatus,
+  TaskMeta,
+  IoArtifact,
+} from "./state-json.js";
+export {
+  TopologyError,
+  validateDag,
+  validateExecutionOrder,
+  generateExecutionOrder,
+  computeNextSubPipeline,
+  listBlockedSubs,
+} from "./topology.js";
