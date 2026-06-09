@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   SERVER_NAME,
   FlowServer,
+  OwnerStillAliveError,
   loadFlowState,
   saveFlowState,
   SessionNotFoundError,
@@ -63,8 +64,16 @@ describe("FlowServer.lifecycle", () => {
     expect(b.next).toEqual({ tool: "aborted" });
   });
 
-  it("recover updates pid + heartbeat", async () => {
-    const fs = fresh();
+  it("recover updates pid + heartbeat when prior owner is dead", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      pid: () => 1234,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 1234,
+      isAlive: () => false, // prior owner is dead → recovery allowed
+    });
     const a = await fs.lifecycle({ action: "start" });
     const b = await fs.lifecycle({
       action: "recover",
@@ -723,5 +732,130 @@ describe("FlowServer orphan detection (spec §06-host-contract §2.2)", () => {
     const q = await fs.query({ session_id: r.state.session_id, claude_pid: 100 });
     expect(q.orphan_candidates).toBeUndefined();
     expect(q.suggested_actions).toBeUndefined();
+  });
+});
+
+describe("FlowServer recover aliveness check (spec §06-host-contract §2.2 step ①)", () => {
+  it("rejects recover when existing owner.pid is still alive", async () => {
+    // Owner pid 200 created the session and is still alive on this host.
+    const fsOwner = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 200,
+      isAlive: () => true,
+    });
+    const orig = await fsOwner.lifecycle({ action: "start" });
+
+    // A different stdio process (ppid=300) attempts to recover. With owner
+    // still alive, this MUST be rejected.
+    const fsStealer = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 300,
+      isAlive: () => true,
+    });
+    await expect(
+      fsStealer.lifecycle({ action: "recover", session_id: orig.state.session_id }),
+    ).rejects.toThrow(OwnerStillAliveError);
+  });
+
+  it("accepts recover when existing owner.pid is dead (true orphan takeover)", async () => {
+    const fsOriginal = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 200,
+    });
+    const orig = await fsOriginal.lifecycle({ action: "start" });
+
+    const fsNew = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 400,
+      isAlive: (pid) => pid !== 200, // 200 is dead, 400 alive
+    });
+    const rec = await fsNew.lifecycle({
+      action: "recover",
+      session_id: orig.state.session_id,
+    });
+    expect(rec.state.owner.pid).toBe(400);
+    expect(rec.state.session_id).toBe(orig.state.session_id);
+  });
+
+  it("idempotent self-recover (same pid) does not trip the aliveness guard", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 500,
+      isAlive: () => true,
+    });
+    const orig = await fs.lifecycle({ action: "start" });
+    // Same pid recovering own session is a no-op-ish bump; must not throw.
+    const rec = await fs.lifecycle({
+      action: "recover",
+      session_id: orig.state.session_id,
+    });
+    expect(rec.state.owner.pid).toBe(500);
+  });
+
+  it("http mode: aliveness guard is skipped (kill(pid,0) meaningless cross-host)", async () => {
+    const fsHttp = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "http",
+      pid: () => 1,
+      isAlive: () => true, // would block stdio recovery, but http skips check
+    });
+    const orig = await fsHttp.lifecycle({ action: "start", claude_pid: 600 });
+
+    const rec = await fsHttp.lifecycle({
+      action: "recover",
+      session_id: orig.state.session_id,
+      claude_pid: 700,
+    });
+    expect(rec.state.owner.pid).toBe(700);
+  });
+
+  it("OwnerStillAliveError carries diagnostic fields", async () => {
+    const fsOwner = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 800,
+      isAlive: () => true,
+    });
+    const orig = await fsOwner.lifecycle({ action: "start" });
+    const fsStealer = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 900,
+      isAlive: () => true,
+    });
+    try {
+      await fsStealer.lifecycle({
+        action: "recover",
+        session_id: orig.state.session_id,
+      });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(OwnerStillAliveError);
+      const e = err as OwnerStillAliveError;
+      expect(e.session_id).toBe(orig.state.session_id);
+      expect(e.owner_pid).toBe(800);
+      expect(e.attempted_pid).toBe(900);
+    }
   });
 });

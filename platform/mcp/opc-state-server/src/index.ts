@@ -1,6 +1,6 @@
 export const SERVER_NAME = "opc-state-server" as const;
 
-export { FlowServer } from "./flow-server.js";
+export { FlowServer, OwnerStillAliveError } from "./flow-server.js";
 export type {
   FlowServerOptions,
   FlowNext,

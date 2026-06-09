@@ -211,6 +211,27 @@ export interface CorrectResponse {
   intervention_id: string;
 }
 
+/**
+ * Spec §06-host-contract §2.2 step ①: thrown by `opc_flow_lifecycle` when
+ * a `recover` action targets a session whose existing owner.pid is still
+ * alive on this host. Recovery is for orphan takeover only; stealing a
+ * live owner would break the at-most-one-writer invariant.
+ */
+export class OwnerStillAliveError extends Error {
+  readonly session_id: string;
+  readonly owner_pid: number;
+  readonly attempted_pid: number;
+  constructor(session_id: string, owner_pid: number, attempted_pid: number) {
+    super(
+      `opc_flow_lifecycle(recover): refusing takeover of session ${session_id} — owner.pid ${owner_pid} is still alive (attempted_pid=${attempted_pid}). Recovery is only for orphan sessions whose owner is dead (spec §06-host-contract §2.2 step ①).`,
+    );
+    this.name = "OwnerStillAliveError";
+    this.session_id = session_id;
+    this.owner_pid = owner_pid;
+    this.attempted_pid = attempted_pid;
+  }
+}
+
 export class FlowServer {
   readonly root: string;
   private readonly now: () => Date;
@@ -631,20 +652,34 @@ export class FlowServer {
   ): Promise<LifecycleResponse> {
     // Spec §06-host-contract §2.3 (C2): same guard as lifecycleStart — in
     // stdio mode an explicit claude_pid is a hard error; recovery uses ppid.
-    let pidOverride: number | undefined;
+    let newPid: number | undefined;
     if (req.pid !== undefined) {
-      pidOverride = req.pid;
-    } else if (req.claude_pid !== undefined || this.transport !== "stdio") {
+      newPid = req.pid;
+    } else {
       const resolved = resolveClaudePid({
         transport: this.transport,
         ...(req.claude_pid !== undefined ? { claude_pid: req.claude_pid } : {}),
         ppid: this.ppid,
         serverPid: this.pid,
       });
-      pidOverride = resolved.pid;
+      newPid = resolved.pid;
     }
     const state = await loadFlowState(this.root, req.session_id);
-    if (pidOverride !== undefined) state.owner.pid = pidOverride;
+    // Spec §06-host-contract §2.2 step ①: refuse takeover when the existing
+    // owner.pid is still alive on this host AND distinct from the recovering
+    // caller — that's not orphan recovery, that's a steal. Skip the check
+    // when the prior owner is the same pid (idempotent re-recover after a
+    // transient blip) or when running outside stdio (kill(pid,0) has no
+    // meaning).
+    if (
+      newPid !== undefined &&
+      state.owner.pid !== newPid &&
+      this.transport === "stdio" &&
+      this.isAlive(state.owner.pid)
+    ) {
+      throw new OwnerStillAliveError(req.session_id, state.owner.pid, newPid);
+    }
+    if (newPid !== undefined) state.owner.pid = newPid;
     state.owner.last_heartbeat_at = this.now().toISOString();
     state.history.push(this.entry("recover", "opc_flow_lifecycle", req, null));
     await saveFlowState(this.root, state, this.now());
