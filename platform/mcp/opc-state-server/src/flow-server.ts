@@ -18,6 +18,11 @@ import {
 } from "./flow-state.js";
 import { deriveSessionId, parseSessionId } from "./session-id.js";
 import {
+  type OrphanScanResult,
+  type SuggestedAction,
+  scanForOrphans,
+} from "./orphan-scanner.js";
+import {
   type TransportMode,
   TransportArgError,
   resolveClaudePid,
@@ -35,6 +40,11 @@ export interface FlowServerOptions {
    */
   transport?: TransportMode;
   ppid?: () => number;
+  /**
+   * Spec §06-host-contract §2.2 (C1 配套): orphan-detection aliveness probe
+   * injectable for tests. Defaults to process.kill(pid, 0).
+   */
+  isAlive?: (pid: number) => boolean;
 }
 
 export type FlowNext =
@@ -59,6 +69,14 @@ export interface QueryRequest {
 export interface QueryResponse {
   state: FlowState;
   next: FlowNext;
+  /**
+   * Spec §06-host-contract §2.2 (C1 配套): in-progress sessions whose
+   * owner.pid is dead on this host. Populated only in stdio mode (kill(pid,0)
+   * carries truth). Each candidate has a matching entry in `suggested_actions`
+   * recommending an `opc_flow_lifecycle({action:"recover"})` call.
+   */
+  orphan_candidates?: OrphanScanResult["orphan_candidates"];
+  suggested_actions?: SuggestedAction[];
 }
 
 export type LifecycleRequest =
@@ -200,6 +218,7 @@ export class FlowServer {
   private readonly uuid: () => string;
   private readonly transport: TransportMode;
   private readonly ppid: () => number;
+  private readonly isAlive: (pid: number) => boolean;
 
   constructor(opts: FlowServerOptions) {
     this.root = opts.root;
@@ -208,6 +227,20 @@ export class FlowServer {
     this.uuid = opts.uuid ?? ((): string => randomUUID());
     this.transport = opts.transport ?? "stdio";
     this.ppid = opts.ppid ?? ((): number => process.ppid);
+    this.isAlive =
+      opts.isAlive ??
+      ((pid: number): boolean => {
+        if (!Number.isInteger(pid) || pid <= 0) return false;
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch (err) {
+          if (typeof err === "object" && err !== null && "code" in err) {
+            if ((err as { code: unknown }).code === "EPERM") return true;
+          }
+          return false;
+        }
+      });
   }
 
   async query(req: QueryRequest): Promise<QueryResponse> {
@@ -219,7 +252,27 @@ export class FlowServer {
     const state = await loadFlowState(this.root, req.session_id);
     this.cleanupExpired(state);
     await saveFlowState(this.root, state, this.now());
-    return { state, next: this.computeNext(state) };
+    // Spec §06-host-contract §2.2 (C1 配套): in stdio mode, surface orphan
+    // sessions (other in-progress sess-* directories whose owner.pid is dead)
+    // so Claude can choose to opc_flow_recover them.
+    const response: QueryResponse = { state, next: this.computeNext(state) };
+    if (this.transport === "stdio") {
+      const currentPid = req.claude_pid ?? this.ppid();
+      try {
+        const scan = await scanForOrphans({
+          root: this.root,
+          currentPid,
+          isAlive: this.isAlive,
+        });
+        if (scan.orphan_candidates.length > 0) {
+          response.orphan_candidates = scan.orphan_candidates;
+          response.suggested_actions = scan.suggested_actions;
+        }
+      } catch {
+        // Orphan scan is best-effort; never let it block the query response.
+      }
+    }
+    return response;
   }
 
   async lifecycle(req: LifecycleRequest): Promise<LifecycleResponse> {

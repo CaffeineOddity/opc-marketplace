@@ -178,3 +178,11 @@ export type {
   ResolvedClaudePid,
   ResolveClaudePidArgs,
 } from "./transport.js";
+export { scanForOrphans, defaultIsAlive } from "./orphan-scanner.js";
+export type {
+  OrphanScanArgs,
+  OrphanScanResult,
+  OrphanClassification,
+  SessionScanEntry,
+  SuggestedAction,
+} from "./orphan-scanner.js";

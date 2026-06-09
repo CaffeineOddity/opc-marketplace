@@ -649,3 +649,79 @@ describe("FlowServer C2 transport guard (spec §06-host-contract §2.3)", () => 
     expect(r.state.owner.pid).toBe(4242);
   });
 });
+
+describe("FlowServer orphan detection (spec §06-host-contract §2.2)", () => {
+  it("stdio mode: query surfaces orphan_candidates + suggested_actions when another session's owner is dead", async () => {
+    // Session A: current claude process (ppid=100)
+    const fsA = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 100,
+      isAlive: (pid) => pid === 100,
+    });
+    const a = await fsA.lifecycle({ action: "start", initial_message: "A" });
+
+    // Session B: previously owned by pid 200, which is now dead.
+    const fsB = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 200,
+      isAlive: () => true,
+    });
+    const b = await fsB.lifecycle({ action: "start", initial_message: "B" });
+    expect(b.state.session_id).not.toBe(a.state.session_id);
+
+    // Now query from A's perspective: A is active, B's owner pid 200 is dead.
+    const q = await fsA.query({ session_id: a.state.session_id });
+    expect(q.orphan_candidates).toBeDefined();
+    expect(q.orphan_candidates).toHaveLength(1);
+    expect(q.orphan_candidates?.[0]?.session_id).toBe(b.state.session_id);
+    expect(q.suggested_actions?.[0]?.action).toBe("recover_orphan_session");
+    expect(q.suggested_actions?.[0]?.session_id).toBe(b.state.session_id);
+  });
+
+  it("query omits orphan_candidates field when no orphans found", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 100,
+      isAlive: () => true,
+    });
+    const r = await fs.lifecycle({ action: "start" });
+    const q = await fs.query({ session_id: r.state.session_id });
+    expect(q.orphan_candidates).toBeUndefined();
+    expect(q.suggested_actions).toBeUndefined();
+  });
+
+  it("query in http mode does not perform orphan scan", async () => {
+    // In http mode, kill(pid,0) is meaningless across hosts; should skip scan.
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "http",
+      pid: () => 100,
+      isAlive: () => false, // would mark all as orphans if called
+    });
+    // Pre-create a session that would look orphaned if scanned.
+    const fsOther = new FlowServer({
+      root,
+      now: fixedNow,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 999,
+    });
+    await fsOther.lifecycle({ action: "start" });
+
+    const r = await fs.lifecycle({ action: "start", claude_pid: 100 });
+    const q = await fs.query({ session_id: r.state.session_id, claude_pid: 100 });
+    expect(q.orphan_candidates).toBeUndefined();
+    expect(q.suggested_actions).toBeUndefined();
+  });
+});
