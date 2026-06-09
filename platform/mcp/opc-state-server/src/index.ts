@@ -130,3 +130,33 @@ export type {
   PhaseResetRequest,
   PhaseResetResponse,
 } from "./phase-server.js";
+
+export { NodeServer, NodeValidationError } from "./node-server.js";
+export type {
+  NodeServerOptions,
+  NodeStartRequest,
+  NodeStartResponse,
+  NodeCompleteRequest,
+  NodeCompleteResponse,
+} from "./node-server.js";
+export {
+  resolve as resolveNodes,
+  computeNextNode,
+  computeUnblockedNodes,
+  NodeResolverError,
+} from "./node-resolver.js";
+export type {
+  ResolvedNode,
+  ResolvedGroup,
+  ResolvedPlan,
+  ResolvedNodeStatus,
+} from "./node-resolver.js";
+export type {
+  NodeDefinition,
+  NodeMode,
+  NodeAgents,
+  NodeInputSpec,
+  NodeOutputSpec,
+  NodeEvidence,
+  QualityGate,
+} from "./state-json.js";

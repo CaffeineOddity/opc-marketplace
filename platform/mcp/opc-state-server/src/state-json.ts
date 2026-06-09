@@ -8,7 +8,42 @@ import { subPipelineDir } from "./pipeline-plan.js";
 export const STATE_FILENAME = "state.json";
 export const BRIEF_FILENAME = "brief.md";
 
-export type NodeStatus = "pending" | "in_progress" | "completed" | "failed";
+export type NodeStatus = "pending" | "ready" | "in_progress" | "completed" | "failed" | "timeout";
+export type NodeMode = "parallel" | "sequential";
+export type QualityGate = "test_pass" | "lint_pass" | "build_pass" | "type_check_pass";
+
+export interface NodeInputSpec {
+  knowledge: string;
+  min_version?: number;
+}
+
+export interface NodeOutputSpec {
+  artifacts: string[];
+  knowledge: string;
+}
+
+export interface NodeAgents {
+  primary: string[];
+  optional?: string[];
+}
+
+export interface NodeDefinition {
+  name: string;
+  phase: string;
+  description: string;
+  tags: string[];
+  mode: NodeMode;
+  agents: NodeAgents;
+  skills?: string[];
+  quality_gates?: QualityGate[];
+  timeout_minutes?: number;
+  max_retries?: number;
+  input?: NodeInputSpec[];
+  output?: NodeOutputSpec[];
+  body?: string;
+  source?: "kit" | "project_override";
+  source_path?: string;
+}
 export type PhaseStatus = "pending" | "in_progress" | "completed" | "blocked";
 export type SubStateStatus =
   | "pending"
@@ -42,6 +77,25 @@ export interface NodeState {
   timeout_minutes: number;
   retry_count: number;
   max_retries: number;
+  mode?: NodeMode;
+  quality_gates?: QualityGate[];
+  node_input?: NodeInputSpec[];
+  node_output?: NodeOutputSpec[];
+  node_file_path?: string;
+  started_at?: string;
+  completed_at?: string;
+  evidence?: NodeEvidence;
+  unblocked_at?: string;
+}
+
+export interface NodeEvidence {
+  test_results?: { passed: number; failed: number; skipped?: number };
+  lint_results?: { errors: number; warnings?: number };
+  build_passed?: boolean;
+  type_check_passed?: boolean;
+  knowledge_written?: Array<{ path: string; version: number }>;
+  artifacts_written?: string[];
+  notes?: string;
 }
 
 export interface PhaseState {
