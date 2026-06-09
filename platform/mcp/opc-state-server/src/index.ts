@@ -119,3 +119,14 @@ export {
   computeNextSubPipeline,
   listBlockedSubs,
 } from "./topology.js";
+
+export { PhaseServer, PhaseValidationError } from "./phase-server.js";
+export type {
+  PhaseServerOptions,
+  PhaseStartRequest,
+  PhaseStartResponse,
+  PhaseCompleteRequest,
+  PhaseCompleteResponse,
+  PhaseResetRequest,
+  PhaseResetResponse,
+} from "./phase-server.js";

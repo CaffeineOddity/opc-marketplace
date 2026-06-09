@@ -48,6 +48,8 @@ export interface PhaseState {
   phase: string;
   status: PhaseStatus;
   nodes: NodeState[];
+  confirm_commit_ref?: string;
+  reflection_log?: Array<{ at: string; round: number; method?: string; notes?: string }>;
 }
 
 export interface PhasePlan {
