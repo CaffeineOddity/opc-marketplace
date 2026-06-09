@@ -11,7 +11,7 @@
 
 ```json
 {
-  "session_id": "sess-abc-001",
+  "session_id": "sess-12345-1717840000",
   "status": "in_progress | completed | aborted",
   "owner": {
     "pid": 12345,

@@ -39,6 +39,16 @@
 - [反思流程](../05-opc-reflection-server/04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户自治 + meta-reflection + phase_reset 交互
 
 
+### 06 Host 契约（Claude Code MCP Host 行为约束）
+
+- [Host 契约总览](../06-host-contract/00_overview.md) — 5 项契约点（pid 派生 session_id / sub-agent MCP 继承 / allowed_tools enforce / hook 优先级 / 验证清单）+ 降级方案 + PoC 验证门槛
+
+
+### 07 工具合并规范（54 → 28）
+
+- [工具合并总览](../07-tool-consolidation/00_overview.md) — discriminator 模式映射表、内联反思（6 步 → 3 步）、registry-guard 保护清单同步、迁移策略
+
+
 ### 阅读顺序
 
 ```
@@ -47,6 +57,7 @@
                   → 知识模型 → 知识 API
                   → 反思方法学 → server 设计 → corrections → 反思流程
                   → 端到端演练 → 链路测试
+                  → 06 Host 契约 → 07 工具合并规范
 ```
 
 ---
@@ -60,15 +71,17 @@
 5. **工具返回自包含 next** —— 每个工具返回 `flow_next` 字段告诉 Claude 下一步调什么，避免文档硬编码跳转
 6. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 7. **子管线严格串行** —— 按 execution_order 依次执行，blocked_by 阻塞未就绪的 sub，无需并发写保护
-7. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
-8. **知识属于项目** —— 切换目录 = 切换知识上下文
-9. **三 MCP 服务** —— opc-state-server 管流程+任务跟进，opc-knowledge-server 管知识库，opc-reflection-server 管反思方法学+用户纠正归档
-10. **知识先于状态** —— 知识库在 state.json 创建前初始化，供所有 phase 参考
-11. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
-12. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
-13. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛（由 Claude 完成）
-14. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
-15. **阶段自包含** —— 节点、模板、阶段定义同目录（`phases/<phase>/`），一目了然
-16. **反思方法学化** —— 反思 = 工程化的标准方法库（5 种学术方法），不让 LLM 自评；evidence artifact + deterministic validator 替代所有 `confidence: number`
-17. **用户纠正必沉淀** —— L1（flow-state）→ L2（项目 corrections）→ L3（全局 lessons）三层归档，反向注入反思 prompt
-18. **反思永不阻塞主流程** —— 反思器自身失败时降级到 validator-only + ask_user，不卡用户
+8. **Marketplace 只分发，不存数据** —— 知识、记忆、产出物都在用户项目里
+9. **知识属于项目** —— 切换目录 = 切换知识上下文
+10. **三 MCP 服务** —— opc-state-server 管流程+任务跟进，opc-knowledge-server 管知识库，opc-reflection-server 管反思方法学+用户纠正归档
+11. **知识先于状态** —— 知识库在 state.json 创建前初始化，供所有 phase 参考
+12. **声明式发现** —— plugin.json capabilities 让编排器动态发现能力
+13. **阶段是强约束** —— input 依赖不满足则阻止，但允许受控回退
+14. **语义匹配优先于关键词** —— node 选择以语义相似度为主，关键词只做初筛（由 Claude 完成）
+15. **失败可恢复** —— 管线状态持久化，失败后尝试修复，支持暂停/恢复、重试/中止
+16. **阶段自包含** —— 节点、模板、阶段定义同目录（`phases/<phase>/`），一目了然
+17. **反思方法学化** —— 反思 = 工程化的标准方法库（5 种学术方法），不让 LLM 自评；evidence artifact + deterministic validator 替代所有 `confidence: number`
+18. **用户纠正必沉淀** —— L1（flow-state）→ L2（项目 corrections）→ L3（全局 lessons）三层归档，反向注入反思 prompt
+19. **反思永不阻塞主流程** —— 反思器自身失败时降级到 validator-only + ask_user，不卡用户
+20. **Host 假设显式化** —— 所有对 Claude Code Host 的运行时假设（session_id 派生 / sub-agent MCP 继承 / allowed_tools enforce）集中到 [06 Host 契约](../06-host-contract/00_overview.md)，散落即违规
+21. **工具数有上限** —— MCP 工具总数 ≤ 30，超量用 discriminator 折叠到一个工具的多个 action / method，详见 [07 工具合并规范](../07-tool-consolidation/00_overview.md)

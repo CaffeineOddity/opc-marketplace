@@ -370,3 +370,5 @@ MCP 协议是请求-响应模型，**天然适合串行调用**——`opc_phase_
 - [../02-opc-state-server/01-intent-analysis/00_overview.md](../02-opc-state-server/01-intent-analysis/00_overview.md) — 意图识别完整方法论
 - [../02-opc-state-server/03-phase/02_node-selection.md](../02-opc-state-server/03-phase/02_node-selection.md) — 节点选择详细算法
 - [../05-opc-reflection-server/00_index.md](../05-opc-reflection-server/00_index.md) — 反思方法学 + 用户纠正归档（state-server 所有判断点的反思链路在此）
+- [../06-host-contract/00_overview.md](../06-host-contract/00_overview.md) — Host 行为契约（session_id 派生 / sub-agent MCP 继承 / allowed_tools enforce / hook 优先级）
+- [../07-tool-consolidation/00_overview.md](../07-tool-consolidation/00_overview.md) — 工具合并规范（discriminator 模式 + 内联反思 + 迁移策略）
