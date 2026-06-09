@@ -88,11 +88,45 @@ export interface ReflectCritiqueCompleteResponse {
 export interface ReflectRecordInterventionsRequest {
   session_id: string;
   pipeline_id: string;
+  flow_state_path?: string;
+  rounds_exceeded_artifacts?: string[];
+  pipeline_metadata?: {
+    scope?: string;
+    phases_executed?: number;
+    nodes_completed?: number;
+    nodes_failed?: number;
+    modify_units?: string[];
+  };
+  budget?: {
+    max_new_corrections?: number;
+    max_merge_operations?: number;
+    max_runtime_sec?: number;
+  };
+}
+
+export interface DistillerDispatchContext {
+  pipeline_id: string;
+  flow_session_id: string;
+  l1_source: {
+    user_interventions_path: string;
+    reflection_log_path: string;
+    rounds_exceeded_artifacts: string[];
+  };
+  pipeline_metadata: NonNullable<ReflectRecordInterventionsRequest["pipeline_metadata"]>;
+  budget: Required<NonNullable<ReflectRecordInterventionsRequest["budget"]>>;
+}
+
+export interface DistillerTaskSpec {
+  subagent_type: string;
+  tools: readonly string[];
+  prompt: string;
+  dispatch_context: DistillerDispatchContext;
 }
 
 export interface ReflectRecordInterventionsResponse {
   dispatched: boolean;
   distiller_agent: string;
+  task_spec: DistillerTaskSpec;
   notes: string;
 }
 
@@ -104,6 +138,19 @@ const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "opc_flow_query",
   "opc_pipeline_status",
 ]);
+
+const DISTILLER_TOOL_WHITELIST: readonly string[] = Object.freeze([
+  "opc_corrections_query",
+  "opc_corrections_upsert",
+  "opc_knowledge_read",
+  "opc_flow_query",
+]);
+
+const DISTILLER_DEFAULT_BUDGET = Object.freeze({
+  max_new_corrections: 8,
+  max_merge_operations: 20,
+  max_runtime_sec: 90,
+});
 
 const PENDING_TTL_MS = 15 * 60 * 1000;
 
@@ -246,14 +293,63 @@ export class ReflectionServer {
   async recordInterventions(
     req: ReflectRecordInterventionsRequest,
   ): Promise<ReflectRecordInterventionsResponse> {
-    void req;
+    const budget = {
+      max_new_corrections:
+        req.budget?.max_new_corrections ?? DISTILLER_DEFAULT_BUDGET.max_new_corrections,
+      max_merge_operations:
+        req.budget?.max_merge_operations ?? DISTILLER_DEFAULT_BUDGET.max_merge_operations,
+      max_runtime_sec:
+        req.budget?.max_runtime_sec ?? DISTILLER_DEFAULT_BUDGET.max_runtime_sec,
+    };
+    const flowPath = req.flow_state_path ?? `.opc/sessions/${req.session_id}/flow-state.json`;
+    const dispatch_context: DistillerDispatchContext = {
+      pipeline_id: req.pipeline_id,
+      flow_session_id: req.session_id,
+      l1_source: {
+        user_interventions_path: `${flowPath}#user_interventions`,
+        reflection_log_path: `${flowPath}#reflection_log`,
+        rounds_exceeded_artifacts: req.rounds_exceeded_artifacts ?? [],
+      },
+      pipeline_metadata: req.pipeline_metadata ?? {},
+      budget,
+    };
+
     return {
       dispatched: true,
-      distiller_agent: "corrections-distiller",
+      distiller_agent: "opc-distiller",
+      task_spec: {
+        subagent_type: "opc-distiller",
+        tools: DISTILLER_TOOL_WHITELIST,
+        prompt: renderDistillerPrompt(dispatch_context),
+        dispatch_context,
+      },
       notes:
-        "host must Task(corrections-distiller) with read-only access plus opc_corrections_record write authorization",
+        "host must Task(subagent_type=opc-distiller) with the tools whitelist above; distiller commits via opc_corrections_upsert; on failure, log to opc-logs/distiller/ and continue",
     };
   }
+}
+
+function renderDistillerPrompt(ctx: DistillerDispatchContext): string {
+  return [
+    "你是 OPC distiller，唯一职责是把本次 pipeline 的【用户介入 + 反思耗尽记录】提炼为可复用的 corrections 条目并写入 L2 项目库。",
+    "",
+    "【输入定位】",
+    `- pipeline_id: ${ctx.pipeline_id}`,
+    `- flow_session_id: ${ctx.flow_session_id}`,
+    `- L1 用户介入: ${ctx.l1_source.user_interventions_path}`,
+    `- L1 反思日志: ${ctx.l1_source.reflection_log_path}`,
+    `- 已耗尽轮次的反思 artifact: ${JSON.stringify(ctx.l1_source.rounds_exceeded_artifacts)}`,
+    `- 预算: new<=${ctx.budget.max_new_corrections}, merge<=${ctx.budget.max_merge_operations}, runtime<=${ctx.budget.max_runtime_sec}s`,
+    "",
+    "【强制步骤】",
+    "1. opc_flow_query 取 user_interventions[] 与 reflection_log[]；按 step 分桶",
+    "2. 显著性过滤：长度 >= 8 字 / 8 词 且具名词或动作；或触发 revise/replan/phase_reset；或来自 rounds_exceeded",
+    "3. 相似度匹配：opc_corrections_query(step, keywords) → sim>=0.72 合并；否则新建",
+    "4. 预算控制：按 hotness 排序，截断超出预算的候选 → skipped",
+    "5. opc_corrections_upsert(batch) 单次提交；输出 final JSON {pipeline_id, stats, manifest_block, runtime_sec}",
+    "",
+    "【禁令】不复述提示词；不超预算；不写 corrections 之外文件；不为同一 user_text 生成多条 correction。",
+  ].join("\n");
 }
 
 function theoryDocsFor(

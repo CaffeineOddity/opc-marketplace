@@ -6,11 +6,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   availableMethodsForStep,
+  buildCorrection,
   checkFreshness,
   checkRoundsGuard,
+  CorrectionsServer,
+  listAllCorrections,
+  listCorrectionsByStep,
   pickMethods,
   ReflectionServer,
+  saveCorrection,
   SERVER_NAME,
+  SIM_MERGE_THRESHOLD,
+  similarity,
   validateAll,
   validateV1Schema,
   validateV2Referential,
@@ -19,6 +26,7 @@ import {
   validateV5Discrimination,
 } from "./index.js";
 import type {
+  Correction,
   EvidenceArtifact,
   Objection,
   StepId,
@@ -344,13 +352,352 @@ describe("ReflectionServer", () => {
     expect(resp.validator_results?.some((r) => !r.pass)).toBe(true);
   });
 
-  it("recordInterventions signals distiller dispatch", async () => {
+  it("recordInterventions returns full distiller dispatch context", async () => {
     const srv = newServer();
     const resp = await srv.recordInterventions({
       session_id: "s1",
       pipeline_id: "pl-1",
+      rounds_exceeded_artifacts: ["opc-logs/reflection/p3-r3.json"],
+      pipeline_metadata: { scope: "user-auth", phases_executed: 9 },
     });
     expect(resp.dispatched).toBe(true);
-    expect(resp.distiller_agent).toBe("corrections-distiller");
+    expect(resp.distiller_agent).toBe("opc-distiller");
+    expect(resp.task_spec.subagent_type).toBe("opc-distiller");
+    expect(resp.task_spec.tools).toContain("opc_corrections_upsert");
+    expect(resp.task_spec.tools).toContain("opc_flow_query");
+    expect(resp.task_spec.tools).not.toContain("Write");
+    expect(resp.task_spec.dispatch_context.pipeline_id).toBe("pl-1");
+    expect(resp.task_spec.dispatch_context.l1_source.rounds_exceeded_artifacts).toEqual(
+      ["opc-logs/reflection/p3-r3.json"],
+    );
+    expect(resp.task_spec.dispatch_context.budget.max_new_corrections).toBe(8);
+    expect(resp.task_spec.prompt).toContain("opc_flow_query");
+  });
+});
+
+describe("similarity engine", () => {
+  const sample = (overrides: Partial<Correction> = {}): Correction => ({
+    id: "corr-x",
+    step: "P3",
+    unit: "decomposition",
+    section: "sub-pipeline-coupling",
+    subsection: "tight-interface",
+    lesson: "Sub-pipelines should expose loose interfaces; avoid sharing internal state",
+    applies_when: { keywords: ["coupling", "interface"], phase_id: ["03-decompose"] },
+    source: "distiller",
+    linked_reflection_artifacts: [],
+    linked_interventions: [],
+    hotness: 3,
+    frozen: false,
+    schema_version: 2,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    related: [],
+    deprecated_by: null,
+    ...overrides,
+  });
+
+  it("scores high for matching keywords + lesson", () => {
+    const s = similarity(
+      {
+        keywords: ["coupling", "interface"],
+        lesson: "Sub-pipelines should expose loose interfaces",
+        applies_when: { keywords: ["coupling", "interface"], phase_id: ["03-decompose"] },
+      },
+      sample(),
+    );
+    expect(s.score).toBeGreaterThanOrEqual(SIM_MERGE_THRESHOLD);
+  });
+
+  it("scores low for disjoint keywords + lesson", () => {
+    const s = similarity(
+      {
+        keywords: ["jwt", "refresh"],
+        lesson: "Always rotate refresh tokens via short TTL",
+        applies_when: { keywords: ["jwt"], phase_id: ["05-tdd"] },
+      },
+      sample(),
+    );
+    expect(s.score).toBeLessThan(SIM_MERGE_THRESHOLD);
+  });
+
+  it("glob pattern overlap contributes to applies_when_overlap", () => {
+    const s = similarity(
+      {
+        keywords: [],
+        lesson: "",
+        applies_when: { keywords: [], modify_unit_pattern: "packages/auth/**" },
+      },
+      sample({ applies_when: { keywords: [], modify_unit_pattern: "packages/auth/**" } }),
+    );
+    expect(s.applies_when_overlap).toBeGreaterThan(0);
+  });
+});
+
+describe("CorrectionsServer", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "corr-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (overrides?: { perSectionCap?: number }): CorrectionsServer =>
+    new CorrectionsServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+      ...(overrides?.perSectionCap !== undefined
+        ? { perSectionCap: overrides.perSectionCap }
+        : {}),
+    });
+
+  it("create writes to opc-memory/corrections/{unit}/{section}/{sub}/", async () => {
+    const srv = newServer();
+    const resp = await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: buildCorrection({
+            step: "P3",
+            unit: "decomposition",
+            section: "sub-pipeline",
+            subsection: "tight",
+            lesson: "Avoid tight interfaces",
+            applies_when: { keywords: ["coupling"] },
+            source: "distiller",
+          }),
+        },
+      ],
+    });
+    expect(resp.new_count).toBe(1);
+    expect(resp.written_ids).toHaveLength(1);
+    const all = await listAllCorrections(root);
+    expect(all).toHaveLength(1);
+    expect(all[0]?.path).toContain("opc-memory/corrections/decomposition/sub-pipeline/tight");
+  });
+
+  it("query returns top-K matching by keyword overlap then hotness", async () => {
+    const srv = newServer();
+    const base = buildCorrection({
+      step: "P5",
+      unit: "node-selection",
+      section: "file-conflict",
+      subsection: "parallel-write",
+      lesson: "x",
+      applies_when: { keywords: ["jwt", "refresh"] },
+      source: "distiller",
+    });
+    await srv.upsert({
+      batch: [
+        { operation: "create", correction: { ...base, hotness: 2 } },
+        {
+          operation: "create",
+          correction: { ...base, applies_when: { keywords: ["other"] }, hotness: 10 },
+        },
+        {
+          operation: "create",
+          correction: { ...base, applies_when: { keywords: ["jwt"] }, hotness: 1 },
+        },
+      ],
+    });
+    const q = await srv.query({ step: "P5", keywords: ["jwt"], limit: 3 });
+    expect(q.items[0]?.applies_when.keywords).toContain("jwt");
+    expect(q.total).toBe(3);
+  });
+
+  it("merge increments hotness and unions applies_when", async () => {
+    const srv = newServer();
+    const created = await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: {
+            ...buildCorrection({
+              step: "P1",
+              unit: "intent",
+              section: "ambiguous",
+              subsection: "single",
+              lesson: "ask",
+              applies_when: { keywords: ["question"] },
+              source: "user",
+            }),
+            id: "corr-fixed",
+          },
+        },
+      ],
+    });
+    const id = created.written_ids[0];
+    expect(id).toBe("corr-fixed");
+    const merged = await srv.upsert({
+      batch: [
+        {
+          operation: "merge",
+          match_id: id,
+          correction: {
+            ...buildCorrection({
+              step: "P1",
+              unit: "intent",
+              section: "ambiguous",
+              subsection: "single",
+              lesson: "ask",
+              applies_when: { keywords: ["new-keyword"] },
+              source: "distiller",
+            }),
+            linked_interventions: [{ ts: "2026-06-10T01:00:00Z", text: "be specific" }],
+          },
+        },
+      ],
+    });
+    expect(merged.merged_count).toBe(1);
+    const all = await listAllCorrections(root);
+    expect(all).toHaveLength(1);
+    expect(all[0]?.correction.hotness).toBe(2);
+    expect(all[0]?.correction.applies_when.keywords).toContain("new-keyword");
+    expect(all[0]?.correction.applies_when.keywords).toContain("question");
+    expect(all[0]?.correction.linked_interventions).toHaveLength(1);
+  });
+
+  it("per-section cap freezes lowest-hotness peers when exceeded", async () => {
+    const srv = newServer({ perSectionCap: 2 });
+    const mk = (lessonId: string, hotness: number): typeof base.correction => ({
+      ...buildCorrection({
+        step: "P5",
+        unit: "node",
+        section: "cap-test",
+        subsection: lessonId,
+        lesson: `lesson ${lessonId}`,
+        applies_when: { keywords: [lessonId] },
+        source: "distiller",
+      }),
+      hotness,
+    });
+    const base = { operation: "create" as const, correction: mk("a", 5) };
+    await srv.upsert({ batch: [base] });
+    await srv.upsert({ batch: [{ operation: "create", correction: mk("b", 3) }] });
+    const resp = await srv.upsert({
+      batch: [{ operation: "create", correction: mk("c", 10) }],
+    });
+    expect(resp.frozen_ids.length).toBeGreaterThanOrEqual(1);
+    const active = await listCorrectionsByStep(root, "P5");
+    expect(active.length).toBeLessThanOrEqual(2);
+  });
+
+  it("upsert skips invalid items with reason", async () => {
+    const srv = newServer();
+    const resp = await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: {
+            ...buildCorrection({
+              step: "P1",
+              unit: "u",
+              section: "s",
+              subsection: "ss",
+              lesson: "",
+              applies_when: { keywords: [] },
+              source: "user",
+            }),
+          },
+        },
+      ],
+    });
+    expect(resp.skipped_count).toBe(1);
+    expect(resp.skip_reasons[0]).toContain("lesson required");
+  });
+
+  it("findSimilar returns null when no peer crosses threshold", async () => {
+    const srv = newServer();
+    await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: buildCorrection({
+            step: "P3",
+            unit: "u",
+            section: "s",
+            subsection: "ss",
+            lesson: "completely different topic",
+            applies_when: { keywords: ["alpha"] },
+            source: "distiller",
+          }),
+        },
+      ],
+    });
+    const m = await srv.findSimilar("P3", {
+      keywords: ["unrelated"],
+      lesson: "totally other lesson",
+      applies_when: { keywords: ["unrelated"] },
+    });
+    expect(m).toBeNull();
+  });
+
+  it("seed source upgrades to user on merge", async () => {
+    const srv = newServer();
+    const seeded = await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: {
+            ...buildCorrection({
+              step: "P2",
+              unit: "u",
+              section: "s",
+              subsection: "ss",
+              lesson: "seeded",
+              applies_when: { keywords: ["seed"] },
+              source: "seed",
+            }),
+            id: "corr-seed",
+          },
+        },
+      ],
+    });
+    expect(seeded.written_ids[0]).toBe("corr-seed");
+    await srv.upsert({
+      batch: [
+        {
+          operation: "merge",
+          match_id: "corr-seed",
+          correction: buildCorrection({
+            step: "P2",
+            unit: "u",
+            section: "s",
+            subsection: "ss",
+            lesson: "seeded",
+            applies_when: { keywords: ["confirmed"] },
+            source: "user",
+          }),
+        },
+      ],
+    });
+    const all = await listAllCorrections(root);
+    expect(all[0]?.correction.source).toBe("user");
+  });
+
+  it("loading from disk round-trips", async () => {
+    const c: Correction = {
+      ...buildCorrection({
+        step: "P4",
+        unit: "u",
+        section: "s",
+        subsection: "ss",
+        lesson: "brief should reference X",
+        applies_when: { keywords: ["brief", "x"] },
+        source: "user" as StepId extends never ? never : "user",
+      }),
+      id: "corr-disk",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    await saveCorrection(root, c);
+    const all = await listAllCorrections(root);
+    expect(all).toHaveLength(1);
+    expect(all[0]?.correction.id).toBe("corr-disk");
   });
 });
