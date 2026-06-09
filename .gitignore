@@ -1,7 +1,13 @@
 .omc
 .env
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
 **/node_modules/
+**/dist/
+coverage/
+.tsbuildinfo
+**/*.tsbuildinfo
 
 
 

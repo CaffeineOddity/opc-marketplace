@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["shared/**/src/**/*.ts", "platform/mcp/**/src/**/*.ts"]
+}
