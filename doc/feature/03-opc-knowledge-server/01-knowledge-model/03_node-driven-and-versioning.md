@@ -57,9 +57,20 @@ input:
 
 Agent 对每个 `output.knowledge` 的目标路径：
 
-1. 调用 `opc_knowledge_get` 检查 `unit/section/subsection` 是否存在
-2. **不存在** → `opc_knowledge_write` 创建新文件
-3. **已存在** → 读取当前内容 → 分析差异 → 合并/补充/覆盖 → `opc_knowledge_write` 更新
+1. 调用 `opc_knowledge_read({mode:"single"})` 检查 `unit/section/subsection` 是否存在，并记下 `current_version`（如存在）
+2. **不存在** → `opc_knowledge_write` 创建新文件（不传 `base_version`，merge_status 为 `clean`）
+3. **已存在** → 读取当前内容 → 分析差异 → 合并/补充/覆盖 → `opc_knowledge_write({base_version: <第 1 步读到的 version>})` 更新
+
+### 关于 base_version 与并发写
+
+Agent 写入时**应当**回传 `base_version`（即第 1 步读到的 version），让 knowledge-server 检测期间是否被并发修改：
+
+- 正常路径（同一 sub-agent 串行执行）：`base_version == current_version` → 直接 `v+1`，`merge_status: "clean"`
+- 边界场景（sub-pipeline 挂起+恢复、跨 session 接管、L3 corrections 注入）：`base_version < current_version` → 走 3-way diff-and-merge
+
+详见 [../02-knowledge-api/02_core-tools.md § 2.10](../02-knowledge-api/02_core-tools.md#210-版本冲突与-3-way-diff-and-merge-契约)。
+
+> **不要把 `base_version` 和 `min_version` 混为一谈**：`min_version` 是 node 声明的**输入前置条件**（不达版本 reject 节点启动）；`base_version` 是 write 时的**乐观锁**（不匹配走 merge）。两者在 .md frontmatter 的 `version` 字段上读出同一个数字，但消费时机和失败处理完全不同。
 
 ---
 

@@ -7,11 +7,13 @@
 
 **输入**："实现完整电商系统：商品管理 + 用户中心 + 购物车 + 下单支付"
 
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。P3 反思（M6 ToT）的工作示例见 [05-opc-reflection-server/04-reflection-flow/01_per-step-sequence.md P3](../../05-opc-reflection-server/04-reflection-flow/01_per-step-sequence.md#p3-任务拆分--m6-tot-主路径)。
+
 ```
-Claude → opc_flow_query → opc_flow_start → opc_intent_complete → opc_knowledge_list
+Claude → opc_flow_query → opc_flow_lifecycle({action:"start"}) → opc_flow_step_complete({step:"intent_analysis", ...}) → opc_knowledge_read({mode:"list"})
 Claude → 7 步分析 → knowledge_unit: [product, user-center, cart, order, payment]
-Claude → opc_task_analysis_complete
-  → opc_task_analysis_complete 路由 task_decomposition
+Claude → opc_flow_step_complete({step:"task_analysis", analysis_result, task_analysis_evidence})
+  → 路由 task_decomposition
 
 Claude 拆分:
   sub-1: product（无依赖）
@@ -20,14 +22,17 @@ Claude 拆分:
   sub-4: order+payment（blocked_by: [sub-3, sub-2]）
   execution_order: sub-1 → sub-2 → sub-3 → sub-4（严格串行）
 
-Claude → opc_decomposition_complete → opc_decomposition_complete 路由 brief_generation
-Claude → opc_brief_complete → opc_pipeline_create
+Claude → opc_flow_step_complete({step:"task_decomposition", sub_pipelines, execution_order, decomposition_evidence})
+  → P3 反思走 M6 ToT 主路径（详见 [01_per-step-sequence.md P3](../../05-opc-reflection-server/04-reflection-flow/01_per-step-sequence.md#p3-任务拆分--m6-tot-主路径)）
+  → opc_reflect_execute({step:"task_decomposition", method:"M6-tot", inline:true, artifact:{...}}) → { verdict:"clean", pending_reflection }
+  → opc_flow_reflect({reflection_id}) → 路由 brief_generation
+Claude → opc_flow_step_complete({step:"brief_generation", brief_content, brief_evidence}) → opc_pipeline_create
 
 按 execution_order 严格串行推进:
   sub-1 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-2
   sub-2 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-3
   sub-3 全 phase completed → opc_phase_complete 返回 next_sub_pipeline=sub-4
-  sub-4 全 phase completed → opc_pipeline_complete
+  sub-4 全 phase completed → opc_pipeline_lifecycle({action:"complete"})
 ```
 
 **关键改进**：

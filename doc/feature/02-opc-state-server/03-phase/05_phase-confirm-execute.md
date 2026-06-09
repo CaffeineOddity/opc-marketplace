@@ -1,6 +1,6 @@
 # 05 opc_phase_confirm 与节点执行
 
-阶段锁定执行计划。`opc_phase_confirm` 由 node-resolver 解析依赖、检查文件域冲突、生成执行分组，并创建快照。
+阶段锁定执行计划。`opc_phase_confirm` 由 node-resolver 解析依赖、检查文件域冲突、生成执行分组，并把当前 knowledge 状态记一个 git commit 锚点（供 `opc_phase_reset` 回退时定位）。
 
 ---
 
@@ -18,7 +18,11 @@
   → node-resolver 解析依赖（即使用户传了 blocked_by 也校验 + 修正）
   → 文件域冲突检查（artifacts + knowledge 路径重叠 → 降级串行）
   → 写入 state.json phases[].nodes[] + blocked_by
-  → 快照当前 phase 节点的 output.knowledge 路径 → .opc/snapshots/
+  → 记 git commit 锚点:
+      · git add opc-knowledge/
+      · git commit -m "opc: phase confirm <pipeline_id>/<sub>/<phase>" --allow-empty
+      · 把 commit hash 写入 state.json.phases[phase].confirm_commit_ref
+      · 该 commit 是 opc_phase_reset 的回退锚点（详见 06_phase-complete-reset.md § 三）
   → 锁定后不可再 opc_phase_adjust
   → 更新 flow-state.json:
       · current_step = "phase_confirmed"

@@ -59,6 +59,7 @@
 
 - `subagent_type` 来自 `agents.primary[0]`
 - sub-agent 在隔离 context 中执行 `node_body`
+- sub-agent **继承父进程注册的所有 MCP server 连接**，可直接调 `opc_knowledge_get_batch` / `opc_knowledge_write` 等工具（已通过 PoC 验证，详见 [06-host-contract/00_overview.md § 2.4 C3](../../06-host-contract/00_overview.md#24-c3sub-agent-的-mcp-连接继承)）
 - 主进程必须把 `dispatch_context` 完整传入 Task 工具的 prompt，确保 sub-agent 在调用 `opc_knowledge_write` 时带 metadata
 - sub-agent 完成后回报 evidence 给主进程，主进程据此调 `opc_node_complete`
 
@@ -77,7 +78,10 @@
   ③ 全部通过 → 写入 output + evidence 摘要，标记 completed
   ④ 严格解锁: 扫描 pending 节点，仅当 blocked_by 全部 completed 才纳入 unblocked_nodes
      （并行场景下：A 先完成不会解锁 blocked_by:[A,B] 的下游 C；必须等 B 也 completed）
-  ⑤ 更新 flow-state.json:
+  ⑤ 若 evidence.knowledge_written[] 非空 → touch .opc/sessions/<id>/.knowledge-flush-required
+     → 同步等 knowledge-server flush（最多 5s）或超时降级（warning: knowledge_index_stale）
+     → 详见 [03-opc-knowledge-server/02-knowledge-api/02_core-tools.md § 2.9](../../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md#29-reindex-调度契约异步--节点级-flush)
+  ⑥ 更新 flow-state.json:
       · current_pipeline_pointer.node = unblocked_nodes[0]（若非空，便于 resume 接续）
       · 若 phase 内全部 completed → pointer.node 置 null（等待 opc_phase_complete）
       · last_heartbeat_at 刷新

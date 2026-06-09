@@ -140,16 +140,135 @@ Round 3:  (verdict=clean 也要登记)
 
 | 不变量 | 强度 | 违反处理 |
 |---|---|---|
-| `pending_reflections[]` 任何时刻最多 1 个元素 | **hard** | 第二次 `opc_reflect_*_complete` 调用前若 `pending_reflections` 非空 → reflection-server 自身 reject（`error: previous_pending_unregistered`），要求 Claude 先调 `opc_flow_reflect` 登记上一轮 |
+| `pending_reflections[]` 任何时刻最多 1 个元素 | **hard** | 第二次 `opc_reflect_*_complete` 调用前若 `pending_reflections` 非空 → reflection-server 自身 reject（`error: previous_pending_unregistered`），要求 Claude 先调 `opc_flow_reflect` 登记上一轮。⚠️ **过期场景的细化**见 [六·补 与现有 hard invariants 的关系修订](#与现有-hard-invariants-的关系修订) |
 | `verdict=clean` 也发 `pending_reflection` | **hard** | 反思日志必须落盘——`verdict=clean` 时 `opc_flow_reflect` 登记后 `flow_next` 指向上层 step（跳出反思），而不是再发 `opc_reflect_plan` |
 | 跨 phase 切换前必须清空 | **hard** | `opc_phase_complete` 出口校验 `pending_reflections.length == 0`，否则 reject 并要求先 `opc_flow_reflect` |
 | 跨 sub-pipeline 切换前必须清空 | **hard** | 同上（`opc_phase_complete` 的同一校验覆盖：完成最后一个 phase 时同时检查） |
 | 同一 `reflection_id` 不可重复登记 | **hard** | 第二次 `opc_flow_reflect({same reflection_id})` → reject `error: reflection_already_registered` |
-| `reflection_id` 过期（默认 30min） | **soft** | 下一次 `opc_flow_query` 自动清理过期项 + 标 incomplete；不阻塞后续流程（避免死锁） |
+| `reflection_id` 过期（默认 30min，artifact 保留 7 天） | **soft → ask_user** | 不再"自动清理 + 静默标 incomplete"。下一次 `opc_flow_query` 检测到过期 pending → 走 ask_user 路径（详见 六·补 过期处理契约）。artifact 文件保留 7 天，期间用户可选"丢弃"或"补登记" |
 
 ---
 
-## 七、三层防御机制
+## 六·补 反思过期处理契约（不再静默吞反思）
+
+### 背景
+
+旧版规则是「过期自动清理 + 标 incomplete + 不阻塞」。问题：**30 分钟没登记不一定是死锁**，可能是 Claude 被用户切走、token 耗光、上下文压缩丢失中间状态。"自动清理 + 不阻塞" = 反思 artifact 被静默吞掉，用户毫无感知。
+
+### 新规则：过期 → ask_user
+
+| 阶段 | 旧行为 | 新行为 |
+|---|---|---|
+| `expires_at` 到达 | `opc_flow_query` 自动从 `pending_reflections[]` 移除 + 标 incomplete | **保留 pending_reflections[] 项不变**，仅标 `status: expired_pending_decision` |
+| artifact 文件 | 立即孤儿化 | **保留 7 天**（`opc-logs/reflection/<session>/<reflection_id>.json` 不删） |
+| 下一次 `opc_flow_query` | 不感知 | 检测到过期 pending → 返回 `flow_next: ask_user`（专用 question_id `uq-expired-<reflection_id>`） |
+| 用户答复入口 | — | 复用 `opc_flow_user_reply`，`resolution.disposition` ∈ `discard` / `resume` |
+| 7 天后 artifact 仍未处理 | — | **物理删除** artifact + 从 pending_reflections[] 移除 + 写 `flow-state.history` 一条 `event: reflection_artifact_purged` |
+
+### 过期 ask_user 的 question payload
+
+```typescript
+opc_flow_query() 检测到过期 pending → 返回:
+{
+  active: true,
+  flow_next: {
+    action: "ask_user",
+    question_id: "uq-expired-rfl-P5-r2-01HXY8",
+    display_to_user: {
+      summary: "反思 rfl-P5-r2-01HXY8 在 30 分钟内未登记（可能因为上下文切换/token 耗尽）。artifact 还在磁盘上，请决定如何处理。",
+      step_id: "node_selection",
+      reflection_id: "rfl-P5-r2-01HXY8",
+      artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+      asked_at: "<原 expires_at>",
+      artifact_purge_at: "<asked_at + 7d>",
+      options: [
+        { value: "resume",  label: "补登记并继续按反思结论推进" },
+        { value: "discard", label: "丢弃这次反思（保留 artifact 7 天用于审计），重新跑反思方法" },
+        { value: "skip",    label: "丢弃 + 跳过本步反思一次，直接 phase_confirm" }
+      ]
+    },
+    required_next_tool: "opc_flow_user_reply"
+  }
+}
+```
+
+### `opc_flow_user_reply` 处理过期 question 的扩展
+
+```typescript
+opc_flow_user_reply({
+  question_id: "uq-expired-rfl-P5-r2-01HXY8",
+  user_reply: "<原话>",
+  resolution: {
+    disposition: "resume" | "discard" | "skip",
+    notes?: string
+  }
+})
+
+内部分支:
+  disposition === "resume":
+    → 等价调用 opc_flow_reflect({reflection_id}) 走正常登记 + 路由 flow_next
+    → user_interventions[] 追加 {trigger: "expired_reflection_resumed", ...}
+
+  disposition === "discard":
+    → 从 pending_reflections[] 移除该项
+    → artifact 文件保留 7 天，标记 status: discarded_by_user
+    → 路由 flow_next 回到触发反思的上一个 step（如 P5 → 重新走 opc_reflect_plan）
+    → user_interventions[] 追加 {trigger: "expired_reflection_discarded", ...}
+
+  disposition === "skip":
+    → 从 pending_reflections[] 移除该项
+    → 标记 reflection_log[] 追加一条 {reflection_id, verdict: "skipped_by_user_after_expiry"}
+    → 路由 flow_next 直接到反思后的 step（如 P5 → opc_phase_confirm，含 _skip_reflection_once 旁路）
+    → user_interventions[] 追加 {trigger: "expired_reflection_skipped", ...}
+```
+
+### Hard invariants（六·补 补充）
+
+| 不变量 | 强度 | 违反处理 |
+|---|---|---|
+| 过期 pending 不被自动从 `pending_reflections[]` 移除 | **hard** | 只能由 `opc_flow_user_reply` 显式消费 |
+| 过期 pending 与新创建 pending 共存时，**优先消费过期项** | **hard** | reflection-server `opc_reflect_*_complete` 校验"前序 pending 是否过期"——若过期 → reject `error: previous_expired_pending`，要求先走 ask_user |
+| artifact 物理保留 ≥ 7 天 | **hard** | `opc-logs` 清理脚本必须按 `discarded_at + 7d` / `expired_at + 7d` 才能删 |
+| 7 天 hard purge 必写 history | **hard** | `flow-state.history` 追加 `event: reflection_artifact_purged`，便于审计 |
+
+### 与现有 hard invariants 的关系修订
+
+> 修订原"`pending_reflections[]` 任何时刻最多 1 个元素"不变量为：
+> - **正常态**：最多 1 个 `status: pending` 元素
+> - **过期未决态**：允许出现 1 个 `status: expired_pending_decision` 元素（等待 ask_user 消费）
+> - **绝对禁止**：同时存在 2 个 `status: pending`，或 1 个 pending + 1 个 expired_pending_decision
+>
+> 实施上，`opc_reflect_*_complete` 在写新 pending 前必须先校验"是否存在任何状态的旧 pending"——若有，要求 Claude 先调 `opc_flow_user_reply` 或 `opc_flow_reflect` 把旧的清掉。
+
+### 告警维度（opc_reflect_query_stats 新增字段）
+
+`opc_reflect_query_stats` 返回中新增三个计数器，作为反思链路健康度的关键告警指标：
+
+```typescript
+type ReflectionStatsResponse = {
+  // ... 既有字段 ...
+
+  expiry_metrics: {
+    expired_pending_count_24h: number       // 过去 24h 触发 ask_user 的过期反思数
+    expired_resumed_count_24h: number       // 其中用户选 resume 的数
+    expired_discarded_count_24h: number     // 其中用户选 discard 的数
+    expired_skipped_count_24h: number       // 其中用户选 skip 的数
+    artifact_purged_7d_count: number        // 过去 30d 因 7 天到期被物理删除的 artifact 数（**应永远为 0**，非 0 即说明用户长期没回 ask_user）
+  }
+}
+```
+
+**告警阈值建议**（写进 platform/opc-orchestrator 默认配置）：
+
+| 指标 | 阈值 | 含义 |
+|---|---|---|
+| `expired_pending_count_24h` > 3 | warning | 反思频繁过期，可能 token budget 不够或 hook 失效 |
+| `expired_discarded_count_24h / expired_pending_count_24h` > 0.5 | warning | 反思方法 FP 率可能太高，用户倾向于丢弃 |
+| `artifact_purged_7d_count` > 0 | **error** | 用户有 7 天没回 ask_user，OPC 整体使用率异常 |
+
+---
+
+
 
 ### 防御 1：理论文档（语义层）
 
@@ -234,8 +353,9 @@ type NextStepHint = {
        5. 返回 flow_next
 
 [过期] expires_at 到达后:
-       → 下一次 opc_flow_query 自动清理过期项 + 标记反思日志 incomplete
-       → 不阻塞后续流程（避免死锁）
+       → 下一次 opc_flow_query 检测到过期 pending → 走 ask_user 路径
+         （详见 六·补 过期处理契约，**不再自动清理 + 静默标 incomplete**）
+       → artifact 文件保留 7 天，期间可通过 opc_flow_reflect_resume 补登记或丢弃
 ```
 
 #### 受 reflection-registry-guard 保护的工具清单（唯一真相源）
@@ -253,8 +373,8 @@ type NextStepHint = {
 | 5 | `opc_pipeline_create` | P4 反思未登记时 | P4 pending 未登记 | 同上 |
 | 6 | `opc_phase_confirm` | P5 反思未登记 | P5 pending 未登记 | 同上 |
 | 7 | `opc_node_start` | P5 反思未登记 | P5 pending 未登记 | 同上 |
-| 8 | `opc_phase_complete` | P6 / P7 反思未登记 | P6 / P7 pending 未登记；**同时也是跨 phase/sub 切换的清空校验点** | 同上 |
-| 9 | `opc_pipeline_complete` | P7 / P8 反思未登记 | 任意 phase 残留 pending | 同上 |
+| 8 | `opc_phase_complete` | P5（残留）反思未登记 | P5 pending 未登记；**同时也是跨 phase/sub 切换的清空校验点**。P6 / P7 走 Validator-only 不产生 pending（[02-server-design 三·补](../02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)） | 同上 |
+| 9 | `opc_pipeline_complete` | P5 / P8 反思未登记 | 任意 phase 残留 pending（P6/P7 不入此列） | 同上 |
 
 **不受保护清单（故意豁免）**：
 

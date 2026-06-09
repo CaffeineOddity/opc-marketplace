@@ -4,11 +4,6 @@
 .opc/pipelines/<id>/
 ├── pipeline-plan.json               # 管线编排计划
 ├── manifest.md                      # 产物清单（管线结束时汇总）
-├── snapshots/                       # 知识快照（每 phase 确认时自动生成）
-│   └── sub-1/
-│       └── 04-implement-design/
-│           ├── user-auth/login/api.md
-│           └── user-auth/session/api.md
 └── sub-pipelines/
     └── sub-1/                       # 单管线仅一条；拆分管线有 sub-1, sub-2...
         ├── state.json               # 子管线状态机
@@ -19,6 +14,8 @@
             └── 06-testing.md
 ```
 
+> **knowledge 历史不在 .opc/ 下**：phase 回退所需的 knowledge 历史快照走 git（`opc_phase_confirm` 时 commit + 记 `confirm_commit_ref`），不再有 `.opc/snapshots/` 目录。详见 [../03-phase/06_phase-complete-reset.md § 三](../03-phase/06_phase-complete-reset.md#三opc_phase_reset--阶段重置)。
+
 ## 路径约定
 
 | 路径 | 写者 | 读者 |
@@ -27,7 +24,6 @@
 | `sub-pipelines/<id>/state.json` | `opc_phase_*` / `opc_node_*` | 所有阶段/节点工具 |
 | `sub-pipelines/<id>/brief.md` | `opc_pipeline_create`（Claude 提供内容） | Agent 执行时 |
 | `sub-pipelines/<id>/phases/*.md` | `opc_phase_complete` | 后续 phase / Agent |
-| `snapshots/<sub>/<phase>/...` | `opc_phase_confirm` | `opc_phase_reset` 回退使用 |
 | `manifest.md` | `opc_pipeline_complete` | 用户最终查看 |
 
 ---
@@ -36,4 +32,5 @@
 
 - [03_pipeline-plan.md](03_pipeline-plan.md) — `pipeline-plan.json` schema
 - [04_state-json.md](04_state-json.md) — `state.json` schema
-- [../../03-opc-knowledge-server/01-knowledge-model/00_overview.md](../../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — 知识快照机制
+- [../../03-opc-knowledge-server/01-knowledge-model/00_overview.md](../../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — 知识模型
+- [../03-phase/06_phase-complete-reset.md](../03-phase/06_phase-complete-reset.md) — phase reset 的 git 锚点机制

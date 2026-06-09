@@ -78,11 +78,14 @@ task / complexity=low → opc_task_analysis_complete 路由 → action: opc_quic
     → 同时返回 orphan_pipelines（管线层孤儿）
 
 取消:     opc_flow_abort → 自动级联 opc_pipeline_abort（含 kill in_progress sub-agent）
-回退:     opc_phase_reset → 快照恢复 → 下游 pending → 立即重生快照
+回退:     opc_phase_reset → git checkout confirm_commit_ref → v+1 写回 → 下游 pending → 下次 confirm 重写 commit 锚点
 重跑:     opc_node_retry → 级联重置下游 → 重跑当前 node
 修订:     opc_flow_revise → 修改 accumulated 字段 → 按需自动回溯
 重做:     opc_flow_restart(from_step) → 回退到指定步骤 → 保留前置数据
 管线改造: opc_pipeline_replan → 细粒度增删节点/阶段/子管线 → 不影响 in_progress
+插队:     opc_pipeline_replan + add_sub_pipeline(execution_priority: immediate)
+          → node 边界挂起当前 sub (status=paused, paused_at)
+          → 插队 sub 跑完 → state-manager 自动 opc_pipeline_resume → 续跑被挂起 sub
 ```
 
 ---
@@ -90,5 +93,5 @@ task / complexity=low → opc_task_analysis_complete 路由 → action: opc_quic
 ## 相关文档
 
 - [06_lifecycle.md](06_lifecycle.md) — 生命周期阶段
-- [09_tools.md](09_tools.md) — 6 个管线级工具规范
+- [09_tools.md](09_tools.md) — 7 个管线级工具规范
 - [../01-intent-analysis/11_complete-example.md](../01-intent-analysis/11_complete-example.md) — 意图分析阶段的精确命令清单

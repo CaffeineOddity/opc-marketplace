@@ -7,13 +7,15 @@
 
 **输入**："给用户认证系统加个短信验证码登录"
 
-```
-Claude → opc_flow_query → opc_flow_query 返回 active: false
-Claude → opc_flow_start → opc_flow_start 返回 intent_analysis 指令
-Claude → opc_intent_complete({intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:加", "deliverable:短信验证码登录"], chat_signals: [], user_quotes: ["给用户认证系统加个短信验证码登录"]}, reasoning: "动作动词+具体子功能交付物"})
-  → opc_intent_complete 经 P1 V1-V5 全 pass → 路由: task_analysis 指令
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。反思工具面展开示例（plan/execute/complete 三步铁律）见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)。
 
-Claude → opc_knowledge_list → user-auth/login(v2), user-auth/session(v3)
+```
+Claude → opc_flow_query → 返回 active: false
+Claude → opc_flow_lifecycle({action:"start"}) → 返回 intent_analysis 指令
+Claude → opc_flow_step_complete({step:"intent_analysis", intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:加", "deliverable:短信验证码登录"], chat_signals: [], user_quotes: ["给用户认证系统加个短信验证码登录"]}, reasoning: "动作动词+具体子功能交付物"})
+  → 经 P1 V1-V5 全 pass → 路由: task_analysis 指令
+
+Claude → opc_knowledge_read({mode:"list"}) → user-auth/login(v2), user-auth/session(v3)
 
 Claude 分析:
   → complexity: medium
@@ -23,11 +25,11 @@ Claude 分析:
   → scenario: add-feature
   → task_analysis_evidence: {requirements:[{text:"短信验证码登录", source_quote:"..."}], dependencies:["sms-gateway"], complexity_signals:{needs_design:true, one_round_solvable:true, verdict:"medium"}, phase_selection_rationale: "..."}
 
-Claude → opc_task_analysis_complete({analysis_result, task_analysis_evidence})
-  → opc_task_analysis_complete 经 P2 V1-V5 全 pass + modify_unit_count=1 → 路由 brief_generation
+Claude → opc_flow_step_complete({step:"task_analysis", analysis_result, task_analysis_evidence})
+  → 经 P2 V1-V5 全 pass + modify_unit_count=1 → 路由 brief_generation
 
-Claude → 生成 brief → opc_brief_complete({brief_content})
-  → opc_brief_complete 返回 next: opc_pipeline_create 预填全部参数
+Claude → 生成 brief → opc_flow_step_complete({step:"brief_generation", brief_content})
+  → 返回 next: opc_pipeline_create 预填全部参数
 
 Claude → opc_pipeline_create({sub_pipelines: [{id: sub-1, knowledge_unit: [user-auth], ...}]})
   → 返回 flow_next: opc_knowledge_open
@@ -43,10 +45,10 @@ Claude → opc_phase_start("04-implement-design")
 
 opc_node_start("api-design") → 返回 node_body + dispatch_instruction + dispatch_context
   → Claude Task spawn backend-engineer sub-agent
-  → sub-agent: opc_knowledge_get_batch + opc_knowledge_write
-  → opc_node_complete → { unblocked_nodes: ["database-schema"] }
+  → sub-agent: opc_knowledge_read({mode:"batch"}) + opc_knowledge_write
+  → opc_node_finish({status:"success", evidence}) → { unblocked_nodes: ["database-schema"] }
 
-opc_node_start("database-schema") → ... → opc_node_complete → { unblocked_nodes: [] }
+opc_node_start("database-schema") → ... → opc_node_finish({status:"success"}) → { unblocked_nodes: [] }
 
 opc_phase_complete → {
   next_phase: "05-implement",
@@ -59,21 +61,25 @@ opc_phase_complete → {
 opc_phase_start("05-implement")
   → 候选: [tdd-implementation, backend-endpoint, security-review] + reflection_budget_hint{max_rounds: 3}
   → Claude 收集第 1 轮 selection_evidence: V5 discrimination fail（backend-endpoint 与 auth 相关节点文件域冲突）
-  → 调 opc_flow_reflect(step_id: "node_selection", round: 1, evidence_diff: {removed:[], added:[], modified:[]}, validator_result: {V5: "fail"})
-  → opc_flow_reflect 持久化第 1 轮反思日志到 state.json.phases[].reflection_log → 按 M4 Critique 返回继续反思指令
-  → Claude 调整方案（移除 backend-endpoint）→ opc_flow_reflect(round=2, evidence_diff: {removed:["backend-endpoint"]}, validator_result: {V1-V5: "ok"}, objections_kept_by_meta: 0)
-  → opc_flow_reflect 判定: validator 全 ok + 无 objection → 跳出，路由 phase_confirm
+  → 走反思工具面（详细 5 步 / 3 步 inline 见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)）：
+    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:true, artifact:{selection_evidence}})
+    · → 返回 { verdict:"objections_remain", kept_objections:[{text:"backend-endpoint 与 auth 节点冲突"}], pending_reflection:{reflection_id} }
+    · opc_flow_reflect({reflection_id}) → 持久化到 state.json.phases[].reflection_log + flow-state 指针
+  → Claude 调整方案（移除 backend-endpoint）→ 第 2 轮反思
+    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:true, artifact:{修正后 evidence}})
+    · → 返回 { verdict:"clean", pending_reflection:{reflection_id} }
+    · opc_flow_reflect({reflection_id}) → 跳出，路由 phase_confirm
   → opc_phase_confirm
 
 opc_node_start ... → ... → opc_phase_complete
 
 [06-testing 类似]
 
-opc_pipeline_complete → manifest.md
+opc_pipeline_lifecycle({action:"complete"}) → manifest.md
 ```
 
 **关键改进**：
-- 节点选择反思走 opc_flow_reflect 持久化到 state.json（不是 flow-state.json），随 phase_reset 自然回退
+- 节点选择反思走 `opc_reflect_execute(inline:true) → opc_flow_reflect` 两步铁律，登记后持久化到 state.json（不是 flow-state.json），随 phase_reset 自然回退
 - unblocked_nodes 严格语义已在 state-manager 实现——只在 blocked_by 全部 completed 时返回
 - node_start 返回 dispatch_context，sub-agent 在隔离 context 中也能正确调 opc_knowledge_write 时携带 metadata
 

@@ -42,7 +42,7 @@
 
 - 校验全部子管线状态
 - 生成 `manifest.md`（汇总所有子管线的产物清单）
-- 释放 owner、清理快照
+- 释放 owner（knowledge 历史保留在 git，不做物理清理）
 
 ---
 
@@ -53,7 +53,7 @@
 - `pipeline-plan.json`: status → `aborted`
 - 所有 `in_progress` 子管线 / phase / node → `aborted`
 - 下游 `pending` 保持 `pending`（不再推进）
-- 清理快照
+- 释放 owner（knowledge 历史保留在 git）
 
 工具规范详见 [09_tools.md opc_pipeline_abort](09_tools.md#opc_pipeline_abort)。
 
@@ -92,6 +92,6 @@ Session 启动后用户首次发消息:
 
 ## 相关文档
 
-- [09_tools.md](09_tools.md) — 6 个管线级工具的完整规范
+- [09_tools.md](09_tools.md) — 7 个管线级工具的完整规范
 - [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 13 个流程层工具
 - [../03-phase/00_overview.md](../03-phase/00_overview.md) — 阶段执行循环

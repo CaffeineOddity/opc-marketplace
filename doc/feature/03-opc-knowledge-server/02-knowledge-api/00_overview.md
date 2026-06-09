@@ -93,13 +93,16 @@ flowchart TD
     UseBatch --> Decide
     Mixed --> Decide
 
-    Decide -->|是| Update[opc_knowledge_write<br/>version+1]
+    Decide -->|是| Update[opc_knowledge_write<br/>base_version+content<br/>v+1]
     Decide -->|否| End1([读取完成])
 
     WriteNew --> End2([写入完成])
-    Update --> End2
+    Update --> WriteRes{merge_status?}
+    WriteRes -->|clean / fast_forward / auto_merged| End2
+    WriteRes -->|conflict| Conflict[node 不允许 complete<br/>state-server 通过 suggested_actions<br/>暴露 accept_theirs / keep_ours / spawn_merge_node]
+    Conflict --> Pick
 
-    End2 --> Idx[异步刷新 .opc-knowledge.idx]
+    End2 --> Idx[入队 reindex job<br/>2s debounce 异步]
     Idx --> EndAll([流程结束])
 ```
 
@@ -112,11 +115,12 @@ flowchart TD
 | 1 | `opc_knowledge_open` | 打开知识点：已有则返回结构树+version，没有则创建 |
 | 2 | `opc_knowledge_get` | 读单条知识（支持指定 version） |
 | 3 | `opc_knowledge_get_batch` | 批量读取多条知识 |
-| 4 | `opc_knowledge_write` | 写入 .md，自动判断创建/更新，version 写入 frontmatter |
-| 5 | `opc_knowledge_delete` | 删除 subsection，自动清理空目录 |
+| 4 | `opc_knowledge_write` | 写入 .md，自动判断创建/更新，version 写入 frontmatter；写时可传 `base_version` 触发 3-way diff-and-merge |
+| 5 | `opc_knowledge_delete` | 删除 subsection，自动清理空目录；传 `base_version` 不一致则 reject（不走 merge） |
 | 6 | `opc_knowledge_list` | readdir 扫描目录结构 |
 | 7 | `opc_knowledge_search` | 全文搜索，走 .opc-knowledge.idx |
 | 8 | `opc_knowledge_reindex` | 全量重建搜索索引 |
+| ＋ | `opc_knowledge_read({mode:"diff"})` | 在 tool-consolidation 模型下 read 的 diff 子模式：预演 3-way 合并、查 hunks |
 
 完整参数 / 行为 / 返回详见 [02_core-tools.md](02_core-tools.md)。
 
@@ -129,7 +133,7 @@ flowchart TD
 | 流程启动 | 被 prerequisites 驱动调用 knowledge_list | flow tools 路由判定 |
 | 管线创建 | knowledge_open 接收 flow_next 指令 | pipeline_create 返回 flow_next:knowledge_open |
 | node 执行 | get_batch 加载 input，write 产出 output | node_start 返回 node_body + dispatch；node_complete 校验 knowledge 文件存在性（L1） |
-| 阶段回退 | 无感知（文件被快照覆盖） | phase_reset 从快照恢复 knowledge 文件 |
+| 阶段回退 | 接收 phase_reset 触发的 base_version 写入（v+1，走标准 diff-and-merge） | phase_reset 走 git checkout 锚点 + opc_knowledge_write 链路 |
 | 搜索 | search / list / reindex | 无感知 |
 
 完整启动时序详见 [03_initialization-flow.md](03_initialization-flow.md)。
@@ -151,6 +155,7 @@ flowchart TD
 - **索引可重建**：`.opc-knowledge.idx` 损坏时自动降级遍历 + 显式 reindex
 - **批量优先**：`get_batch` 一次性加载，减少 sub-agent 的 round-trip
 - **跨 unit 通过 _refs**：在 `.opc-knowledge.json` 显式声明依赖，open 时自动联动
+- **reindex 不进 sub-agent 上下文**：`opc_knowledge_write` 入队即返回（debounce 2s），reindex 在 knowledge-server 主进程跑；node 边界 hard flush 保证下一个 sub-agent 不漏读。完整契约见 [02_core-tools.md § 2.9 reindex 调度契约](02_core-tools.md#29-reindex-调度契约异步--节点级-flush)
 
 ---
 

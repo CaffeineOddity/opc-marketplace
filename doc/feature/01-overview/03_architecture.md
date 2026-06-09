@@ -359,7 +359,7 @@ Host → opc_phase_start(sub-B) → ...
 
 ### MCP 协议支持
 
-MCP 协议是请求-响应模型，**天然适合串行调用**——`opc_phase_complete` 返回 `next_sub_pipeline` 后，Claude 在下一轮调 `opc_phase_start` 即可。无需 Host 并发能力假设，无需并发写保护，状态空间线性可预测。完整规约详见 [02-opc-state-server/02-pipeline/07_dependency-parallel.md](../02-opc-state-server/02-pipeline/07_dependency-parallel.md)。
+MCP 协议是请求-响应模型，**天然适合串行调用**——`opc_phase_complete` 返回 `next_sub_pipeline` 后，Claude 在下一轮调 `opc_phase_start` 即可。无需 Host 并发能力假设，无需并发写保护，状态空间线性可预测。完整规约详见 [02-opc-state-server/02-pipeline/07_dependency-serial.md](../02-opc-state-server/02-pipeline/07_dependency-serial.md)。
 
 ---
 

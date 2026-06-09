@@ -21,9 +21,9 @@
 |---|------|------|
 | 10 | `opc_phase_start` | 扫描 node，返回候选列表 |
 | 11 | `opc_phase_adjust` | 调整节点列表，重新生成预览 |
-| 12 | `opc_phase_confirm` | 锁定节点计划，写入 state，创建快照 |
+| 12 | `opc_phase_confirm` | 锁定节点计划，写入 state，记 git commit 锚点（`confirm_commit_ref`） |
 | 13 | `opc_phase_complete` | 标记完成，返回推进指令 |
-| 14 | `opc_phase_reset` | 从快照恢复 knowledge，下游级联 pending |
+| 14 | `opc_phase_reset` | `git checkout` confirm 锚点 → 以 v+1 写回 knowledge，下游级联 pending |
 
 各工具完整规范散落在：
 - `opc_phase_start` → [04_phase-start.md](04_phase-start.md)

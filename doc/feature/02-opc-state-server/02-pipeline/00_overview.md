@@ -43,7 +43,7 @@ sequenceDiagram
     Note over U,K: ③ 完成 / 异常
     alt 全部 sub 成功
         U->>PC: opc_pipeline_complete()
-        PC->>PP: status=completed<br/>归档快照
+        PC->>PP: status=completed<br/>生成 manifest.md
         PC-->>U: 流程结束
     else 失败/中止
         U->>PC: opc_pipeline_abort(reason)
@@ -110,14 +110,15 @@ flowchart TD
 | 子文档 | 内容 |
 |------|------|
 | [05_single-vs-split.md](05_single-vs-split.md) | 单管线 vs 拆分管线触发条件、`knowledge_unit` 分配 |
-| [07_dependency-parallel.md](07_dependency-parallel.md) | `blocked_by` 语义、`execution_order` 排序、失败传播、多 Feature 独立管线 |
+| [07_dependency-serial.md](07_dependency-serial.md) | `blocked_by` 语义、`execution_order` 排序、失败传播、多 Feature 独立管线 |
 
 ### 生命周期与工具
 
 | 子文档 | 内容 | 涉及工具 |
 |------|------|------|
 | [06_lifecycle.md](06_lifecycle.md) | 创建、执行、完成、取消、恢复 5 个生命周期阶段 | `opc_pipeline_create` / `opc_pipeline_recover` 等 |
-| [09_tools.md](09_tools.md) | 6 个 `opc_pipeline_*` 工具完整规范 | 全部 6 个管线级工具 |
+| [09_tools.md](09_tools.md) | 7 个 `opc_pipeline_*` 工具完整规范 | 全部 7 个管线级工具 |
+| [11_insert-resume.md](11_insert-resume.md) | sub-pipeline 插队、挂起、自动恢复完整契约 | `opc_pipeline_replan(add_sub_pipeline + immediate)` / `opc_pipeline_resume` |
 
 ### 状态展示与示例
 
@@ -133,6 +134,7 @@ flowchart TD
 - **创建管线**：[`opc_pipeline_create`](09_tools.md#opc_pipeline_create) — 由 `opc_brief_complete` 路由预填参数触发
 - **查看状态**：[`opc_pipeline_status`](09_tools.md#opc_pipeline_status) — 不带 sub_id 返回聚合视图 + `next_sub_pipeline`
 - **细粒度修改**：[`opc_pipeline_replan`](09_tools.md#opc_pipeline_replan细粒度) — 增删节点/阶段/子管线，不影响 in_progress
+- **插队子管线**：[`opc_pipeline_replan + add_sub_pipeline(execution_priority: immediate)`](11_insert-resume.md) — node 边界挂起当前 sub，插队 sub 完成后自动 resume
 
 ---
 
@@ -142,7 +144,7 @@ flowchart TD
 - **状态机驱动**：所有状态迁移仅通过 MCP 工具完成，禁止手工编辑 JSON
 - **owner 进程隔离**：基于 pid 存活检测识别孤儿管线，支持跨 session 恢复
 - **依赖无环**：`blocked_by` 引用的 sub_id 必须存在且无环，`opc_pipeline_create` 时强制校验
-- **严格串行执行**：子管线按 `execution_order` 依次执行，`blocked_by` 阻塞未就绪的 sub。`opc_phase_complete` 返回 `next_sub_pipeline`，Claude 直接调下一条 `opc_phase_start`（详见 [07_dependency-parallel.md](07_dependency-parallel.md)）
+- **严格串行执行**：子管线按 `execution_order` 依次执行，`blocked_by` 阻塞未就绪的 sub。`opc_phase_complete` 返回 `next_sub_pipeline`，Claude 直接调下一条 `opc_phase_start`（详见 [07_dependency-serial.md](07_dependency-serial.md)）
 
 ---
 
@@ -151,4 +153,4 @@ flowchart TD
 - [意图分析](../01-intent-analysis/00_overview.md) — 管线入口与任务分析
 - [阶段](../03-phase/00_overview.md) — 阶段执行与节点选择
 - [节点](../04-node/00_overview.md) — 节点执行与质量门
-- [03-1 知识模型](../../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — 知识快照机制
+- [03-1 知识模型](../../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — 知识模型 + version 单调递增契约

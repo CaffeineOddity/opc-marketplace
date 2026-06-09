@@ -160,6 +160,38 @@ type EvidenceArtifact = {
 
 ---
 
+## 三·补 P6 / P7 不走 reflection 工具面（边界澄清）
+
+P6（节点执行）/ P7（阶段完成）在主矩阵（[07_three-server-seam-matrix 二](../04-reflection-flow/07_three-server-seam-matrix.md#二主矩阵p1p8)）里 primary 写的是 **Validator-only**（V1–V5 + L1/L2 quality_gates）。这意味着：
+
+| 维度 | P1–P5 / P8（反思路径） | **P6 / P7（Validator-only 路径）** |
+|---|---|---|
+| 工具入口 | `opc_reflect_plan` → `opc_reflect_execute` → `opc_reflect_complete` | **不调任何 `opc_reflect_*` 工具** |
+| 由谁跑校验 | reflection-server 的 sub-agent + meta-validator | **state-manager 内部纯 TS 跑 V1–V5 + L1/L2** |
+| 是否注册 `reflection_id` | ✅ 是（`opc_flow_reflect` 登记）| ❌ 否（无 pending_reflection 产物） |
+| 是否受 reflection-registry-guard 保护 | ✅ 是 | ❌ 否（无 pending 元素需要 guard）|
+| Artifact 落盘路径 | `opc-logs/reflection/<session_id>/<reflection_id>.json` | **`opc-logs/validator/<session_id>/<step>-<n>.json`** |
+| 失败处理 | `verdict=objections_remain` → 二次反思 / ask_user | 直接 reject 当前调用（`opc_node_finish({status:"failed"})` / `opc_phase_complete` 拒绝），由 Claude 调 retry / reset |
+| 何时升级到 reflection 工具面 | — | Claude 主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion", method:"M4-critique"\|"M3-cove"})` 显式升级（典型场景：L2 通过但 evidence diff 异常 / quality_gate 多次自动跑失败） |
+
+**为什么这么设计**：V1–V5 是确定性 TS 函数，纯函数校验跨 MCP 服务调用是 overkill；P6/P7 走 reflection 工具面只会增加跨服务握手次数，且 Validator-only 路径没有 sub-agent 产物可登记。把这两步收敛到 state-manager 内部既能复用同一套 V1–V5 实现（与 P1–P5/P8 共享 [02-server-design 三](#三deterministic-validatorv1v5--三个工程兜底)），又能避免"为校验而握手"的反模式。
+
+**Validator artifact 简化 schema**（写到 `opc-logs/validator/`）：
+
+```typescript
+type ValidatorArtifact = {
+  step: 'node_execution' | 'phase_completion'
+  validator_results: { v1: 'pass'|'fail', v2: ..., v3: ..., l1?: ..., l2?: ... }
+  failure_reasons?: string[]      // fail 时给出可读的失败原因
+  ran_at: ISO8601
+  ran_by: 'state-manager'         // 区别于 reflection 'sub-agent-id'
+}
+```
+
+> 在主矩阵（P1–P8 表格）中，P6 / P7 的 Primary 列写 `(internal V1–V5)`，与 P1–P5/P8 的 `M3/M4/M5/M6` 严格区分。
+
+---
+
 ## 四、Meta-Validator（反思器自身的输出校验）
 
 sub-agent 也会出错（幻觉 objection / 编造 quote / 跑题）。Meta-validator 在 `opc_reflect_*_complete` 时跑：
@@ -172,6 +204,7 @@ sub-agent 也会出错（幻觉 objection / 编造 quote / 跑题）。Meta-vali
 | Debate 双方立场重合度 > 阈值 | 视为「假辩论」，结果作废 |
 | ToT 分支全部评分 > 0.9 | 怀疑乐观偏差，强制 critic |
 | reasoning_trace 缺失 / < min_length | reject |
+| evidence 引用文件的 `mtime` > 反思任务派发时间 | reasoning_trace 末尾追加 `warning: evidence file mutated during reflection`（检测用户在反思中途手改 knowledge，详见 [02-pipeline/07_dependency-serial.md 六·补 反思期间的 knowledge 稳定性约定](../../02-opc-state-server/02-pipeline/07_dependency-serial.md#六补-反思期间的-knowledge-稳定性约定人类介入边界)） |
 
 Meta-validator 也是纯 TS，配每个 sub-agent 的健康度统计。
 
@@ -179,9 +212,9 @@ Meta-validator 也是纯 TS，配每个 sub-agent 的健康度统计。
 
 ## 五、Sub-Agent 权限白名单
 
-派 sub-agent 时通过 `allowed_tools` 严格限制，**所有反思 agent 只读、禁写**：
+派 sub-agent 时通过 `tools` frontmatter 严格限制，**所有反思 agent 只读、禁写**。本节依赖的 Host 行为已通过 PoC 验证（见 [06-host-contract/00_overview.md § 2.5 C4](../../06-host-contract/00_overview.md#25-c4allowed_tools-enforce-责任分配)）：未在 `tools` 中声明的工具对 sub-agent **不可见**（Host 在工具列表层面直接裁剪，报错 `No such tool available`，比"运行时拒绝"更彻底）。
 
-| Sub-Agent | allowed_tools | 禁止 |
+| Sub-Agent | tools | 禁止 |
 |---|---|---|
 | critic | `opc_knowledge_get`, `opc_knowledge_search`, `opc_corrections_query`, `Read`, `Grep` | 任何 write / exec / network |
 | debater | 同 critic | 同上 |
@@ -189,7 +222,11 @@ Meta-validator 也是纯 TS，配每个 sub-agent 的健康度统计。
 | distiller (pipeline 结束) | 上述 + `opc_corrections_record` | 仍禁 exec / network |
 | meta-reflection synthesizer | `opc_reflect_query_stats`, `opc_corrections_query` (R/O) | 同上 |
 
+**双保险**（C4 § 2.5 OPC server 端）：即使 kit 配错让某个 critic 的 `tools` 误开了写工具，OPC server 内部仍按 `dispatch_context.role` 拒绝写入。
+
 state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent **绝不能**继承 task agent 的写权限。
+
+> **注**：上面字段名按 Claude Code 当前规范写作 `tools`（早期文档曾用 `allowed_tools`）。后续 kit 模板与 distiller 产物一律使用 `tools`，避免混淆。
 
 ---
 
@@ -239,9 +276,10 @@ state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent 
        → 返回 flow_next
 
 [过期] expires_at 到达:
-       → 下一次 opc_flow_query 自动清理过期项
-       → 标记对应反思日志 incomplete
-       → 不阻塞后续流程（避免死锁）
+       → **不再自动清理**。pending 保留并标 status=expired_pending_decision
+       → 下一次 opc_flow_query 检测到过期 → 走 ask_user 路径
+         （让用户选 resume / discard / skip，artifact 文件保留 7 天）
+       → 详见 [04-reflection-flow/06_call-sequence-contract.md 六·补 反思过期处理契约](../04-reflection-flow/06_call-sequence-contract.md#六补-反思过期处理契约不再静默吞反思)
 ```
 
 ### 受 reflection-registry-guard 保护的 state-server 工具
@@ -299,6 +337,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 - 方法 × step 的「objection → evidence_diff」转化率（是否真的发现了问题）
 - 反思总开销（tokens / 时长）占 pipeline 比例
 - corrections 命中率（注入的 prior corrections 是否被采纳）
+- **过期反思告警**（`expiry_metrics`）：`expired_pending_count_24h` / `expired_resumed_count_24h` / `expired_discarded_count_24h` / `expired_skipped_count_24h` / `artifact_purged_7d_count`。完整 schema + 告警阈值见 [04-reflection-flow/06_call-sequence-contract.md 六·补 告警维度](../04-reflection-flow/06_call-sequence-contract.md#告警维度opc_reflect_query_stats-新增字段)
 
 ---
 

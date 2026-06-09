@@ -7,20 +7,27 @@
 
 **输入**："重构 user 模块，把 session 管理从 cookie 改成 JWT"
 
-```
-Claude → opc_flow_query → opc_flow_start → opc_intent_complete({intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:重构", "deliverable:JWT session"], chat_signals: [], user_quotes: ["重构 user 模块，把 session 管理从 cookie 改成 JWT"]}, reasoning: "重构动词+协议级改造，影响面大"})
-Claude → opc_knowledge_list
-Claude 分析: complexity: high（改协议，影响面大）
-Claude → opc_task_analysis_complete({analysis_result: {complexity: "high", knowledge_unit: ["user-auth"], phase_selection_rationale: "...", ...}, task_analysis_evidence: {...}})
-  → opc_task_analysis_complete 经 P2 V1-V5 全 pass → 路由 brief_generation（modify_unit_count=1 跳过 decomposition）
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。反思工具面 5 步铁律 / 3 步 inline 见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)。
 
-Claude → opc_brief_complete → opc_pipeline_create
+```
+Claude → opc_flow_query → opc_flow_lifecycle({action:"start"}) → opc_flow_step_complete({step:"intent_analysis", intent: "task", intent_evidence: {task_criteria_hits: ["action_verb:重构", "deliverable:JWT session"], chat_signals: [], user_quotes: ["重构 user 模块，把 session 管理从 cookie 改成 JWT"]}, reasoning: "重构动词+协议级改造，影响面大"})
+Claude → opc_knowledge_read({mode:"list"})
+Claude 分析: complexity: high（改协议，影响面大）
+Claude → opc_flow_step_complete({step:"task_analysis", analysis_result: {complexity: "high", knowledge_unit: ["user-auth"], phase_selection_rationale: "...", ...}, task_analysis_evidence: {...}})
+  → 经 P2 V1-V5 全 pass → 路由 brief_generation（modify_unit_count=1 跳过 decomposition）
+
+Claude → opc_flow_step_complete({step:"brief_generation", brief_content, brief_evidence}) → opc_pipeline_create
 
 opc_phase_start("04-implement-design")
   → 高复杂度：reflection_budget_hint{max_rounds: 4, primary: M4, secondary: M5}
   → 候选: [api-design, database-schema, scaffold]
-  → Claude 收集 selection_evidence: V4 coverage ok，但 meta-validator 保留 1 条中等 objection（scaffold 与 api-design 部分重叠）
-  → P5 路径 B 快速确认（展示 reasoning_trace + objection 供用户一键确认）
+  → Claude 收集 selection_evidence: V4 coverage ok
+  → 走反思工具面 5 步铁律（high 复杂度默认 inline=false 以便观察 reasoning_trace；详见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)）：
+    · opc_reflect_plan({step:"node_selection"}) → method:M4-critique, agent_spec
+    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:false, artifact:{selection_evidence}}) → agent_spec
+    · Task(critic) → objections
+    · opc_reflect_complete({method:"M4-critique", result:{objections}}) → meta-validator 保留 1 条中等 objection（scaffold 与 api-design 部分重叠）→ pending_reflection
+    · opc_flow_reflect({reflection_id}) → P5 路径 B 快速确认（展示 reasoning_trace + objection 供用户一键确认）
   → complexity=high → auto_advance: false（每阶段必须用户确认）
 
 ... [执行流程同 #4，但每节点更严格]
@@ -31,7 +38,7 @@ opc_phase_complete("04-implement-design")
 
 opc_phase_start("05-implement") → ... [同理]
 
-opc_pipeline_complete
+opc_pipeline_lifecycle({action:"complete"})
 ```
 
 **关键改进**：auto_advance 公式已在 `phase/06_phase-complete-reset.md auto_advance` 明确（complexity ≠ high + 100% completed + 当前 phase 的 P5 selection_evidence 通过 V1-V5 + meta-validator 无严重 objection + 下一 phase 在 `phase_plan.selected` 中）。

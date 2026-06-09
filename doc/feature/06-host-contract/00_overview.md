@@ -17,14 +17,15 @@
 | `UserPromptSubmit` hook 注入"先调 opc_flow_query" vs Claude 默认行为的优先级 | 用户问"你好"也要绕一圈 query，性价比可疑 |
 | `opc_node_start.dispatch_instruction` 把 `dispatch_context` 传给 sub-agent 的机制，Host 端是 Task 工具 prompt 拼接还是别的 | sub-agent 调 `opc_knowledge_write` 时能否带上正确的 metadata，决定了产物可追溯性 |
 
-### 1.2 本章覆盖的 5 个契约点
+### 1.2 本章覆盖的 6 个契约点
 
 | # | 契约点 | 决议 |
 |---|---|---|
 | C1 | session_id 来源 | pid 派生：`session_id = "sess-" + <claude_code_pid> + "-" + <unix_ts>` |
 | C2 | MCP server 拿到 Claude Code pid 的方式 | stdio 模式用 `process.ppid`；HTTP/SSE 模式由 Claude 在首次 `opc_flow_query` 时传 `claude_pid` 参数 |
-| C3 | sub-agent 与 MCP server 的连接继承 | 假设 Task spawn 的 sub-agent **继承** 父 conversation 的所有 MCP 连接；如不继承则降级到主进程逐工具代理 |
-| C4 | `allowed_tools` 白名单的 enforce 责任 | 由 Host 在 Task spawn 时强制；OPC server 不做二次校验（信任 Host），但工具内部仍按角色拒绝越权写（双保险） |
+| C3 | sub-agent 与 MCP server 的连接继承 | Task spawn 的 sub-agent **完全继承**父 conversation 的 MCP 连接，且命中**父进程的 server 实例**（同 session 内 sub-agent 共享同一 MCP server 进程）— ✅ **已验证**（2026-06-10 PoC，详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)） |
+| C4 | `allowed_tools` 白名单的 enforce 责任 | Host 在 Task spawn 时**直接从工具列表裁剪**（未白名单工具对 sub-agent **不可见**，报错 `No such tool available`，非运行时拒绝）；OPC server 仍按角色做二次校验作为双保险 — ✅ **已验证**（同上，比预期更强） |
+| C4-推论 | kit 加载边界 | `.claude/agents/*.md` 与 `.mcp.json` 仅在 Claude Code session **启动时**扫描，运行中安装/更新 kit 不会被发现 — ✅ **已验证** |
 | C5 | Hook 注入与 Claude 默认行为的冲突解决 | UserPromptSubmit 只对**非 `/` 前缀**消息生效；提供 `OPC_HOOK_INTENSITY=quiet\|loud` 让用户调档 |
 
 ### 1.3 非目标
@@ -87,6 +88,22 @@ opc_flow_recover(orphan_session_id) 内部:
 | **stdio**（默认） | `process.ppid` —— MCP server 是 Claude Code 通过 stdio 启动的子进程，父进程就是 Claude Code | 无需 fallback |
 | **HTTP / SSE**（远程/容器） | Claude 在首次调 `opc_flow_query()` 时显式传入 `{claude_pid: number, claude_started_at: number}` 参数 | 若未传 → server 用自身 `process.pid + uptime` 派生临时 id 并 warning |
 
+**已验证契约**（2026-06-10 PoC V1，详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)）：
+
+> stdio 模式下 MCP server 启动后 `process.ppid` 指向**直接 spawn 该 server 的 claude 进程**，且与该 server 一对一绑定（同生死）。`kill(pid, 0)` 探活语义正确：headless 父 claude 退出后探活立即 ESRCH。
+
+**PoC 关键证据**：
+- `report_pid` 工具返回 `server_pid=44010, server_ppid=43990`
+- `ps` 链验证 ppid=43990 的 `comm=claude`
+- headless session 结束 → `kill -0 43990` 立刻 ESRCH（owner.pid orphan 检测可用）
+- 同一 host session 的两条 MCP server 进程 (43187/43617) 各自 ppid 指向不同的 claude 主进程，证实**每个 session 独占一个 server**
+
+**重要 caveat（写入约束，避免实施时踩坑）**：
+- `process.ppid` 是 **spawn 该 server 的 claude 进程**，**不是**用户终端里的顶层 claude
+- 在 `claude -p` headless 或嵌套 launcher 场景下，ancestor chain 形如 `node → claude(headless) → zsh → claude(host)`，两个 claude pid 不同
+- ✅ **正确做法**：owner.pid 用**直接 ppid**（与 server 共生死的那一层）。每个 session 自己派生自己的 session_id，互不交叉
+- ❌ **错误做法**：不要 walk chain 去找"真正的顶层 claude"——那样反而会让两个并行 session 错误地共享 owner
+
 **实现要点**：
 - stdio 模式下 `opc_flow_query()` **不接受** `claude_pid` 入参（防止 Claude 误传），server 一律用 `process.ppid`
 - 模式判断由 server 启动时的 `MCP_TRANSPORT` 环境变量决定（`stdio` / `http` / `sse`）
@@ -94,40 +111,77 @@ opc_flow_recover(orphan_session_id) 内部:
 
 ### 2.4 C3：sub-agent 的 MCP 连接继承
 
-**假设**（待 Claude Code 团队官方确认）：
+**已验证契约**（2026-06-10 PoC，详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)）：
 
-> Claude Code 的 `Task` 工具 spawn 的 sub-agent **完全继承父 conversation 的 MCP server 连接**，包括所有已注册的工具（按 `subagent_type` 在 kit 的 `agents/*.md` 中声明的 `allowed_tools` 过滤）。
+> Claude Code 的 `Task` 工具 spawn 的 sub-agent **完全继承父 conversation 的 MCP server 连接**，包括所有已注册的工具（按 `subagent_type` 在 kit 的 `agents/*.md` 中声明的 `tools` 过滤）。
+>
+> 更强的结论：sub-agent 的 MCP 调用**命中父进程托管的同一个 server 实例**——同一 session 内所有 sub-agent 与主对话**共享**该实例（不是每个 sub-agent 重新 spawn 一个 MCP server 子进程）。这意味着 server 的内存态、文件句柄、文件锁等都是 session 单实例的。
 
-**基于该假设的设计**：
-- task sub-agent（如 `backend-engineer`）能直接调 `opc_knowledge_get_batch` / `opc_knowledge_write`
-- reflection sub-agent（如 `critic`）能直接调 `opc_corrections_query` / `opc_knowledge_get`（只读子集）
+**PoC 关键证据**：
+- `poc-v2-writer` sub-agent 调 `mcp__poc-host-contract__poc_echo_write` 返回 `{file_path, server_pid: 43275}`，文件实际写到 `artifacts/proof-1781020775701-jp9l68.txt`
+- `server_pid` 与父 `claude -p` 子进程关联，证明 MCP server 由父 session 进程托管
 
-**若假设不成立的降级方案**（fallback plan，写到工程实现里）：
-1. **代理模式**：主进程 Claude 在 sub-agent 完成前持有所有 MCP 调用。sub-agent 通过 Task 工具的"中间响应通道"（output streaming）发出 RPC 请求，主进程代为执行 MCP 调用并回灌结果。
-2. **延迟写入模式**：sub-agent 把所有写请求积累成 `evidence.deferred_writes[]`，主进程在 `opc_node_complete` 时统一回放。
+**基于该契约的设计**（不再是"假设"，是确定性依赖）：
+- task sub-agent（如 `backend-engineer`）直接调 `opc_knowledge_get_batch` / `opc_knowledge_write`
+- reflection sub-agent（如 `critic`）直接调 `opc_corrections_query` / `opc_knowledge_get`（只读子集）
+- 三个 OPC server 可以在内存里维护 per-session 状态（如反思 registry、knowledge index debounce 队列），不必担心 sub-agent 走另一个 server 进程读到陈旧值
 
-**验证手段**：在 PoC 阶段写一个 minimal kit，task agent 调 `opc_knowledge_write`，看是否成功。失败则启动降级方案。
+**降级方案保留位置**：[02_subagent-fallback-plans.md](02_subagent-fallback-plans.md)（标记为"⚠️ 仅在未来 Claude Code 版本变更行为时启用"，不在 v1 实施）
 
 ### 2.5 C4：allowed_tools enforce 责任分配
 
+**已验证契约**（同 C3 PoC）：
+
+> Host（Claude Code 的 Task 工具）按 `subagent_type` 在 kit `agents/<role>.md` 中的 `tools` 字段**直接从工具列表裁剪**。未白名单的工具在 sub-agent 视角下**根本不可见**——sub-agent 尝试调用时报错 `Error: No such tool available: <tool_name>`，而**不是**"工具可见但被拒绝"。
+
+**比预期更强的隔离**：
+- "不可见" > "可见但被拒"。即便 critic sub-agent 被 prompt injection 引导去"探测"是否存在某个写工具，从工具列表里就拿不到这个名字
+- 因此工具白名单 = **视野白名单**。OPC kit 不需要担心 critic 的 prompt 里偶然提到了某个写工具的名字会被滥用
+
+**PoC 关键证据**：
+- `poc-v3-reader.md` frontmatter 只白名单 `mcp__poc-host-contract__poc_echo_read`
+- sub-agent 调 read 工具成功（`{echoed:"v3-probe-read", server_pid:43347}`）
+- sub-agent 调 write 工具报 `Error: No such tool available: mcp__poc-host-contract__poc_echo_write`
+- `artifacts/` 没有新增 v3-probe-write 文件 → 写入确实没发生
+
 ```
-                ┌─ Host 强制（最先生效）
+                ┌─ Host 强制裁剪（最先生效，sub-agent 看不到禁用工具）
 allowed_tools ──┤
-                └─ OPC server 工具内部按角色拒绝（双保险）
+                └─ OPC server 工具内部按角色拒绝（双保险，防 kit 配错）
 ```
 
-**Host 端**（Claude Code 的 Task 工具）：
-- 按 `subagent_type` 在 kit `agents/<role>.md` 中的 `allowed_tools` 字段过滤
-- sub-agent 调被禁工具时，Host 直接拒绝
-
-**OPC server 端**（双保险）：
+**OPC server 端双保险**（保留，作为 kit 配置失误的兜底）：
 - `opc_knowledge_write` 检查调用方 `dispatch_context.role`，若是 `critic`/`debater`/`tot-explorer` 之一直接 reject
-- 这层是为了"用户错配了 allowed_tools / Host 漏 enforce"时的兜底
 - 实现细节：`dispatch_context` 由 OPC server 在 `opc_node_start` / `opc_reflect_critique` 时写入 `.opc/sessions/<id>/active-dispatches.json`，sub-agent 调写工具时 server 反查
 
-**约束**（写进 kit 规范）：
-- 每个 kit 的 `agents/*.md` 必须显式声明 `allowed_tools`（不允许"全开"）
-- reflection sub-agent 角色（`critic` / `debater` / `tot-explorer` / `meta-synthesizer`）一律不能出现在 `allowed_tools` 中包含写类工具
+**Kit 规范约束**（写进 [03_kit-agent-conventions.md](03_kit-agent-conventions.md)）：
+- 每个 kit 的 `agents/*.md` 必须显式声明 `tools`（不允许"全开"）
+- reflection sub-agent 角色（`critic` / `debater` / `tot-explorer` / `meta-synthesizer`）一律**不能**在 `tools` 里出现任何写类工具（`opc_knowledge_write` / `opc_knowledge_delete` 等）
+- 注：上面字段名按 Claude Code 当前规范是 `tools`（不是早期文档里的 `allowed_tools`），kit 模板要对齐
+
+### 2.5.1 C4-推论：kit 加载边界（session 启动 = 唯一加载时机）
+
+**已验证契约**（同 C3/C4 PoC，附带发现）：
+
+> `.claude/agents/*.md` 与 `.mcp.json` 仅在 Claude Code session **启动时**被扫描和加载。session 运行中新增/修改 kit 文件**不会**被发现，新文件里声明的 agent / MCP server 在当前 session 内全部不可用。
+
+**PoC 证据**：
+- 在 session A 里写好 `poc-v2-writer.md` 与 `.mcp.json` 后，A 内直接 `Task subagent_type=poc-v2-writer` 报 `Agent type 'poc-v2-writer' not found`
+- 起一个新的 `claude -p` 子进程（session B）后，B 能正常 spawn 该 agent 并调到 MCP 工具
+
+**对 OPC kit-install UX 的硬要求**：
+- kit 安装器（`opc-kit install <name>`）在写完文件后**必须**显式提示用户"请重启 Claude Code 以加载新 kit"
+- 不能假装"装完即可用"——用户在当前 session 内会撞到 `Agent type not found`
+- 同理，`opc-kit update` / `opc-kit remove` 也需要同样的重启提示
+
+**对 OPC v1 实施的影响**：
+- kit-install 工具不需要任何"热重载"机制（既不可能也不必要）
+- distiller 提炼出的 corrections 写入到 `.opc/corrections/*.md`（不属于 `.claude/agents/`，是数据文件），仍可被运行中的 OPC reflection server 即时读到——这条路径不受 C4-推论影响
+- 反过来，如果将来想做"动态 kit 切换"（如 A/B 测试不同的 phase 集合），不能走 `.claude/agents/` 路径，必须走 OPC server 内部的逻辑路由
+
+**与 C1 session_id 的关系**：
+- session 启动 → 新 session_id → 新一份加载快照
+- 两个 session 之间的 kit 状态独立；不存在"两个 session 共享一份 agent 注册表"的概念
 
 ### 2.6 C5：Hook 注入策略
 
@@ -141,21 +195,70 @@ allowed_tools ──┤
 
 **实现位置**：`platform/opc-orchestrator/bin/opc-hook.sh`（详见 `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 高级形态`）。
 
+### 2.7 C4-推论的工程化：kit-install UX 约定
+
+源自 C4-推论"`.claude/agents/*.md` 与 `.mcp.json` 仅在 session 启动时加载"。本节把它落成对 OPC 实施层的硬约定。
+
+#### 2.7.1 安装器输出契约
+
+`opc-kit install <kit-name>` / `opc-kit update <kit-name>` / `opc-kit remove <kit-name>` 三个命令在文件操作完成后**必须**输出以下结构化提示：
+
+```
+✓ Kit installed: <kit-name>
+  Wrote .claude/agents/*.md  (N files)
+  Wrote .mcp.json  (added server: <server-name>)
+
+⚠️  Restart required
+   Claude Code only loads .claude/agents/ and .mcp.json at session start.
+   To use this kit, please:
+     1. Exit the current `claude` session (Ctrl+D or /exit)
+     2. Run `claude` again in this directory
+   The new agents and MCP server will be available in the new session.
+```
+
+不能省略 `⚠️ Restart required` 段——这是 UX 契约，省略会导致用户在当前 session 内撞到 `Agent type not found` 报错并误判"安装失败"。
+
+#### 2.7.2 数据型 vs 注册型变更的区分
+
+| 变更类型 | 文件位置 | 是否需要重启 |
+|---|---|---|
+| **注册型** | `.claude/agents/*.md`, `.mcp.json` | ✅ 需要 |
+| **数据型** | `.opc/corrections/*.md`, `.opc/knowledge/**/*.md`, `.opc/sessions/<id>/**`, kit 内的 `phases/**/*.md` | ❌ 不需要（运行中即时读到） |
+
+**含义**：
+- distiller 把反思精华写入 `.opc/corrections/` —— 不需要重启，下一次 `opc_corrections_query` 就能读到（C3 已验证：sub-agent 与主进程共享 server，server 重读文件即可）
+- 用户手动改一个 phase 的 node body（如调整 `tdd-implementation.md` 文字）—— 不需要重启，下一次 `opc_node_start` 重新读文件
+- 用户新装一个 kit 引入新 agent 类型（如 `backend-engineer-v2`）—— **需要**重启
+- 用户新装的 kit 携带自己的 MCP server（如 `opc-distiller-server`）—— **需要**重启
+
+#### 2.7.3 不需要的工程复杂度
+
+明确**不实现**的几样东西，避免方案膨胀：
+- ❌ "热重载"机制（Claude Code 不支持，也不应该让 OPC 去 mock）
+- ❌ "sidecar 注册中心"（同上）
+- ❌ "kit 动态 A/B 测试"（如必要，应走 OPC server 内部的逻辑路由，不动 `.claude/agents/`）
+
+#### 2.7.4 与 corrections 路径的关系
+
+C4-推论的边界很重要：
+- corrections 是 OPC server **运行时读的数据文件**，不是 Host 加载的注册表，所以 distiller 把内容写进去就立刻生效——这是 OPC v1 的可行性前提
+- 如果未来 corrections 演变成"动态 sub-agent 模板"（即每条 correction 想生成一个新的 `.claude/agents/<role>.md`），那条路会撞 C4-推论而必须重启。届时设计要回头来这里加一节"动态 agent 生成的处理方案"。当前 v1 不走这条路
+
 ---
 
-## 三、验证清单（PoC 阶段必跑）
+## 三、验证清单
 
-实施 OPC 前，先用 minimal spike 验证 5 项：
+实施 OPC 前的 5 项 Host 行为验证。**V1 / V2 / V3 已通过 PoC 验证**，余下 V4 / V5 在工程实施初期补做。
 
-| # | 验证项 | 验证方式 | 失败处理 |
+| # | 验证项 | 状态 | 验证方式 / 结果 |
 |---|---|---|---|
-| V1 | `process.ppid` 在 stdio MCP server 中等于 Claude Code pid | spike 启动时 print ppid，比对 Host 显示的 pid | 失败 → 强制走 HTTP/SSE 模式 + 显式传 `claude_pid` |
-| V2 | Task spawn 的 sub-agent 能调父 conversation 注册的 MCP 工具 | spike 内 task agent 调 `opc_knowledge_write` 看是否成功 | 失败 → 启用代理模式或延迟写入模式 |
-| V3 | Task `allowed_tools` 白名单被 Host 强制 | spike 让 critic 调 `opc_knowledge_write`，预期被拒 | 失败 → 完全依赖 OPC server 双保险层 |
-| V4 | UserPromptSubmit hook 与 system prompt 优先级 | spike 让 hook 注入与 system 冲突的指令，看 Claude 服从哪个 | 失败 → 调整 hook 文本措辞或改用 SessionStart |
-| V5 | hook 注入文本是否进入 user message history（影响 token） | 检查 long context 后历史里 hook 文本是否累积 | 累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
+| V1 | `process.ppid` 在 stdio MCP server 中等于 spawn 该 server 的 Claude Code 进程，且 `kill(pid, 0)` 探活语义正确 | ✅ **PASS** | 2026-06-10 PoC：`report_pid` 工具返 `server_ppid=43990`，`ps` 验证 ppid 是 `claude` 进程；headless 退出后 `kill -0 43990` 立刻 ESRCH。**caveat**：ppid 指向 spawn 该 server 的 claude，不是顶层 host claude（嵌套场景下两者不同）。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
+| V2 | Task spawn 的 sub-agent 能调父 conversation 注册的 MCP 工具 | ✅ **PASS** | 2026-06-10 PoC：`poc-v2-writer` sub-agent 调 `mcp__poc-host-contract__poc_echo_write` 成功写出 `artifacts/proof-1781020775701-jp9l68.txt`，`server_pid=43275` 与父进程关联。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
+| V3 | Task `tools` 白名单被 Host 强制 | ✅ **PASS（更强）** | 2026-06-10 PoC：`poc-v3-reader` 调未白名单的写工具直接报 `Error: No such tool available`——未白名单工具**不可见**，比"运行时拒绝"更彻底 |
+| V4 | UserPromptSubmit hook 与 system prompt 优先级 | ⏳ 待 PoC | spike 让 hook 注入与 system 冲突的指令，看 Claude 服从哪个。失败 → 调整 hook 文本措辞或改用 SessionStart |
+| V5 | hook 注入文本是否进入 user message history（影响 token） | ⏳ 待 PoC | 检查 long context 后历史里 hook 文本是否累积。累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
 
-每项验证结果记到 `doc/feature/06-host-contract/01_validation-log.md`（PoC 完成后补）。
+V1/V2/V3 完整复现指令与原始返回见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)。后续 V4/V5 验证结果按需追加到 `doc/feature/06-host-contract/01_validation-log.md`。
 
 ---
 
@@ -165,8 +268,8 @@ allowed_tools ──┤
 |---|---|---|
 | `01-overview/03_architecture.md` | 假设 Claude 按 flow_next 推进 | 本章 C4/C5 给出 Host 行为约束的硬约定 |
 | `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 1.3 session_id 来源` | env / PPID / default 三段式 | **替换**为本章 C1/C2 的 pid 派生方案；该节后续仅引用本章 |
-| `02-opc-state-server/04-node/07_tools.md opc_node_start dispatch_instruction` | 假设 sub-agent 能调 knowledge 工具 | 由本章 C3 假设 + 降级方案兜底 |
-| `05-opc-reflection-server/02-server-design/00_overview.md 五 Sub-Agent 权限白名单` | 假设 `allowed_tools` 被 enforce | 由本章 C4 拆分到 Host + OPC 双保险 |
+| `02-opc-state-server/04-node/07_tools.md opc_node_start dispatch_instruction` | 假设 sub-agent 能调 knowledge 工具 | 由本章 C3 **已验证契约**保证（不再需要降级方案兜底，降级方案降级为"未来变更时启用"备份） |
+| `05-opc-reflection-server/02-server-design/00_overview.md 五 Sub-Agent 权限白名单` | 假设 `allowed_tools` 被 enforce | 由本章 C4 **已验证契约**保证（强度比"拒绝"更高：未白名单工具不可见）；OPC server 双保险仍保留，作 kit 配置失误兜底 |
 | `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 高级形态` | hook 脚本示例 | 本章 C5 补 `OPC_HOOK_INTENSITY` 配置项规范 |
 
 ---

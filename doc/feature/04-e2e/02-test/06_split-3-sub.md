@@ -7,11 +7,13 @@
 
 **输入**："实现商品管理 + 购物车功能"
 
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。
+
 ```
-Claude → opc_flow_query → opc_flow_start → opc_intent_complete → opc_knowledge_list
+Claude → opc_flow_query → opc_flow_lifecycle({action:"start"}) → opc_flow_step_complete({step:"intent_analysis", ...}) → opc_knowledge_read({mode:"list"})
 Claude 分析: knowledge_unit: [product, cart] → modify_unit_count=2
-Claude → opc_task_analysis_complete
-  → opc_task_analysis_complete 路由 task_decomposition
+Claude → opc_flow_step_complete({step:"task_analysis", analysis_result, task_analysis_evidence})
+  → 路由 task_decomposition
 
 Claude 拆分:
   → cart._refs: [product]
@@ -24,11 +26,11 @@ Claude 拆分:
       unit_isolation_check: {ok: true, overlapping_units: []}
     }
 
-Claude → opc_decomposition_complete({sub_pipelines, execution_order, decomposition_evidence})
-  → opc_decomposition_complete 经 P3 V1-V5 全 pass + meta-validator 无严重 objection → 自动推进 → 路由 brief_generation
+Claude → opc_flow_step_complete({step:"task_decomposition", sub_pipelines, execution_order, decomposition_evidence})
+  → 经 P3 V1-V5 全 pass + meta-validator 无严重 objection（走 opc_reflect_execute(inline:true) → opc_flow_reflect 两步）→ 自动推进 → 路由 brief_generation
   → Claude 通知: "已自动拆分为 2 条子管线（P3 evidence 通过 V1-V5）"
 
-Claude → opc_brief_complete → opc_pipeline_create({...sub_pipelines...})
+Claude → opc_flow_step_complete({step:"brief_generation", brief_content, brief_evidence}) → opc_pipeline_create({...sub_pipelines...})
   → state-server 写入 pipeline-plan.json
   → 返回 flow_next: opc_knowledge_open
 
@@ -45,7 +47,7 @@ opc_phase_complete(sub-1, 最后 phase) → {
   flow_next: { tool: "opc_phase_start", args: {sub_pipeline_id: "sub-2", phase: "04-implement-design"} }
 }
 
-Claude 按 flow_next 启动 sub-2 → ... → opc_pipeline_complete
+Claude 按 flow_next 启动 sub-2 → ... → opc_pipeline_lifecycle({action:"complete"})
 ```
 
 **关键改进**：`opc_phase_complete` 返回 `pipeline_progress.next_sub_pipeline` + `flow_next`，Claude 不需要猜下一步该启动哪条子管线。

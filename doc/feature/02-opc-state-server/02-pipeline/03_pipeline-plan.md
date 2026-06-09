@@ -72,8 +72,11 @@
 | `owner` | 当前占用管线的 session_id + pid + since |
 | `sub_pipelines[].id` | 子管线 ID |
 | `sub_pipelines[].knowledge_unit` | 该子管线负责的 unit |
-| `sub_pipelines[].status` | `pending` / `in_progress` / `completed` / `failed` |
+| `sub_pipelines[].status` | `pending` / `in_progress` / `paused` / `completed` / `failed` / `aborted` |
 | `sub_pipelines[].blocked_by` | 依赖的其他子管线 ID |
+| `sub_pipelines[].execution_priority` | `normal`（默认，按 `execution_order` 串行）/ `immediate`（插队，挂起当前 sub 优先执行） |
+| `sub_pipelines[].inserted_at` | 插入时间戳（仅 `add_sub_pipeline` 注入时存在），用于审计 |
+| `sub_pipelines[].paused_at` | 挂起时间戳（status=paused 时存在），含 `node` 字段指向暂停时的 node_name |
 | `execution_order` | 执行分组列表。`sub_pipeline_ids` 按列表顺序串行执行；group 之间串行 |
 
 > **phase 选择不在本文件**：每条子管线实际跑哪些 phase 由 `sub-pipelines/<id>/state.json` 的 `phase_plan` 块声明（包含 `available` / `selected` / `selected_by` / `selection_rationale`，并由 state-server 做偏序与一致性校验）。详见 [04_state-json.md 六](04_state-json.md#六phase_plan-校验规则deterministic)。
@@ -88,10 +91,11 @@
 | 任意 aborted | `aborted` |
 | 任意 failed | `failed` |
 | 任意 in_progress | `in_progress` |
+| 任意 paused（无 in_progress / failed / aborted）| `in_progress`（管线仍活跃，等待 resume） |
 | 全部 pending | `pending` |
 | 部分 completed + 其余 pending | `in_progress` |
 
-聚合优先级：`aborted` > `failed` > `in_progress` > 混合 > `completed` > `pending`。任何子管线状态变更后，`pipeline-plan.json.status` 同步重算。
+聚合优先级：`aborted` > `failed` > `in_progress` > 混合 > `completed` > `pending`。`paused` 视同 `in_progress` 参与活跃判定（owner 不释放），任何子管线状态变更后，`pipeline-plan.json.status` 同步重算。
 
 ---
 
@@ -113,4 +117,5 @@
 
 - [04_state-json.md](04_state-json.md) — 阶段/节点状态
 - [05_single-vs-split.md](05_single-vs-split.md) — 单/拆分管线触发条件
-- [07_dependency-parallel.md](07_dependency-parallel.md) — `blocked_by` 与 `execution_order` 关系
+- [07_dependency-serial.md](07_dependency-serial.md) — `blocked_by` 与 `execution_order` 关系
+- [11_insert-resume.md](11_insert-resume.md) — sub-pipeline 插队与挂起/恢复契约

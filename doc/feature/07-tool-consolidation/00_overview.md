@@ -80,7 +80,7 @@
 6. `opc_quick_dispatch`
 7. `opc_flow_correct`（revise/restart/phase_reset）
 
-#### state-server pipeline（6 → 3）
+#### state-server pipeline（7 → 3）
 
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
@@ -90,11 +90,12 @@
 | `opc_pipeline_complete` | `opc_pipeline_lifecycle` | `action: "complete"` |
 | `opc_pipeline_abort` | `opc_pipeline_lifecycle` | `action: "abort"` |
 | `opc_pipeline_replan` | `opc_pipeline_lifecycle` | `action: "replan"` |
+| `opc_pipeline_resume` | `opc_pipeline_lifecycle` | `action: "resume"`（多数场景由 state-manager 在 node 边界自动触发）|
 
 **新工具列表（3 个）**：
 1. `opc_pipeline_create`
 2. `opc_pipeline_status`
-3. `opc_pipeline_lifecycle`（complete/abort/replan）
+3. `opc_pipeline_lifecycle`（complete/abort/replan/resume）
 
 #### state-server phase（5 → 3）
 
@@ -133,14 +134,15 @@
 | `opc_knowledge_get_batch` | `opc_knowledge_read` | `mode: "batch"` |
 | `opc_knowledge_list` | `opc_knowledge_read` | `mode: "list"` |
 | `opc_knowledge_search` | `opc_knowledge_read` | `mode: "search"` |
-| `opc_knowledge_write` | `opc_knowledge_write` | —（保留，含 `refs?: string[]` 参数支持 _refs 写入）|
-| `opc_knowledge_delete` | `opc_knowledge_admin` | `action: "delete"` |
+| —（新增） | `opc_knowledge_read` | `mode: "diff"`（3-way diff 预演，详见 [knowledge-api § 2.10](../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md#210-版本冲突与-3-way-diff-and-merge-契约)）|
+| `opc_knowledge_write` | `opc_knowledge_write` | —（保留，含 `refs?: string[]` 参数支持 _refs 写入；新增 `base_version?: number` 触发 3-way diff-and-merge，返回 `merge_status`）|
+| `opc_knowledge_delete` | `opc_knowledge_admin` | `action: "delete"`（可传 `base_version`，不一致则 reject，不走 merge）|
 | `opc_knowledge_reindex` | `opc_knowledge_admin` | `action: "reindex"` |
 
 **新工具列表（5 个）**：
 1. `opc_knowledge_open`
-2. `opc_knowledge_read`（single/batch/list/search）
-3. `opc_knowledge_write`
+2. `opc_knowledge_read`（single/batch/list/search/**diff**）
+3. `opc_knowledge_write`（含 `base_version` + `merge_status`）
 4. `opc_knowledge_admin`（delete/reindex）
 5. —（4 个对外足够；如未来加 import/export 用 admin 吸收）
 
@@ -198,6 +200,8 @@
 | **合计** | — | **24** |
 
 > 实际 24（比 G1 目标 30 还少 6）。预留 6 个空位给未来新增能力（如 `opc_session_register` 配合 06 章 C2 的 HTTP/SSE 模式）。
+>
+> **P6 / P7 走 Validator-only 不走 reflection 工具面**：上表 `reflection-server` 4 个工具（plan/execute/complete/admin）只覆盖 P1–P5 / P8 五个反思位点；P6（节点执行）/ P7（阶段完成）由 state-manager 内部跑 V1–V5 + L1/L2，不产生 `reflection_id`、不受 reflection-registry-guard 保护、artifact 写到 `opc-logs/validator/`。详见 [02-server-design 三·补](../05-opc-reflection-server/02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)。Claude 仍可主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion"})` 显式升级到反思工具面（按 method 走标准 5 步 / 3 步 inline）。
 
 ---
 

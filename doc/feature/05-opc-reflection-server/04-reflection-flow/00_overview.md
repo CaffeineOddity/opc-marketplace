@@ -216,15 +216,15 @@ sequenceDiagram
 
 ---
 
-## 七、子文档导航（占位）
+## 七、子文档导航
 
 | 子文档 | 内容 |
 |------|------|
-| 01_per-step-sequence.md | P1–P8 的统一 per-step 反思时序细节 |
-| 02_user-autonomy.md | intensity / skip / on_demand 完整 API + 默认 |
-| 03_intervention-archival.md | L1 → L2 → L3 归档链与 distiller 提示词 |
-| 04_meta-reflection.md | pipeline 级 meta-reflection 算法 + 报告模板 |
-| 05_phase-reset-interaction.md | 与 state-server phase_reset 的边界 |
+| [01_per-step-sequence.md](01_per-step-sequence.md) | **P3 / P4 / P7 / P8 反思工作示例**（P1 / P2 / P5 / P6 在本文档六 + e2e 04/05 已展开）|
+| 02_user-autonomy.md（占位，第二批）| intensity / skip / on_demand 完整 API + 默认 |
+| 03_intervention-archival.md（占位，第二批）| L1 → L2 → L3 归档链与 distiller 提示词 |
+| [04_meta-reflection.md](04_meta-reflection.md) | **A/B/C/D 四类 meta-validator 规则 + FP/FN 指标 + unlearn 阈值（PoC TODO）** |
+| 05_phase-reset-interaction.md（占位，第二批）| 与 state-server phase_reset 的边界 |
 | [06_call-sequence-contract.md](06_call-sequence-contract.md) | 单驱动者契约 + reflection-registry-guard 三层防御 + 5 步铁律 + 命名约定 + 不变量 |
 | [07_three-server-seam-matrix.md](07_three-server-seam-matrix.md) | **接缝矩阵**：P1–P8 × 触发器/evidence/方法/pending/持久化/knowledge/降级一表打通 |
 

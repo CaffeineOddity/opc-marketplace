@@ -1,6 +1,6 @@
 # 09 MCP 工具
 
-管线层 6 个工具。流程层 13 个 `opc_flow_*` 工具见 [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md)。
+管线层 7 个工具。流程层 13 个 `opc_flow_*` 工具见 [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md)。
 
 ---
 
@@ -13,7 +13,8 @@
 | 3 | `opc_pipeline_recover` | 手动恢复指定孤儿管线（通常由 `opc_flow_recover` 内部调用） |
 | 4 | `opc_pipeline_complete` | 管线完成：校验 + `manifest.md` |
 | 5 | `opc_pipeline_abort` | 管线取消：级联终止 + kill in_progress sub-agent + 同步调用 `opc_flow_abort` |
-| 6 | `opc_pipeline_replan` | 管线修改：细粒度增删节点、阶段，调整子管线列表和执行顺序 |
+| 6 | `opc_pipeline_replan` | 管线修改：细粒度增删节点、阶段，调整子管线列表和执行顺序（含插队子管线 `add_sub_pipeline + execution_priority`） |
+| 7 | `opc_pipeline_resume` | 从被插队挂起的 sub 恢复执行：把 `paused` 切回 `in_progress`，重置 active sub 指针 |
 
 ---
 
@@ -136,7 +137,7 @@
   → 汇总各子管线的 output 产物清单
   → 写入 .opc/pipelines/<id>/manifest.md
   → pipeline-plan.json status → completed
-  → 释放 owner，清理 snapshots/
+  → 释放 owner（knowledge 历史保留在 git，无需物理清理）
   → 同步通知 flow-state.json status → completed
 
 返回:
@@ -159,12 +160,12 @@
   → 全部 in_progress sub_pipelines/phases/nodes 标记 aborted
   → kill_agents=true → 向所有 in_progress node 的 sub-agent 发 SIGTERM（pid 存于 node.agent_pid）
   → 写入 abort_reason
-  → 清理 .opc/snapshots/
+  → owner 释放（knowledge 历史保留在 git）
   → 若 flow-state.status=in_progress + pipeline_id 匹配 → 同步调用 opc_flow_abort
 
 返回:
 {
-  aborted_pipeline_id, killed_agent_pids: [...], freed_snapshots: int
+  aborted_pipeline_id, killed_agent_pids: [...]
 }
 ```
 
@@ -186,9 +187,13 @@
     selection_rationale: "<必填，replan 必须给出理由>",
     selected_by: "replan"
   },
-  add_sub_pipeline?: [{id, title, knowledge_unit, blocked_by,
-                       phase_plan: { selected, selection_rationale,
-                                     selected_by: "task_decomposition" }}],
+  add_sub_pipeline?: [{
+    id, title, knowledge_unit, blocked_by,
+    phase_plan: { selected, selection_rationale,
+                  selected_by: "task_decomposition" | "user_insert" },
+    execution_priority?: "normal" | "immediate",  // 默认 normal；immediate 触发插队
+    insert_after?: "<sub_id>"                     // execution_priority=normal 时指定插入位置
+  }],
   remove_sub_pipeline?: [id],                        // 仅 pending 可移
   update_execution_order?: [...]
 }, reason?: string
@@ -203,9 +208,20 @@
        （存在性 + 偏序 + 非空 + 与 phases[] 一致 + rationale 必填），
        失败则该项 reject 并写入 rejected_changes
      · update_execution_order 必须保持 blocked_by 推导的偏序（前置 sub 在前）
+     · add_sub_pipeline + execution_priority=immediate（插队场景）:
+       - 当前必有一条 sub 处于 in_progress（否则降级为 normal 直接入队）
+       - 新 sub 的 knowledge_unit 必须**不与**当前 in_progress sub 的 unit 重叠
+         （避免插队 sub 与挂起 sub 写同一 knowledge 引发 base_version 冲突）
+       - 仅在 **node 边界** 生效：当前 in_progress node 跑完（completed/failed）
+         才执行挂起；不打断进行中的 sub-agent
   ② 应用 changes 到 pipeline-plan.json + state.json
      · update_phase_plan 通过校验后写入对应子管线 state.json 的 phase_plan
        块，order_validated: true
+     · execution_priority=immediate:
+       - 当前 in_progress sub → status: paused，记 paused_at: {at, node}
+       - 新 sub 插入 execution_order group 0 最前位置（其他 group 整体后移）
+       - 新 sub status → pending，inserted_at: <ts>
+       - 标记 flow-state.json.active_sub_pipeline_id = 新 sub.id
   ③ 重新触发 node-resolver 校验依赖关系
   ④ 追加 replan_history[] 到 pipeline-plan.json
   ⑤ 更新 flow-state.json.history
@@ -224,6 +240,55 @@
   · 当前正在执行的 node 不受影响（继续按原计划跑完）
   · 受影响的下游 pending 节点立即根据新计划生效
   · complexity 升级 (medium→high) 会自动把后续 phase 的 auto_advance 改为 false
+  · 插队 sub（execution_priority=immediate）必须在 node 边界生效——
+    新 sub 入 pending 但不立即跑；当前 in_progress sub 的 active node 完成后，
+    state-manager 检测到 paused-pending 配对，自动把被插队 sub 标记 paused，
+    才让 active 切换到新 sub。详见 [11_insert-resume.md](11_insert-resume.md)。
+```
+
+---
+
+## opc_pipeline_resume
+
+```
+触发: 插队 sub 跑完（status=completed/aborted/failed）后，由 opc_phase_complete 内部
+      检测到 pipeline-plan.json 存在 status=paused 的 sub 时自动调用；
+      或用户主动调用以恢复指定挂起 sub。
+
+参数: pipeline_id, sub_pipeline_id
+
+行为:
+  ① 校验目标 sub:
+     · status == paused → 通过
+     · 其他状态 → reject，返回 {error: "not_paused", current_status}
+  ② 校验当前无 in_progress sub（同一时刻仅一条活跃）:
+     · 有 → reject，返回 {error: "another_sub_in_progress", active_sub_id}
+  ③ 读 sub.paused_at = {at, node, phase}
+  ④ 一致性探测（防止挂起期间用户改动 knowledge）:
+     · 对该 sub 已 confirmed 的 phase 涉及的每个 output knowledge 路径:
+       - git show <phase.confirm_commit_ref>:opc-knowledge/<path>  → confirmed 内容
+       - 读当前 .md → current
+       - 若 confirmed != current → 列入 dirty_paths（提示但不阻断；下次
+         opc_knowledge_write 时 base_version 探测器会进入 3-way diff-and-merge）
+  ⑤ sub.status → in_progress
+  ⑥ 清除 paused_at（保留到 history.paused_events[]，供审计）
+  ⑦ flow-state.json.active_sub_pipeline_id = sub_pipeline_id
+  ⑧ flow-state.json.current_pipeline_pointer = {sub_id, phase, node}（恢复到挂起前）
+
+返回:
+{
+  resumed_sub_pipeline_id,
+  resumed_at: "...",
+  paused_for_ms: 1234567,                          // 挂起时长（审计用）
+  resume_pointer: {phase, node},                   // 续跑入口
+  dirty_paths: [{path, hint: "下次写入将走 3-way diff-and-merge"}],
+  flow_next: {tool: "opc_node_start", args: {node_name}}
+}
+
+约束:
+  · 不修改 knowledge 文件（探测不会覆盖；冲突由后续 write 走 02_core-tools §2.10）
+  · 不重启已结束的 sub-agent（resume 是状态切换，不是工具重跑）
+  · 插队 sub 全部完成才会触发 resume；中途再次插队也会按 paused 栈式压入
 ```
 
 ---
@@ -233,3 +298,4 @@
 - [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 13 个流程层工具
 - [06_lifecycle.md](06_lifecycle.md) — 工具在生命周期中的调用顺序
 - [10_complete-example.md](10_complete-example.md) — 完整调用链路
+- [11_insert-resume.md](11_insert-resume.md) — 插队/挂起/恢复完整契约

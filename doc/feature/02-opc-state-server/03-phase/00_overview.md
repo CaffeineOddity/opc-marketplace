@@ -39,7 +39,7 @@ sequenceDiagram
     PH->>NR: resolve(phase, nodes)
     NR->>NR: 依赖解析<br/>+ 拓扑排序<br/>+ 文件域冲突检测
     NR-->>PH: execution_order 分组
-    PH->>K: 生成 knowledge 快照
+    PH->>K: 记 git commit 锚点<br/>(confirm_commit_ref)
     PH-->>C: 已锁定 + flow_next: opc_node_start
 
     Note over C,K: ④ 逐 group 执行 node
@@ -99,7 +99,7 @@ flowchart TD
     Decide -->|回退| Reset[opc_phase_reset]
 
     Reset --> RType{回退层级}
-    RType -->|L0<br/>仅当前 phase| L0[重置 phase nodes<br/>knowledge 恢复快照]
+    RType -->|L0<br/>仅当前 phase| L0[重置 phase nodes<br/>knowledge git checkout<br/>v+1 写回]
     RType -->|L1<br/>+ 下游 phase| L1[L0 + 下游 pending]
     RType -->|L2<br/>+ 跨 sub 下游| L2[L1 + 受影响<br/>sub-pipelines pending]
     RType -->|L3<br/>整个 pipeline| L3[整个管线<br/>回退到指定 phase]
@@ -141,7 +141,7 @@ flowchart TD
 
 - **进入阶段**：[`opc_phase_start`](04_phase-start.md#二opc_phase_start--扫描与返回) — 由 `opc_pipeline_create` / 上一 phase 的 `opc_phase_complete` 路由触发
 - **锁定执行**：[`opc_phase_confirm`](05_phase-confirm-execute.md#一opc_phase_confirm--锁定执行计划) — selection_evidence 通过 V1-V5 后调用
-- **回退**：[`opc_phase_reset`](06_phase-complete-reset.md#三opc_phase_reset--阶段重置) — 快照恢复，下游级联 pending
+- **回退**：[`opc_phase_reset`](06_phase-complete-reset.md#三opc_phase_reset--阶段重置) — git checkout 锚点写回 v+1，下游级联 pending
 
 ---
 
@@ -149,7 +149,7 @@ flowchart TD
 
 - **节点选择由 Claude 完成**：state-server 只做 tag 过滤和 scenario 标记，**不调 LLM**；语义匹配和 selection_evidence 收集由 Claude 在主循环承担
 - **Evidence 驱动确认**：V1-V5 validator + meta-validator 通过即自动确认；validator 失败或保留严重 objections → reflection 循环 → ask_user 兜底
-- **快照保证可回退**：每次 `opc_phase_confirm` 生成 knowledge 快照，`opc_phase_reset` 可幂等恢复
+- **git 锚点保证可回退**：每次 `opc_phase_confirm` 把当时 knowledge `git commit` 并把 hash 记入 `confirm_commit_ref`，`opc_phase_reset` 据此 checkout 内容并以 v+1 写回（version 永远向前，乐观锁始终工作）
 - **auto_advance 严格判定**：complexity + selection_evidence + 节点完成率 + phase_plan.selected 4 条件全满足才自动推进
 
 ---

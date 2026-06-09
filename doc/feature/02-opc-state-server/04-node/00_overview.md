@@ -82,7 +82,7 @@ flowchart TD
     TOR -->|否| TOFail[node failed<br/>阶段卡住]
 
     MR --> Cascade[cascade_reset_after_retry<br/>计算下游影响面]
-    Cascade --> ResetDown[下游 node/phase<br/>→ pending<br/>knowledge 回滚快照]
+    Cascade --> ResetDown[下游 node/phase<br/>→ pending<br/>knowledge git checkout<br/>+ v+1 写回]
     ResetDown --> Restart[当前 node<br/>status=ready<br/>retry_count += 1]
 
     AFRetry --> Resume[Claude 重新<br/>opc_node_start]

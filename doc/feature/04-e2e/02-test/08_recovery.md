@@ -7,6 +7,8 @@
 
 **输入**：（断电重连，上次在 05-implement/tdd-implementation 中间）
 
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。`opc_flow_recover` 已合并到 `opc_flow_lifecycle({action:"recover"})`；`opc_node_retry` 已合并到 `opc_node_finish({status:"retry"})`。
+
 ```
 Session 启动后用户首次发消息（任意内容）
 UserPromptSubmit hook → 注入"先调 opc_flow_query"
@@ -24,31 +26,31 @@ Claude → opc_flow_query()
         current_pipeline_pointer: {sub_pipeline_id: "sub-1", phase: "05-implement", node: "tdd-implementation"}
       },
       suggested_actions: [
-        {intent: "恢复流程", next: {tool: "opc_flow_recover"}},
-        {intent: "放弃并开新流程", next: {tools: ["opc_flow_abort", "opc_flow_start"]}}
+        {intent: "恢复流程", next: {tool: "opc_flow_lifecycle", args: {action:"recover"}}},
+        {intent: "放弃并开新流程", next: {tools: ["opc_flow_lifecycle({action:'abort'})", "opc_flow_lifecycle({action:'start'})"]}}
       ],
-      orphan_pipelines: [{id: "pipeline-001", last_active: "...", suggest: "opc_pipeline_recover"}]
+      orphan_pipelines: [{id: "pipeline-001", last_active: "...", suggest: "opc_flow_lifecycle({action:'recover'}) 内部级联"}]
     }
 
 用户: "恢复"
 
-Claude → opc_flow_recover()
+Claude → opc_flow_lifecycle({action:"recover"})
   → owner.pid 接管为当前 pid
-  → 检测 current_pipeline_pointer 非空 → 内部调 opc_pipeline_recover(pipeline-001)
+  → 检测 current_pipeline_pointer 非空 → 内部级联 pipeline 恢复（吸收原 opc_pipeline_recover 语义）
     · in_progress node tdd-implementation 超时（>30 min 无心跳）→ 自动标记 failed (error.type: timeout)
   → 返回:
     {
       recovered: true,
       resume_step: "phase_execution",
       resume_pointer: {sub_pipeline_id: "sub-1", phase: "05-implement", node: "tdd-implementation"},
-      next: {tool: "opc_node_retry", args: {node_name: "tdd-implementation"}},
-      recoverable_nodes: [{name: "tdd-implementation", status: "failed", suggested_action: "opc_node_retry"}]
+      next: {tool: "opc_node_finish", args: {status:"retry", node_name: "tdd-implementation"}},
+      recoverable_nodes: [{name: "tdd-implementation", status: "failed", suggested_action: "opc_node_finish({status:'retry'})"}]
     }
 
-Claude → opc_node_retry("tdd-implementation") → 级联重置下游 → 重跑
+Claude → opc_node_finish({status:"retry", node_name:"tdd-implementation"}) → 级联重置下游 → 重跑
 ```
 
-**关键改进**：opc_flow_recover `opc_flow_recover` 自动 timeout 检测，避免脏 in_progress 状态卡死。无需独立 SessionStart hook。
+**关键改进**：`opc_flow_lifecycle({action:"recover"})` 自动 timeout 检测 + 级联 pipeline_recover，避免脏 in_progress 状态卡死。无需独立 SessionStart hook。
 
 **结论**：✓ 无缺口。
 
@@ -57,4 +59,4 @@ Claude → opc_node_retry("tdd-implementation") → 级联重置下游 → 重�
 ## 相关文档
 
 - [09_phase-reset.md](09_phase-reset.md) — 下一场景：阶段重置
-- [../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md](../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 恢复与孤儿（opc_flow_recover）
+- [../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md](../../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 恢复与孤儿（`opc_flow_lifecycle({action:"recover"})`）
