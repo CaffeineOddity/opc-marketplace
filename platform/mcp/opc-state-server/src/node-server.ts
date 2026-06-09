@@ -102,6 +102,12 @@ export class NodeServer {
         { required_action: "opc_flow_reflect" },
       );
     }
+    if (flow.pending_user_question) {
+      throw new NodeValidationError(
+        `pending-question-guard: opc_node_start blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: "opc_flow_user_reply" },
+      );
+    }
 
     const state = await loadStateJson(this.root, req.session_id, req.pipeline_id, req.sub_pipeline_id);
     const phase = state.phases.find((p) => p.phase === req.phase);

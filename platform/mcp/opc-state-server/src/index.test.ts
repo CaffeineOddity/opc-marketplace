@@ -366,7 +366,7 @@ describe("FlowServer.correct", () => {
 });
 
 describe("FlowServer.query expires cleanup", () => {
-  it("removes expired pending_reflections", async () => {
+  it("promotes expired pending_reflections to expired_pending_decision + emits ask_user (M8.c)", async () => {
     const fs = fresh();
     const a = await fs.lifecycle({ action: "start" });
     const s = a.state.session_id;
@@ -382,6 +382,144 @@ describe("FlowServer.query expires cleanup", () => {
     });
     await saveFlowState(root, state, fixedNow());
     const q = await fs.query({ session_id: s });
-    expect(q.state.pending_reflections).toEqual([]);
+    expect(q.state.pending_reflections).toHaveLength(1);
+    expect(q.state.pending_reflections[0]?.status).toBe("expired_pending_decision");
+    expect(q.state.pending_user_question).not.toBeNull();
+    expect(q.state.pending_user_question?.question_id).toBe("uq-expired-rfl-old");
+    expect(q.next.tool).toBe("opc_flow_user_reply");
+  });
+});
+
+describe("M8.b registerPendingReflection max-1 invariant", () => {
+  it("rejects second registration when one is already pending", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const state = await loadFlowState(root, a.state.session_id);
+    fs.registerPendingReflection(state, {
+      reflection_id: "rfl-1",
+      artifact_path: "p",
+      step_id: "intent_analysis",
+      issued_by: "x",
+      issued_at: fixedNow().toISOString(),
+      expires_at: new Date(fixedNow().getTime() + 60_000).toISOString(),
+      must_be_registered_by: "opc_flow_reflect",
+    });
+    expect(() =>
+      fs.registerPendingReflection(state, {
+        reflection_id: "rfl-2",
+        artifact_path: "p2",
+        step_id: "intent_analysis",
+        issued_by: "x",
+        issued_at: fixedNow().toISOString(),
+        expires_at: new Date(fixedNow().getTime() + 60_000).toISOString(),
+        must_be_registered_by: "opc_flow_reflect",
+      }),
+    ).toThrow(/pending_reflections_max_1_violated/);
+  });
+});
+
+describe("M8.c expired-reflection dispositions via userReply", () => {
+  async function setupExpired(fs: FlowServer): Promise<{ s: string; qid: string }> {
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const state = await loadFlowState(root, s);
+    fs.registerPendingReflection(state, {
+      reflection_id: "rfl-exp",
+      artifact_path: "art.json",
+      step_id: "intent_analysis",
+      issued_by: "x",
+      issued_at: "2026-06-09T00:00:00Z",
+      expires_at: "2026-06-09T00:30:00Z",
+      must_be_registered_by: "opc_flow_reflect",
+    });
+    await saveFlowState(root, state, fixedNow());
+    const q = await fs.query({ session_id: s });
+    return { s, qid: q.state.pending_user_question!.question_id };
+  }
+
+  it("disposition=resume re-arms pending and emits intervention", async () => {
+    const fs = fresh();
+    const { s, qid } = await setupExpired(fs);
+    const r = await fs.userReply({
+      session_id: s,
+      question_id: qid,
+      user_reply: "let's try again",
+      resolution: { disposition: "resume" },
+    });
+    expect(r.state.pending_user_question).toBeNull();
+    expect(r.state.pending_reflections).toHaveLength(1);
+    expect(r.state.pending_reflections[0]?.status).toBe("pending");
+    expect(r.state.user_interventions[0]?.trigger).toBe("expired_reflection_resumed");
+  });
+
+  it("disposition=discard drops pending and appends discarded reflection_log entry", async () => {
+    const fs = fresh();
+    const { s, qid } = await setupExpired(fs);
+    const r = await fs.userReply({
+      session_id: s,
+      question_id: qid,
+      user_reply: "drop it",
+      resolution: { disposition: "discard" },
+    });
+    expect(r.state.pending_reflections).toEqual([]);
+    expect(r.state.user_interventions[0]?.trigger).toBe("expired_reflection_discarded");
+    expect(r.state.reflection_log.at(-1)?.verdict).toBe("discarded_by_user_after_expiry");
+    expect(r.state.skip_reflection_once_for_step).toBeFalsy();
+  });
+
+  it("disposition=skip drops pending, logs skipped, sets skip_reflection_once_for_step", async () => {
+    const fs = fresh();
+    const { s, qid } = await setupExpired(fs);
+    const r = await fs.userReply({
+      session_id: s,
+      question_id: qid,
+      user_reply: "skip ahead",
+      resolution: { disposition: "skip" },
+    });
+    expect(r.state.pending_reflections).toEqual([]);
+    expect(r.state.user_interventions[0]?.trigger).toBe("expired_reflection_skipped");
+    expect(r.state.reflection_log.at(-1)?.verdict).toBe("skipped_by_user_after_expiry");
+    expect(r.state.skip_reflection_once_for_step).toBe("intent_analysis");
+  });
+
+  it("rejects expired reply without disposition", async () => {
+    const fs = fresh();
+    const { s, qid } = await setupExpired(fs);
+    await expect(
+      fs.userReply({ session_id: s, question_id: qid, user_reply: "x", resolution: {} }),
+    ).rejects.toThrow(/disposition is required/);
+  });
+});
+
+describe("M8.d skip_reflection_once_for_step lifecycle", () => {
+  it("rounds_exceeded user_reply sets flag; matching stepComplete clears it", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const rx = await fs.reflect({
+      session_id: s,
+      reflection_id: "rfl-rx",
+      verdict: "rounds_exceeded",
+      step_id: "intent_analysis",
+      rounds_exceeded_payload: {
+        reasoning_trace: [],
+        kept_objections: [],
+        context_artifacts: [],
+      },
+    });
+    const qid = rx.state.pending_user_question!.question_id;
+    const reply = await fs.userReply({
+      session_id: s,
+      question_id: qid,
+      user_reply: "go",
+      resolution: { accumulated_patch: { intent: "task" } },
+    });
+    expect(reply.state.skip_reflection_once_for_step).toBe("intent_analysis");
+    const done = await fs.stepComplete({
+      step: "intent_analysis",
+      session_id: s,
+      intent: "task",
+    });
+    expect(done.state.skip_reflection_once_for_step).toBeNull();
   });
 });

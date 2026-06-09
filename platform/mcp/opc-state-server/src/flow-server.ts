@@ -233,6 +233,9 @@ export class FlowServer {
     }
 
     state.history.push(this.entry(req.step, "opc_flow_step_complete", req, null));
+    if (state.skip_reflection_once_for_step === req.step) {
+      state.skip_reflection_once_for_step = null;
+    }
     await saveFlowState(this.root, state, this.now());
     return { state, next: this.computeNext(state) };
   }
@@ -292,6 +295,11 @@ export class FlowServer {
     if (!q || q.question_id !== req.question_id) {
       throw new Error(`no pending user question with id ${req.question_id}`);
     }
+    const isExpiredFlow = q.question_id.startsWith("uq-expired-");
+    const disposition = req.resolution?.disposition;
+    if (isExpiredFlow) {
+      return this.handleExpiredReflectionReply(state, q, req, disposition);
+    }
     const intervention_id = `intv-${this.uuid()}`;
     const intervention: UserIntervention = {
       intervention_id,
@@ -308,8 +316,87 @@ export class FlowServer {
     if (req.resolution?.accumulated_patch) {
       Object.assign(state.accumulated, req.resolution.accumulated_patch);
     }
+    state.skip_reflection_once_for_step = q.step_id;
     state.history.push(this.entry("user_reply", "opc_flow_user_reply", req, { intervention_id }));
     await saveFlowState(this.root, state, this.now());
+    return { state, next: this.computeNext(state), intervention_id };
+  }
+
+  private async handleExpiredReflectionReply(
+    state: FlowState,
+    q: PendingUserQuestion,
+    req: UserReplyRequest,
+    disposition: "resume" | "discard" | "skip" | undefined,
+  ): Promise<UserReplyResponse> {
+    const reflection_id = q.question_id.replace(/^uq-expired-/, "");
+    const target = state.pending_reflections.find((p) => p.reflection_id === reflection_id);
+    if (!target) {
+      throw new Error(
+        `expired reflection ${reflection_id} not found in pending_reflections; question_id=${q.question_id} is stale`,
+      );
+    }
+    if (!disposition) {
+      throw new Error(
+        `resolution.disposition is required for expired-reflection user_reply (one of: resume | discard | skip)`,
+      );
+    }
+    const intervention_id = `intv-${this.uuid()}`;
+    let trigger: UserIntervention["trigger"];
+    const now = this.now();
+
+    if (disposition === "resume") {
+      target.status = "pending";
+      target.expires_at = new Date(now.getTime() + 30 * 60_000).toISOString();
+      trigger = "expired_reflection_resumed";
+    } else if (disposition === "discard") {
+      state.pending_reflections = state.pending_reflections.filter(
+        (p) => p.reflection_id !== reflection_id,
+      );
+      trigger = "expired_reflection_discarded";
+      state.reflection_log.push({
+        step_id: target.step_id,
+        reflection_id,
+        artifact_path: target.artifact_path,
+        verdict: "discarded_by_user_after_expiry",
+        at: now.toISOString(),
+      });
+    } else {
+      state.pending_reflections = state.pending_reflections.filter(
+        (p) => p.reflection_id !== reflection_id,
+      );
+      trigger = "expired_reflection_skipped";
+      state.reflection_log.push({
+        step_id: target.step_id,
+        reflection_id,
+        artifact_path: target.artifact_path,
+        verdict: "skipped_by_user_after_expiry",
+        at: now.toISOString(),
+      });
+    }
+
+    const intervention: UserIntervention = {
+      intervention_id,
+      trigger,
+      step_id: q.step_id,
+      question_id: q.question_id,
+      user_reply: req.user_reply,
+      ...(req.resolution ? { resolution: req.resolution } : {}),
+      linked_reflection_artifacts: q.context_artifacts,
+      at: now.toISOString(),
+    };
+    state.user_interventions.push(intervention);
+    state.pending_user_question = null;
+    if (disposition === "skip") {
+      state.skip_reflection_once_for_step = q.step_id;
+    }
+    state.history.push(
+      this.entry("user_reply", "opc_flow_user_reply", req, {
+        intervention_id,
+        disposition,
+        reflection_id,
+      }),
+    );
+    await saveFlowState(this.root, state, now);
     return { state, next: this.computeNext(state), intervention_id };
   }
 
@@ -385,6 +472,12 @@ export class FlowServer {
   }
 
   registerPendingReflection(state: FlowState, p: PendingReflection): void {
+    if (state.pending_reflections.length > 0) {
+      const existing = state.pending_reflections.map((x) => x.reflection_id).join(",");
+      throw new Error(
+        `pending_reflections_max_1_violated: cannot register ${p.reflection_id}; existing=[${existing}]; this indicates a reflection-server bug or missing opc_flow_reflect call`,
+      );
+    }
     state.pending_reflections.push(p);
   }
 
@@ -432,12 +525,39 @@ export class FlowServer {
 
   private cleanupExpired(state: FlowState): void {
     const nowMs = this.now().getTime();
-    state.pending_reflections = state.pending_reflections.filter(
-      (p) => new Date(p.expires_at).getTime() > nowMs,
-    );
+    // Spec §六·补: pending_reflections MUST NOT be silently dropped on expiry.
+    // Promote expired entries to `expired_pending_decision` and synthesize a
+    // pending_user_question so opc_flow_user_reply can dispose of them.
+    for (const p of state.pending_reflections) {
+      const expiredMs = new Date(p.expires_at).getTime();
+      if (expiredMs > nowMs) continue;
+      if (p.status === "expired_pending_decision") continue;
+      p.status = "expired_pending_decision";
+      if (!state.pending_user_question) {
+        const askedAt = this.now();
+        const replyExpires = new Date(askedAt.getTime() + 24 * 60 * 60_000);
+        state.pending_user_question = {
+          question_id: `uq-expired-${p.reflection_id}`,
+          step_id: p.step_id,
+          round: 0,
+          asked_at: askedAt.toISOString(),
+          expires_at: replyExpires.toISOString(),
+          must_be_resolved_by: "opc_flow_user_reply",
+          reasoning_trace: [
+            `pending reflection ${p.reflection_id} for step ${p.step_id} expired at ${p.expires_at}; choose disposition: resume | discard | skip`,
+          ],
+          kept_objections: [],
+          context_artifacts: [p.artifact_path],
+          ...(p.pipeline_pointer_ref ? { pipeline_pointer_ref: p.pipeline_pointer_ref } : {}),
+        };
+      }
+    }
+    // pending_user_question expiry continues to clear (it has its own 24h budget);
+    // expired-reflection prompts get reissued on next query if user still hasn't replied.
     if (
       state.pending_user_question &&
-      new Date(state.pending_user_question.expires_at).getTime() <= nowMs
+      new Date(state.pending_user_question.expires_at).getTime() <= nowMs &&
+      !state.pending_user_question.question_id.startsWith("uq-expired-")
     ) {
       state.pending_user_question = null;
     }

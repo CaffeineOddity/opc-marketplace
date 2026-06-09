@@ -141,6 +141,17 @@ export class PipelineServer {
     if (flow.status !== "in_progress") {
       throw new Error(`session ${req.session_id} is ${flow.status}; cannot create pipeline`);
     }
+    if (flow.pending_reflections.length > 0) {
+      const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
+      throw new PipelineConflictError(
+        `reflection-registry-guard: opc_pipeline_create blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+      );
+    }
+    if (flow.pending_user_question) {
+      throw new PipelineConflictError(
+        `pending-question-guard: opc_pipeline_create blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+      );
+    }
     const pipeline_id = `pl-${this.uuid()}`;
     const now = this.now();
     const subs = this.materializeSubs(req, now);
@@ -250,6 +261,18 @@ export class PipelineServer {
   }
 
   async replan(req: PipelineReplanRequest): Promise<PipelineReplanResponse> {
+    const flow = await loadFlowState(this.root, req.session_id);
+    if (flow.pending_reflections.length > 0) {
+      const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
+      throw new PipelineConflictError(
+        `reflection-registry-guard: opc_pipeline_replan blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+      );
+    }
+    if (flow.pending_user_question) {
+      throw new PipelineConflictError(
+        `pending-question-guard: opc_pipeline_replan blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+      );
+    }
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
     const now = this.now();
     const applied: AddSubPipelineSpec[] = [];

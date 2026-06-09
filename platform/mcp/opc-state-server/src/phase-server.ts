@@ -161,6 +161,11 @@ export class PhaseServer {
         `reflection-registry-guard: opc_phase_complete blocked; pending_reflections=[${ids}]`,
       );
     }
+    if (flow.pending_user_question) {
+      throw new PhaseValidationError(
+        `pending-question-guard: opc_phase_complete blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+      );
+    }
     const incompleteNodes = phase.nodes.filter((n) => n.status !== "completed");
     const allNodesDone = incompleteNodes.length === 0;
 

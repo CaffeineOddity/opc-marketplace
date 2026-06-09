@@ -68,6 +68,14 @@ export interface ReflectionLogEntry {
   step_id: string;
   round?: number;
   method?: string;
+  reflection_id?: string;
+  artifact_path?: string;
+  verdict?:
+    | "clean"
+    | "objections_remain"
+    | "rounds_exceeded"
+    | "skipped_by_user_after_expiry"
+    | "discarded_by_user_after_expiry";
   evidence_diff?: { added?: string[]; modified?: string[]; removed?: string[] };
   validator_result?: Record<string, "ok" | "fail" | "skip">;
   objections_kept_by_meta?: number;
@@ -86,6 +94,14 @@ export interface PendingReflection {
   expires_at: string;
   must_be_registered_by: "opc_flow_reflect";
   pipeline_pointer_ref?: PipelinePointer | null;
+  /**
+   * Spec §六·补: `pending` is the normal queued state; on `cleanupExpired`
+   * pass an expired entry is promoted to `expired_pending_decision` and the
+   * cleanup pass MUST emit a `pending_user_question` with the matching
+   * `question_id = uq-expired-<reflection_id>`. Only `opc_flow_user_reply`
+   * may consume an `expired_pending_decision` entry.
+   */
+  status?: "pending" | "expired_pending_decision";
 }
 
 export interface PendingUserQuestion {
@@ -105,6 +121,10 @@ export interface UserIntervention {
   intervention_id: string;
   trigger:
     | "ask_user_rounds_exceeded"
+    | "ask_user_expired_reflection"
+    | "expired_reflection_resumed"
+    | "expired_reflection_discarded"
+    | "expired_reflection_skipped"
     | "user_initiated_revise"
     | "user_initiated_restart"
     | "user_initiated_phase_reset"
@@ -117,6 +137,7 @@ export interface UserIntervention {
     objections_resolved?: string[];
     objections_dismissed?: string[];
     notes?: string | null;
+    disposition?: "resume" | "discard" | "skip";
   };
   linked_reflection_artifacts?: string[];
   at: string;
@@ -153,6 +174,15 @@ export interface FlowState {
 
   pipeline_id: string | null;
   current_pipeline_pointer: PipelinePointer | null;
+  /**
+   * Spec §七 路由表: after `opc_flow_user_reply` consumes either a
+   * `ask_user_rounds_exceeded` question or an `expired_pending_decision`
+   * with disposition=skip, set this to the step_id so the next
+   * `opc_<step>_complete` knows to bypass the reflection cycle once
+   * (preventing ping-pong with the rounds-guard). Consumed (cleared) the
+   * next time `opc_flow_step_complete` runs for that step.
+   */
+  skip_reflection_once_for_step?: string | null;
 }
 
 export function emptyAccumulated(): Accumulated {
@@ -195,6 +225,7 @@ export function newFlowState(args: {
     user_interventions: [],
     pipeline_id: null,
     current_pipeline_pointer: null,
+    skip_reflection_once_for_step: null,
   };
 }
 

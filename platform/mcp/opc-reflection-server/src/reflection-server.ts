@@ -74,6 +74,14 @@ export interface ReflectCritiqueCompleteRequest {
   evidence_diff?: Record<string, unknown> | null;
   validator_context?: ValidatorContext;
   artifact?: EvidenceArtifact;
+  /**
+   * Hard invariant per spec §六: pending_reflections[] must be empty before a
+   * new reflection artifact is produced. Caller (state-server consumer) MUST
+   * pass the current count read from flow-state; if > 0, this tool throws
+   * `previous_pending_unregistered`. Omitting the field is permitted only for
+   * legacy callers / unit tests that bypass the invariant.
+   */
+  current_pending_count?: number;
 }
 
 export interface ReflectCritiqueCompleteResponse {
@@ -208,6 +216,11 @@ export class ReflectionServer {
   async critiqueComplete(
     req: ReflectCritiqueCompleteRequest,
   ): Promise<ReflectCritiqueCompleteResponse> {
+    if (typeof req.current_pending_count === "number" && req.current_pending_count > 0) {
+      throw new ReflectionServerError(
+        `previous_pending_unregistered: pending_reflections has ${req.current_pending_count} unregistered entry(ies); call opc_flow_reflect to register the previous artifact before producing a new one`,
+      );
+    }
     let validatorResults: ValidatorResult[] | undefined;
     if (req.artifact) {
       const ctxForValidator: ValidatorContext = {
