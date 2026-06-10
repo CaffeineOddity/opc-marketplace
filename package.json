@@ -10,8 +10,6 @@
   },
   "packageManager": "pnpm@10.26.1",
   "scripts": {
-    "build": "pnpm -r --filter './shared/**' --filter './platform/mcp/**' run build",
-    "typecheck": "pnpm -r --filter './shared/**' --filter './platform/mcp/**' run typecheck",
     "lint": "eslint \"{shared,platform}/**/*.ts\"",
     "format": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md}\"",
     "format:fix": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
