@@ -1,5 +1,8 @@
 {
   "name": "opc-marketplace",
   "private": true,
-  "packageManager": "pnpm@10.26.1"
+  "packageManager": "pnpm@10.26.1",
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
 }

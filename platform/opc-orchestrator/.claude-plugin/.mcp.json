@@ -1,16 +1,16 @@
 {
   "mcpServers": {
     "opc-state-server": {
-      "command": "npx",
-      "args": ["tsx", "../../mcp/opc-state-server/src/server.ts"]
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../mcp/opc-state-server/dist/server.js"]
     },
     "opc-knowledge-server": {
-      "command": "npx",
-      "args": ["tsx", "../../mcp/opc-knowledge-server/src/mcp-server.ts"]
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../mcp/opc-knowledge-server/dist/mcp-server.js"]
     },
     "opc-reflection-server": {
-      "command": "npx",
-      "args": ["tsx", "../../mcp/opc-reflection-server/src/mcp-server.ts"]
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../mcp/opc-reflection-server/dist/mcp-server.js"]
     }
   }
 }

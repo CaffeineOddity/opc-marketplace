@@ -49,11 +49,11 @@ const TOOL_DEFS = [
   {
     name: "opc_reflect_execute",
     description:
-      "Execute a reflection method. method=cove runs M3; method=critique runs M4; method=debate runs M5; method=tot runs M6. Returns sub-agent dispatch spec.",
+      "Execute a reflection method. method=cove runs M3; method=critique runs M4; method=debate runs M5; method=tot runs M6; method=reflexion runs M7; method=validator runs M8. Returns sub-agent dispatch spec.",
     inputSchema: {
       type: "object",
       properties: {
-        method: { type: "string", enum: ["cove", "critique", "debate", "tot"] },
+        method: { type: "string", enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
         session_id: { type: "string" },
         step_id: { type: "string" },
         artifact: { type: "object" },
@@ -69,7 +69,7 @@ const TOOL_DEFS = [
     inputSchema: {
       type: "object",
       properties: {
-        method: { type: "string", enum: ["cove", "critique", "debate", "tot"] },
+        method: { type: "string", enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
         session_id: { type: "string" },
         step_id: { type: "string" },
         objections: { type: "array" },

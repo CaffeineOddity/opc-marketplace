@@ -1,9 +1,0 @@
-**/dist/**
-**/node_modules/**
-**/coverage/**
-**/.opc/**
-poc/**/artifacts/**
-.git/**
-pnpm-lock.yaml
-doc/**
-poc/**/*.md
