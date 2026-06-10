@@ -148,3 +148,5 @@ export {
   SIM_WARN_THRESHOLD,
 } from "./similarity.js";
 export type { SimilarityInput, SimilarityResult } from "./similarity.js";
+export { startReflectionServer } from "./mcp-server.js";
+export type { ReflectionMcpOptions } from "./mcp-server.js";

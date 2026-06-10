@@ -21,3 +21,5 @@ export { diff3 } from "./diff3.js";
 export type { Diff3Result, Hunk, MergeStatus } from "./diff3.js";
 export { loadRefs, saveRefs, addRefs, relatedUnits, refsPath, REFS_FILENAME } from "./refs.js";
 export type { RefsFile } from "./refs.js";
+export { startKnowledgeServer } from "./mcp-server.js";
+export type { KnowledgeMcpOptions } from "./mcp-server.js";

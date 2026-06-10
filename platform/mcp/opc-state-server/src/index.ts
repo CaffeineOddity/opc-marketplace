@@ -229,3 +229,6 @@ export type {
   ValidatorStep,
   WriteValidatorArtifactInput,
 } from "./validator-log.js";
+
+export { startStateServer } from "./server.js";
+export type { StateServerOptions } from "./server.js";
