@@ -382,7 +382,7 @@ type NextStepHint = {
 |---|---|
 | `opc_flow_correct({action:"revise"\|"restart"\|"phase_reset"})` / `opc_pipeline_lifecycle({action:"replan"})` | 纠错类通道——反思未登记时用户也可能想纠错，不该被锁死 |
 | `opc_flow_lifecycle({action:"abort"})` | 用户跑路权，永远允许 |
-| `opc_node_finish({status:"completed"\|"failed"})` | sub-agent 回报通道，不能被反思阻塞 |
+| `opc_node_finish({status:"success"\|"failed"})` | sub-agent 回报通道，不能被反思阻塞 |
 
 #### 失败返回示例
 
@@ -499,7 +499,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 | `task_decomposition` (P3) | `opc_flow_step_complete({step:"task_decomposition"})`（带 resolution 修正后的 sub_pipelines） | 跳过反思一次 |
 | `brief_generation` (P4) | `opc_flow_step_complete({step:"brief_generation"})` | 跳过反思一次 |
 | `node_selection` (P5) | `opc_phase_confirm`（直接采用用户决策的 selected_nodes，写入 state.json.phases[].selected_nodes） | 跳过反思一次 |
-| `node_execution` (P6) | `opc_node_finish({status:"completed"})`（直接采纳用户对 evidence 的裁定） | 跳过反思一次 |
+| `node_execution` (P6) | `opc_node_finish({status:"success"})`（直接采纳用户对 evidence 的裁定） | 跳过反思一次 |
 | `phase_completion` (P7) | `opc_phase_complete` | 跳过反思一次 |
 | `phase_advance` (P8) | `opc_phase_start(next_phase)` 或 `opc_flow_correct({action:"phase_reset"})`（按用户裁定） | 跳过反思一次 |
 
@@ -542,7 +542,7 @@ checkPendingUserQuestion(flowState, callerTool) // ② 再校用户问答
 // 任一抛错即 reject
 ```
 
-豁免清单也复用——`opc_flow_lifecycle({action:"abort"})` / `opc_flow_correct({action:"revise"|"restart"|"phase_reset"})` / `opc_pipeline_lifecycle({action:"replan"})` / `opc_node_finish({status:"completed"|"failed"})` 永远放行（用户跑路 / 主动纠错 / sub-agent 回报通道）。
+豁免清单也复用——`opc_flow_lifecycle({action:"abort"})` / `opc_flow_correct({action:"revise"|"restart"|"phase_reset"})` / `opc_pipeline_lifecycle({action:"replan"})` / `opc_node_finish({status:"success"|"failed"})` 永远放行（用户跑路 / 主动纠错 / sub-agent 回报通道）。
 
 ### Hard invariants（A3 补充）
 

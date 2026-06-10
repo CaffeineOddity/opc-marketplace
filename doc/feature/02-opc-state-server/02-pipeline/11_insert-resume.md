@@ -43,7 +43,7 @@ sequenceDiagram
     Note over C,A: ② 让当前 node 跑完
     C->>A: (sub-2 的 backend-endpoint 节点继续执行)
     A-->>C: 完成
-    C->>ND: opc_node_finish({status:"completed", evidence})
+    C->>ND: opc_node_finish({status:"success", evidence})
     ND->>SM: validate_node_completion + L1/L2
 
     Note over ND,SM: ③ node 边界：state-manager 检测到 pending immediate sub

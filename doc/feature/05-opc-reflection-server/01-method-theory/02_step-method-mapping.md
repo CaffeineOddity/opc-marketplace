@@ -140,7 +140,7 @@ opc_phase_confirm
 ### P6 — 节点执行
 
 ```
-opc_node_finish({status:"completed"})
+opc_node_finish({status:"success"})
     │
     ├── V1 (L1 工件存在性) → 失败? → ask_user
     ├── V2–V5 (按 node 类型选择) → 失败? →

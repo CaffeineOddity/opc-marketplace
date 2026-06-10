@@ -144,7 +144,7 @@ sequenceDiagram
         C->>C: 按 node_body 指令执行
         alt 成功
             C->>KS: opc_knowledge_write
-            C->>SS: opc_node_finish({status:"completed"})
+            C->>SS: opc_node_finish({status:"success"})
             SS-->>C: { unblocked_nodes }
         else 失败
             C->>SS: opc_node_finish({status:"failed"}) → 修复 → retry / abort
@@ -231,7 +231,7 @@ flowchart TD
     T --> T2[Claude 加载前置知识<br/>opc_knowledge_read({mode:"batch"})]
     T2 --> U[按 node_body 指令执行]
     U --> V{执行结果}
-    V -->|成功| W[opc_knowledge_write<br/>opc_node_finish({status:"completed"})<br/>返回 unblocked_nodes]
+    V -->|成功| W[opc_knowledge_write<br/>opc_node_finish({status:"success"})<br/>返回 unblocked_nodes]
     W --> X{当前 phase<br/>全部 node 完成?}
     X -->|否| S
     X -->|是| Y[opc_phase_complete<br/>返回 pipeline_progress + next_phase]

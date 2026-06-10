@@ -21,7 +21,7 @@
 ⑩ 返回 flow_next → Claude → opc_knowledge_open
 ⑪ 返回 flow_next → Claude → opc_phase_start("04-implement-design")
 ⑫ opc_phase_confirm → 锁定（同步更新 current_pipeline_pointer）
-⑬ 逐 node: opc_node_start → 按 node_body 执行 → opc_node_finish({status:"completed"})
+⑬ 逐 node: opc_node_start → 按 node_body 执行 → opc_node_finish({status:"success"})
 ⑭ opc_phase_complete → auto_advance + pipeline_progress
 ⑮ 回到 ⑪ → 进入 05-implement → 重复
 ⑯ opc_pipeline_lifecycle({action:"complete"}) → manifest.md

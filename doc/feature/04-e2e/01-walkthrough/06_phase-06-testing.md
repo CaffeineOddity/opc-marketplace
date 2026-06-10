@@ -17,7 +17,7 @@ opc_node_start("integration-test") → Agent:
   → 端到端测试: 注册 → 登录 → 获取 session → 登出 → 验证 session 失效
   → opc_knowledge_write(...)  # 如有修正
 
-opc_node_finish({status:"completed"}) → { unblocked_nodes: [] }
+opc_node_finish({status:"success"}) → { unblocked_nodes: [] }
 opc_phase_complete → { next_phase: null }
 ```
 

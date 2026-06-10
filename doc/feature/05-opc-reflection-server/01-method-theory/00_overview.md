@@ -45,7 +45,7 @@
 | P3 | 分解 | opc_flow_step_complete({step:"task_decomposition"}) | sub-pipeline 切分不合理 | D 元决策 |
 | P4 | Brief | opc_flow_step_complete({step:"brief_generation"}) | brief 与 task 偏移 | B 完整性 |
 | P5 | 节点选择 | opc_phase_confirm | 选错节点组合 | D 元决策 |
-| P6 | 节点执行 | opc_node_finish({status:"completed"}) | evidence 造假 / 缺失 | C 执行 |
+| P6 | 节点执行 | opc_node_finish({status:"success"}) | evidence 造假 / 缺失 | C 执行 |
 | P7 | 阶段完成 | opc_phase_complete | quality_gate 没真跑 | C 执行 |
 | P8 | 阶段推进 | auto_advance | 该回退却前进 | D 元决策 |
 

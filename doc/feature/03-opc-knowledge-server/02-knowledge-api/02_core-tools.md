@@ -152,7 +152,7 @@ opc_node_start 内部固定走此 mode 加载 input.knowledge。
     ["accept_theirs", "keep_ours", "spawn_merge_node"], written: false }
 ```
 
-> **注**：`opc_node_finish({status:"completed"})` L1 evidence 校验时若收到 `merge_status="conflict"`，会拒绝节点完成并把 `suggested_actions` 通过 `opc_flow_query` 暴露给 Claude；不会自动 keep_ours 静默覆盖。
+> **注**：`opc_node_finish({status:"success"})` L1 evidence 校验时若收到 `merge_status="conflict"`，会拒绝节点完成并把 `suggested_actions` 通过 `opc_flow_query` 暴露给 Claude；不会自动 keep_ours 静默覆盖。
 
 ---
 
@@ -200,7 +200,7 @@ discriminator 分支:
 
 `opc_knowledge_admin({action:"reindex"})` **不是 Claude 路径的常规工具**，主要用于：
 - 启动时检测到 `.idx` 缺失/损坏的自愈
-- `opc_node_finish({status:"completed"})` 完成时的 flush 触发点（详见 § 2.9 节点级 flush）
+- `opc_node_finish({status:"success"})` 完成时的 flush 触发点（详见 § 2.9 节点级 flush）
 - 用户在 `/opc-status` 看到 stale-window 异常时的手动修复
 
 ---
@@ -229,7 +229,7 @@ write 调用 → │  ┌─────────────┐    ┌──
             └──────────────────────────────────────────┘
                        ▲
                        │ Hard flush 触发点：
-                       ├─ opc_node_finish({status:"completed"}) 调用
+                       ├─ opc_node_finish({status:"success"}) 调用
                        ├─ opc_phase_complete 调用
                        ├─ opc_knowledge_read({mode:"search", consistency:"fresh"})
                        └─ opc_knowledge_admin({action:"reindex"}) 显式调用
@@ -252,17 +252,17 @@ knowledge-server 在以下时机**同步 flush** dirty queue（最多 5s 超时�
 
 | 触发 | 调用方 | 目的 |
 |---|---|---|
-| `opc_node_finish({status:"completed"})` 被 state-server 接收时 | state-server 内部跨进程通知 knowledge-server flush | 保证 node 边界后下一个 node 的 sub-agent search 不漏读上个 node 的产物 |
+| `opc_node_finish({status:"success"})` 被 state-server 接收时 | state-server 内部跨进程通知 knowledge-server flush | 保证 node 边界后下一个 node 的 sub-agent search 不漏读上个 node 的产物 |
 | `opc_phase_complete` 同上 | state-server | 跨 phase / sub-pipeline 切换前的强一致点 |
 | `opc_knowledge_read({mode:"search", consistency:"fresh"})` | 反思 sub-agent 等关键路径 | 校验 evidence 时不漏读 |
 | `opc_knowledge_admin({action:"reindex"})` 显式调用 | 用户 / 自愈脚本 | 修复异常 |
 
-> **跨进程通知 = 文件信号**：state-server 不直接调 knowledge-server 的内部函数。`opc_node_finish({status:"completed"})` 写一个标记文件 `.opc/sessions/<id>/.knowledge-flush-required`，knowledge-server 主进程 fs.watch 监听并 flush。简单可靠、无 IPC 复杂度。
+> **跨进程通知 = 文件信号**：state-server 不直接调 knowledge-server 的内部函数。`opc_node_finish({status:"success"})` 写一个标记文件 `.opc/sessions/<id>/.knowledge-flush-required`，knowledge-server 主进程 fs.watch 监听并 flush。简单可靠、无 IPC 复杂度。
 
-### `opc_node_finish({status:"completed"})` 的 reindex 协作
+### `opc_node_finish({status:"success"})` 的 reindex 协作
 
 ```
-state-server.opc_node_finish({status:"completed"}, node_evidence) 内部:
+state-server.opc_node_finish({status:"success"}, node_evidence) 内部:
   1. L1 evidence 校验 + L2 unblocked_by 校验
   2. 若 evidence.artifacts[] 含 knowledge_write 标记:
      → touch .opc/sessions/<id>/.knowledge-flush-required
@@ -286,7 +286,7 @@ state-server.opc_node_finish({status:"completed"}, node_evidence) 内部:
 |---|---|
 | reindex worker hang | 队列堆积 > 50 → `.idx.broken` 标记 → search 全部降级遍历 |
 | `.opc-knowledge.idx` 损坏 | search 检测 → 自动降级遍历 + 后台触发 `opc_knowledge_admin({action:"reindex", mode:"full"})` |
-| Hard flush 5s 超时 | `opc_node_finish({status:"completed"})` 不阻塞，返回 warning `{knowledge_index_stale: true}`，state-server 在下一次 search 前重试 |
+| Hard flush 5s 超时 | `opc_node_finish({status:"success"})` 不阻塞，返回 warning `{knowledge_index_stale: true}`，state-server 在下一次 search 前重试 |
 | knowledge-server 进程崩溃后启动 | 启动自检脚本扫 `.md` 文件 mtime > `.idx` mtime → 自动 incremental reindex |
 
 ---
@@ -347,10 +347,10 @@ flowchart TD
 | **L1/L2/L3 corrections 注入** | reflection-server 写时**必须**传 base_version；否则反思可能静默覆盖 sub-agent 的产出 |
 | **knowledge-server 内部 reindex** | 不调 write，不涉及 |
 
-### 与 `opc_node_finish({status:"completed"})` 的衔接
+### 与 `opc_node_finish({status:"success"})` 的衔接
 
 ```
-state-server.opc_node_finish({status:"completed"}, node_evidence) 内部:
+state-server.opc_node_finish({status:"success"}, node_evidence) 内部:
   1. L1 evidence 校验
      → 若 evidence.artifacts[] 中任一 write 返回 merge_status="conflict":
        → node 不允许 complete

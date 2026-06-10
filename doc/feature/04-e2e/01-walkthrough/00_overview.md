@@ -67,7 +67,7 @@ sequenceDiagram
             A->>KS: opc_knowledge_write
             KS-->>A: version+1
             A-->>C: evidence
-            C->>P: opc_node_finish({status:"completed"})(evidence)
+            C->>P: opc_node_finish({status:"success"})(evidence)
             P-->>C: unblocked_nodes
         end
         C->>P: opc_phase_complete
@@ -108,7 +108,7 @@ flowchart TD
     Groups --> Exec{有未完成 group?}
     Exec -->|是| StartNode[opc_node_start<br/>+ Task spawn]
     StartNode --> Sub[sub-agent 执行<br/>get_batch + write]
-    Sub --> Complete[opc_node_finish({status:"completed"})<br/>+evidence]
+    Sub --> Complete[opc_node_finish({status:"success"})<br/>+evidence]
     Complete --> L1{L1 校验<br/>knowledge 文件存在?}
     L1 -->|否| Retry[opc_node_finish({status:"retry"})]
     L1 -->|是| L2{L2 校验<br/>test/lint pass?}

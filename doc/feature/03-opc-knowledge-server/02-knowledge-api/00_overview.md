@@ -131,7 +131,7 @@ flowchart TD
 |------|----------------------|-------------------|
 | 流程启动 | 被 prerequisites 驱动调用 `opc_knowledge_read({mode:"list"})` | flow tools 路由判定 |
 | 管线创建 | `opc_knowledge_open` 接收 flow_next 指令 | `opc_pipeline_create` 返回 `flow_next:opc_knowledge_open` |
-| node 执行 | `read({mode:"batch"})` 加载 input，`write` 产出 output | `opc_node_start` 返回 node_body + dispatch；`opc_node_finish({status:"completed"})` 校验 knowledge 文件存在性（L1） |
+| node 执行 | `read({mode:"batch"})` 加载 input，`write` 产出 output | `opc_node_start` 返回 node_body + dispatch；`opc_node_finish({status:"success"})` 校验 knowledge 文件存在性（L1） |
 | 阶段回退 | 接收 phase_reset 触发的 base_version 写入（v+1，走标准 diff-and-merge） | `opc_flow_correct({action:"phase_reset"})` 走 git checkout 锚点 + `opc_knowledge_write` 链路 |
 | 搜索 | `read({mode:"search"})` / `read({mode:"list"})` / `admin({action:"reindex"})` | 无感知 |
 

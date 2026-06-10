@@ -175,7 +175,7 @@ Agent 执行：
 
 ⑤ 运行 lint → 0 errors, 2 warnings
 
-opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "tdd-implementation",
+opc_node_finish({status:"success"})("pipeline-20260606-001", "sub-1", "tdd-implementation",
   evidence: {
     summary: "TDD 实现完成：3 个测试文件，12/12 通过，lint 0 errors",
     test_results: { passed: 12, failed: 0, skipped: 0 },
@@ -236,7 +236,7 @@ Agent 执行：
    )
    → opc_knowledge_read({mode:"single"}) → 已有 v1 → merge → version: v2
 
-opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "auth-integration")
+opc_node_finish({status:"success"})("pipeline-20260606-001", "sub-1", "auth-integration")
 ```
 
 返回：
@@ -262,7 +262,7 @@ opc_node_start("security-review") → Agent:
 
   ② opc_knowledge_write(...)
 
-opc_node_finish({status:"completed"}) → { unblocked_nodes: [] }
+opc_node_finish({status:"success"}) → { unblocked_nodes: [] }
 ```
 
 ---

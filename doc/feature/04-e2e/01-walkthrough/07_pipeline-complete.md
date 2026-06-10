@@ -99,14 +99,14 @@ node: "auth-integration"
 | 3.4 | `opc_knowledge_open` | 1 |
 | 4.1 | `opc_phase_start` | 1 |
 | 4.3 | `opc_phase_confirm` | 1 |
-| 4.4 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"completed"})` | 2 |
-| 4.5 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"completed"})` | 2 |
+| 4.4 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"success"})` | 2 |
+| 4.5 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"success"})` | 2 |
 | 4.6 | `opc_phase_complete` | 1 |
 | 5.1 | `opc_phase_start` | 1 |
 | 5.2 | `opc_phase_confirm`（`opc_phase_adjust` 已删除，见 TOMBSTONES） | 1 |
-| 5.3-5.5 | `opc_node_start`×3 + `opc_node_finish({status:"completed"})`×3 | 6 |
+| 5.3-5.5 | `opc_node_start`×3 + `opc_node_finish({status:"success"})`×3 | 6 |
 | 5.6 | `opc_phase_complete` | 1 |
-| 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_finish({status:"completed"})` + `opc_phase_complete` | 5 |
+| 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_finish({status:"success"})` + `opc_phase_complete` | 5 |
 | 7 | `opc_pipeline_lifecycle({action:"complete"})` | 1 |
 
 Claude 按需读取的 prompt 文档（非 MCP 调用，由 flow tools 返回的 methodology 指引）：

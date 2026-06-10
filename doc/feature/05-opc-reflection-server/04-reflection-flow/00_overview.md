@@ -196,7 +196,7 @@ sequenceDiagram
     Note over C,U: ... 每个 step 重复 plan → method → complete → ack → flow_reflect
 
     Note over C,U: P6/P7 执行与完成
-    C->>SS: opc_node_finish({status:"completed"}) (validator-heavy)
+    C->>SS: opc_node_finish({status:"success"}) (validator-heavy)
     C->>SS: opc_phase_complete
 
     Note over C,U: P8 推进 / 回退
