@@ -304,8 +304,8 @@ export class CorrectionsServer {
       );
     if (peers.length <= this.perSectionCap) return;
     const sorted = [...peers].sort((a, b) => a.hotness - b.hotness);
-    const toFreezeCount = peers.length - this.perSectionCap;
-    for (let i = 0; i < toFreezeCount; i += 1) {
+    let toFreezeCount = peers.length - this.perSectionCap;
+    for (let i = 0; i < sorted.length && toFreezeCount > 0; i += 1) {
       const target = sorted[i];
       if (!target || target.id === seed.id) continue;
       const frozen: Correction = {
@@ -315,6 +315,7 @@ export class CorrectionsServer {
       };
       await saveCorrection(this.root, frozen);
       resp.frozen_ids.push(frozen.id);
+      toFreezeCount -= 1;
     }
   }
 

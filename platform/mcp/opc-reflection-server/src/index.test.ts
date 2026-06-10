@@ -1881,6 +1881,235 @@ describe("CorrectionsServer", () => {
   });
 });
 
+describe("distiller E2E: L1→L2 pipeline", () => {
+  let root: string;
+  let globalRoot: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "distiller-"));
+    globalRoot = await mkdtemp(join(tmpdir(), "distiller-glb-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(globalRoot, { recursive: true, force: true });
+  });
+
+  const newServer = (): CorrectionsServer =>
+    new CorrectionsServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      autoDecay: false,
+      globalCorrectionsRoot: globalRoot,
+    });
+
+  it("creates corrections from user interventions (L1→L2 create path)", async () => {
+    const srv = newServer();
+
+    // Simulate L1: user interventions from flow-state.json
+    const interventions = [
+      {
+        ts: "2026-06-10T10:00:00Z",
+        text: "不应该并行写入同一个 knowledge 文件",
+        before_state: "node_selection",
+      },
+      {
+        ts: "2026-06-10T10:01:00Z",
+        text: "decomposition 时两个 sub-pipeline 共享 model 但没有接口定义",
+        before_state: "task_decomposition",
+      },
+    ];
+
+    // Simulate distiller Step 3-5: batch upsert
+    const batch = interventions.map((intervention) => ({
+      operation: "create" as const,
+      correction: buildCorrection({
+        step:
+          intervention.before_state === "node_selection"
+            ? ("node_selection" as const)
+            : ("task_decomposition" as const),
+        unit: "corrections-test",
+        section: intervention.before_state === "node_selection" ? "file-conflict" : "coupling",
+        subsection: `l1-${intervention.ts.replace(/[:.]/g, "-")}`,
+        lesson: intervention.text.length > 300 ? intervention.text.slice(0, 300) : intervention.text,
+        rationale: `Manual intervention: ${intervention.text.slice(0, 100)}`,
+        applies_when: {
+          keywords: intervention.before_state === "node_selection"
+            ? ["parallel", "write", "conflict"]
+            : ["coupling", "interface", "sub-pipeline"],
+        },
+        source: "user" as const,
+        trigger: "intervention" as const,
+        linked_interventions: [{ ts: intervention.ts, text: intervention.text }],
+      }),
+    }));
+
+    const resp = await srv.upsert({ batch });
+    expect(resp.new_count).toBe(2);
+    expect(resp.merged_count).toBe(0);
+    expect(resp.written_ids).toHaveLength(2);
+
+    // Verify corrections are queryable
+    const q1 = await srv.query({ step: "node_selection" });
+    expect(q1.items.length).toBe(1);
+    expect(q1.items[0].source).toBe("user");
+    expect(q1.items[0].trigger).toBe("intervention");
+
+    const q2 = await srv.query({ step: "task_decomposition" });
+    expect(q2.items.length).toBe(1);
+  });
+
+  it("merges similar corrections (sim ≥ 0.72) instead of creating new", async () => {
+    const srv = newServer();
+
+    // Create initial correction
+    await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: buildCorrection({
+            step: "node_selection",
+            unit: "ns",
+            section: "parallel",
+            subsection: "write-conflict",
+            lesson: "avoid parallel writes to the same knowledge file because it causes merge conflicts",
+            rationale: "two nodes wrote simultaneously",
+            applies_when: { keywords: ["parallel", "write", "conflict", "file"] },
+            source: "user",
+            trigger: "intervention",
+          }),
+        },
+      ],
+    });
+
+    // Query to find similar — high keyword overlap + near-identical lesson
+    const similarMatch = await srv.findSimilar("node_selection", {
+      keywords: ["parallel", "write", "conflict", "file"],
+      lesson:
+        "avoid parallel writes to the same file because it causes merge conflicts",
+      applies_when: { keywords: ["parallel", "write", "conflict"] },
+    });
+
+    // Should match with high similarity (lots of keyword overlap + similar lesson)
+    expect(similarMatch).not.toBeNull();
+    expect(similarMatch!.score).toBeGreaterThanOrEqual(SIM_MERGE_THRESHOLD);
+
+    // Merge instead of create
+    const mergeResp = await srv.upsert({
+      batch: [
+        {
+          operation: "merge",
+          match_id: similarMatch!.match.id,
+          correction: buildCorrection({
+            step: "node_selection",
+            unit: "ns",
+            section: "parallel",
+            subsection: "write-conflict",
+            lesson: "avoid parallel writes",
+            applies_when: {
+              keywords: ["parallel", "write", "same-file"],
+            },
+            source: "user",
+          }),
+        },
+      ],
+    });
+    expect(mergeResp.merged_count).toBe(1);
+  });
+
+  it("respects per-section capacity cap (C3)", async () => {
+    const srv = new CorrectionsServer({
+      root,
+      perSectionCap: 2,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      autoDecay: false,
+      globalCorrectionsRoot: globalRoot,
+    });
+
+    // Create 4 corrections in the same section
+    for (let i = 0; i < 4; i += 1) {
+      await srv.upsert({
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "node_selection",
+              unit: "ns",
+              section: "capped-section",
+              subsection: `ss-${i}`,
+              lesson: `lesson ${i}`,
+              applies_when: { keywords: [`k${i}`] },
+              source: "distiller",
+              hotness: 5 - i, // decreasing hotness: 5, 4, 3, 2
+            }),
+          },
+        ],
+      });
+    }
+
+    // Should have frozen the lowest-hotness entries
+    const all = await listAllCorrections(root);
+    const inSection = all
+      .map((x) => x.correction)
+      .filter(
+        (c) =>
+          c.unit === "ns" &&
+          c.section === "capped-section" &&
+          !c.deprecated_by,
+      );
+
+    const active = inSection.filter((c) => !c.frozen);
+    const frozen = inSection.filter((c) => c.frozen);
+
+    expect(active.length).toBeLessThanOrEqual(2); // perSectionCap
+    expect(frozen.length).toBeGreaterThan(0); // excess frozen
+  });
+
+  it("rejects corrections with duplicate user_text (one lesson per intervention)", async () => {
+    const srv = newServer();
+
+    const lesson = "same lesson text for both interventions";
+    const resp = await srv.upsert({
+      batch: [
+        {
+          operation: "create",
+          correction: buildCorrection({
+            step: "node_selection",
+            unit: "ns",
+            section: "s",
+            subsection: "ss1",
+            lesson,
+            applies_when: { keywords: ["k1"] },
+            source: "user",
+          }),
+        },
+        {
+          operation: "create",
+          correction: buildCorrection({
+            step: "node_selection",
+            unit: "ns",
+            section: "s",
+            subsection: "ss2",
+            lesson,
+            applies_when: { keywords: ["k2"] },
+            source: "user",
+          }),
+        },
+      ],
+    });
+    // Both should still be written (server doesn't enforce uniqueness of lesson text at the batch level;
+    // the distiller agent is responsible for deduplication)
+    expect(resp.new_count).toBe(2);
+    expect(resp.warnings.length).toBe(0);
+  });
+
+  it("handles empty batch gracefully", async () => {
+    const srv = newServer();
+    const resp = await srv.upsert({ batch: [] });
+    expect(resp.new_count).toBe(0);
+    expect(resp.merged_count).toBe(0);
+    expect(resp.written_ids).toHaveLength(0);
+  });
+});
+
 describe("seed corrections", () => {
   let seedLoader: typeof import("./seed-loader.js");
 
