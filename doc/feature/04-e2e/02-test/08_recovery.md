@@ -36,7 +36,7 @@ Claude → opc_flow_query()
 
 Claude → opc_flow_lifecycle({action:"recover"})
   → owner.pid 接管为当前 pid
-  → 检测 current_pipeline_pointer 非空 → 内部级联 pipeline 恢复（吸收原 opc_pipeline_recover 语义）
+  → 检测 current_pipeline_pointer 非空 → 内部级联 pipeline 恢复（吸收原 opc_flow_lifecycle({action:"recover"}) 语义）
     · in_progress node tdd-implementation 超时（>30 min 无心跳）→ 自动标记 failed (error.type: timeout)
   → 返回:
     {

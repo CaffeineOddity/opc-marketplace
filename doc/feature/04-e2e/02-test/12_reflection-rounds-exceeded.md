@@ -229,7 +229,7 @@ A3 闭环对 8 个反思点 P1–P8 的行为完全对称，仅 `flow_next` 路�
 
 ## 与 distiller 的下游联动
 
-L1 写入的 `user_interventions[]` 条目带 `trigger:"ask_user_rounds_exceeded"`，distiller sub-agent 在 pipeline 结束时（`opc_reflect_record_interventions`）**优先级更高**地处理这类条目——因为它们附带了 `linked_reflection_artifacts`（指向 3 轮反思 artifact 路径），上下文比纯"用户主动纠错"丰富得多，提炼成 corrections 后命中率更高（详见 [06_call-sequence-contract.md 与 distiller 的下游联动](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#与-distiller-的下游联动)）。
+L1 写入的 `user_interventions[]` 条目带 `trigger:"ask_user_rounds_exceeded"`，distiller sub-agent 在 pipeline 结束时（`opc_reflect_admin({action:"record_interventions"})`）**优先级更高**地处理这类条目——因为它们附带了 `linked_reflection_artifacts`（指向 3 轮反思 artifact 路径），上下文比纯"用户主动纠错"丰富得多，提炼成 corrections 后命中率更高（详见 [06_call-sequence-contract.md 与 distiller 的下游联动](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#与-distiller-的下游联动)）。
 
 本 e2e 不直接验证 distiller 行为（pipeline_complete 阶段才触发），但断言 #10 保证了 distiller 拿到的输入字段完整。
 

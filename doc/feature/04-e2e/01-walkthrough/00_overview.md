@@ -26,21 +26,21 @@ sequenceDiagram
     H->>C: 注入"先调 opc_flow_query"
     C->>F: opc_flow_query()
     F-->>C: active=false<br/>+ suggested_actions
-    C->>F: opc_flow_start({user_message})
+    C->>F: opc_flow_lifecycle({action:"start"})({user_message})
     F-->>C: intent_analysis 指令
 
     Note over U,A: ② 意图判定 + 任务分析
-    C->>F: opc_intent_complete(intent=task, intent_evidence)
+    C->>F: opc_flow_step_complete({step:"intent_analysis"})(intent=task, intent_evidence)
     F-->>C: task_analysis 指令<br/>+ prerequisites:[knowledge_list]
-    C->>KS: opc_knowledge_list()
+    C->>KS: opc_knowledge_read({mode:"list"})()
     KS-->>C: units:[]
     C->>C: 7 步分析 + 收集 task_analysis_evidence
-    C->>F: opc_task_analysis_complete<br/>(P2 evidence 通过 V1-V5, medium, knowledge_unit:[user-auth])
+    C->>F: opc_flow_step_complete({step:"task_analysis"})<br/>(P2 evidence 通过 V1-V5, medium, knowledge_unit:[user-auth])
     F-->>C: brief_generation 指令
 
     Note over U,A: ③ 生成 brief + 创建管线
     C->>C: 按模板生成 brief.md
-    C->>F: opc_brief_complete({brief_content})
+    C->>F: opc_flow_step_complete({step:"brief_generation"})({brief_content})
     F-->>C: next: pipeline_create (预填全部参数)
     C->>P: opc_pipeline_create(...)
     P-->>C: pipeline_id + flow_next: knowledge_open
@@ -61,13 +61,13 @@ sequenceDiagram
             C->>P: opc_node_start
             P-->>C: node_body + dispatch_instruction
             C->>A: Task spawn sub-agent
-            A->>KS: opc_knowledge_get_batch
+            A->>KS: opc_knowledge_read({mode:"batch"})
             KS-->>A: input knowledge
             A->>A: 执行 node 业务逻辑
             A->>KS: opc_knowledge_write
             KS-->>A: version+1
             A-->>C: evidence
-            C->>P: opc_node_complete(evidence)
+            C->>P: opc_node_finish({status:"completed"})(evidence)
             P-->>C: unblocked_nodes
         end
         C->>P: opc_phase_complete
@@ -75,7 +75,7 @@ sequenceDiagram
     end
 
     Note over U,A: ⑤ 管线完成
-    C->>P: opc_pipeline_complete
+    C->>P: opc_pipeline_lifecycle({action:"complete"})
     P-->>C: manifest.md 路径
     C-->>U: 完成通知
 ```
@@ -108,9 +108,9 @@ flowchart TD
     Groups --> Exec{有未完成 group?}
     Exec -->|是| StartNode[opc_node_start<br/>+ Task spawn]
     StartNode --> Sub[sub-agent 执行<br/>get_batch + write]
-    Sub --> Complete[opc_node_complete<br/>+evidence]
+    Sub --> Complete[opc_node_finish({status:"completed"})<br/>+evidence]
     Complete --> L1{L1 校验<br/>knowledge 文件存在?}
-    L1 -->|否| Retry[opc_node_retry]
+    L1 -->|否| Retry[opc_node_finish({status:"retry"})]
     L1 -->|是| L2{L2 校验<br/>test/lint pass?}
     L2 -->|否| Retry
     L2 -->|是| NextNode[unblocked_nodes 推进]
@@ -143,7 +143,7 @@ flowchart TD
 
 - **MCP 状态机驱动**：每一步由 flow-router 返回 step_instruction + next 工具，Claude 无需自行查阅文档
 - **方法论文档按需引用**：flow tools 返回 methodology.docs，Claude 仅在自省不足或反思时读
-- **预填参数减少决策**：`opc_brief_complete` 直接预填 `opc_pipeline_create` 的全部参数
+- **预填参数减少决策**：`opc_flow_step_complete({step:"brief_generation"})` 直接预填 `opc_pipeline_create` 的全部参数
 - **flow_next 链式推进**：pipeline_create → knowledge_open → phase_start 串成自动链
 - **Sub-agent 隔离执行**：node 内 Task spawn 隔离 context，sub-agent 自主调 knowledge 工具
 - **L1+L2 双层校验**：knowledge 文件存在性（L1）+ 节点声明的 quality_gates（L2）

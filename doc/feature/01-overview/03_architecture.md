@@ -61,28 +61,28 @@ sequenceDiagram
     U->>H: "实现用户认证系统"
     H->>C: 注入: "先调 opc_flow_query"
     C->>FL: opc_flow_query()
-    FL-->>C: { active: false, suggested_actions: [opc_flow_start, ...], methodology }
+    FL-->>C: { active: false, suggested_actions: [opc_flow_lifecycle({action:"start"}), ...], methodology }
 
-    C->>FL: opc_flow_start({user_message})
-    FL-->>C: { step: intent_analysis, prompt 引用, schema, next: opc_intent_complete }
+    C->>FL: opc_flow_lifecycle({action:"start", user_message})
+    FL-->>C: { step: intent_analysis, prompt 引用, schema, next: opc_flow_step_complete({step:"intent_analysis"}) }
 
     C->>C: 按方法论判断意图（可选读 prompts/01_intent-analysis-overview.md）
-    C->>FL: opc_intent_complete({intent, confidence})
+    C->>FL: opc_flow_step_complete({step:"intent_analysis", intent, confidence})
 
     alt intent = chat / general_question
         FL-->>C: { done: true, action: respond_normally, status: completed }
         C-->>U: 直接回复
     else intent = project_question
-        FL-->>C: { prerequisites: [opc_knowledge_search], action: respond_with_knowledge, status: completed }
-        C->>KS: opc_knowledge_search
+        FL-->>C: { prerequisites: [opc_knowledge_read({mode:"search"})], action: respond_with_knowledge, status: completed }
+        C->>KS: opc_knowledge_read({mode:"search"})
         KS-->>C: 知识 snippet
         C-->>U: 注入知识上下文后回答
     else intent = task
-        FL-->>C: { step: task_analysis, prerequisites: [opc_knowledge_list], next: opc_task_analysis_complete }
-        C->>KS: opc_knowledge_list
+        FL-->>C: { step: task_analysis, prerequisites: [opc_knowledge_read({mode:"list"})], next: opc_flow_step_complete({step:"task_analysis"}) }
+        C->>KS: opc_knowledge_read({mode:"list"})
         KS-->>C: 已有 unit 列表
         C->>C: 7 步分析 + 收集 task_analysis_evidence<br/>(可选读 prompts/task-analysis.md)
-        C->>FL: opc_task_analysis_complete({analysis_result, evidence_artifact, knowledge_plan})
+        C->>FL: opc_flow_step_complete({step:"task_analysis", analysis_result, evidence_artifact, knowledge_plan})
 
         alt V1-V5 validator 或 meta-validator 发现 objection
             FL-->>C: { step: task_analysis_reflection, round, method: M3-CoVe, next: opc_flow_reflect }
@@ -98,16 +98,16 @@ sequenceDiagram
             FL-->>C: { action: quick_dispatch, status: completed }
             C->>A: Agent 直接执行（无管线/无 state，写入 quick-history.jsonl）
         else 需修改 unit ≥ 2
-            FL-->>C: { step: task_decomposition, next: opc_decomposition_complete }
+            FL-->>C: { step: task_decomposition, next: opc_flow_step_complete({step:"task_decomposition"}) }
             C->>C: 拆分分析 + 自省
-            C->>FL: opc_decomposition_complete({sub_pipelines, confidence})
-            FL-->>C: { step: brief_generation, next: opc_brief_complete }
+            C->>FL: opc_flow_step_complete({step:"task_decomposition", sub_pipelines, confidence})
+            FL-->>C: { step: brief_generation, next: opc_flow_step_complete({step:"brief_generation"}) }
         else
-            FL-->>C: { step: brief_generation, next: opc_brief_complete }
+            FL-->>C: { step: brief_generation, next: opc_flow_step_complete({step:"brief_generation"}) }
         end
 
         C->>C: 生成 brief markdown
-        C->>FL: opc_brief_complete({brief_content})
+        C->>FL: opc_flow_step_complete({step:"brief_generation", brief_content})
         FL-->>C: { next: { tool: opc_pipeline_create, args: 预填全部参数 } }
 
         C->>SS: opc_pipeline_create({...预填...})
@@ -140,14 +140,14 @@ sequenceDiagram
     loop 每个 Node（按依赖顺序）
         C->>SS: opc_node_start
         SS-->>C: { input_loaded, node_file_path, node_body, dispatch_instruction }
-        C->>KS: opc_knowledge_get_batch
+        C->>KS: opc_knowledge_read({mode:"batch"})
         C->>C: 按 node_body 指令执行
         alt 成功
             C->>KS: opc_knowledge_write
-            C->>SS: opc_node_complete
+            C->>SS: opc_node_finish({status:"completed"})
             SS-->>C: { unblocked_nodes }
         else 失败
-            C->>SS: opc_node_fail → 修复 → retry / abort
+            C->>SS: opc_node_finish({status:"failed"}) → 修复 → retry / abort
         end
     end
     C->>SS: opc_phase_complete
@@ -156,7 +156,7 @@ sequenceDiagram
     Note over C,NR: ── Phase: 05-implement / 06-testing ──
     C->>SS: 类似流程
 
-    C->>SS: opc_pipeline_complete
+    C->>SS: opc_pipeline_lifecycle({action:"complete"})
     SS-->>C: manifest.md
     C-->>U: pipeline completed
 ```
@@ -170,41 +170,41 @@ flowchart TD
     A[用户输入自然语言] --> HOOK[UserPromptSubmit hook<br/>注入一行指令：先调 opc_flow_query]
     HOOK --> FQ[Claude 调 opc_flow_query<br/>返回 active 状态 + suggested_actions + methodology]
     FQ --> FQDEC{active 状态?}
-    FQDEC -->|active=false| opc_flow_query[Claude 调 opc_flow_start<br/>opc_flow_start 返回 intent_analysis 指令]
+    FQDEC -->|active=false| opc_flow_query[Claude 调 opc_flow_lifecycle({action:"start"})<br/>opc_flow_lifecycle 返回 intent_analysis 指令]
     FQDEC -->|active=true + 延续| CONT[按已有 flow_next 推进]
-    FQDEC -->|active=true + 纠正| REVISE[opc_flow_revise / opc_flow_restart]
-    FQDEC -->|active=true + 流程内调整| REPLAN[opc_pipeline_replan / opc_phase_reset]
-    FQDEC -->|active=true + 题外话/无关问答| OUTSIDE[respond_outside_flow<br/>不动 flow-state / pipeline<br/>必要时只读 opc_knowledge_search]
-    FQDEC -->|active=true + 放弃| ABORT[opc_flow_abort 后 opc_flow_start]
-    FQDEC -->|active=true + orphan| RECOVER[opc_flow_recover]
+    FQDEC -->|active=true + 纠正| REVISE[opc_flow_correct({action:"revise"}) / opc_flow_correct({action:"restart"})]
+    FQDEC -->|active=true + 流程内调整| REPLAN[opc_pipeline_lifecycle({action:"replan"}) / opc_flow_correct({action:"phase_reset"})]
+    FQDEC -->|active=true + 题外话/无关问答| OUTSIDE[respond_outside_flow<br/>不动 flow-state / pipeline<br/>必要时只读 opc_knowledge_read({mode:"search"})]
+    FQDEC -->|active=true + 放弃| ABORT[opc_flow_lifecycle({action:"abort"}) 后 opc_flow_lifecycle({action:"start"})]
+    FQDEC -->|active=true + orphan| RECOVER[opc_flow_lifecycle({action:"recover"})]
     FQDEC -->|流程外问答/暂停| NOOP[直接回答 / 等待]
     opc_flow_query --> C1{Claude 意图识别<br/>按 step_instruction 或选读方法论文档}
-    C1 -->|task| F2T[Claude 调 opc_intent_complete<br/>opc_intent_complete 路由 task 分支<br/>返回 task_analysis 指令]
-    C1 -->|project_question| F2P[Claude 调 opc_intent_complete<br/>opc_intent_complete 返回 knowledge_search 指令<br/>+ 自动标记 status=completed]
-    F2P --> PQ1[Claude 调 opc_knowledge_search<br/>注入知识上下文后回答<br/>不创建管线/state]
-    C1 -->|general_question / chat| F2C[Claude 调 opc_intent_complete<br/>opc_intent_complete 返回 done: true<br/>+ 自动标记 status=completed]
+    C1 -->|task| F2T[Claude 调 opc_flow_step_complete({step:"intent_analysis"})<br/>路由 task 分支<br/>返回 task_analysis 指令]
+    C1 -->|project_question| F2P[Claude 调 opc_flow_step_complete({step:"intent_analysis"})<br/>返回 knowledge_search 指令<br/>+ 自动标记 status=completed]
+    F2P --> PQ1[Claude 调 opc_knowledge_read({mode:"search"})<br/>注入知识上下文后回答<br/>不创建管线/state]
+    C1 -->|general_question / chat| F2C[Claude 调 opc_flow_step_complete({step:"intent_analysis"})<br/>返回 done: true<br/>+ 自动标记 status=completed]
     F2C --> NC[零 OPC 介入，直接回复]
-    F2T --> C2[Claude 调 opc_knowledge_list 后<br/>7 步分析 + 收集 task_analysis_evidence]
-    C2 --> opc_intent_complete[Claude 调 opc_task_analysis_complete<br/>opc_task_analysis_complete 按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
-    opc_intent_complete --> C2_SR_DEC{opc_task_analysis_complete 路由判定}
+    F2T --> C2[Claude 调 opc_knowledge_read({mode:"list"}) 后<br/>7 步分析 + 收集 task_analysis_evidence]
+    C2 --> opc_intent_complete[Claude 调 opc_flow_step_complete({step:"task_analysis"})<br/>按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
+    opc_intent_complete --> C2_SR_DEC{opc_flow_step_complete({step:"task_analysis"}) 路由判定}
     C2_SR_DEC -->|validator pass + 无严重 objection| C2a
     C2_SR_DEC -->|validator fail 或 objection 严重| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 evidence_diff<br/>受 rounds-guard 约束]
     C2_SR_LOOP --> C2_SR_RECHECK{反思后 evidence 状态?}
     C2_SR_RECHECK -->|validator pass| C2a
     C2_SR_RECHECK -->|rounds 耗尽 / 仍有 objection| C2_QC[ask_user<br/>opc_flow_reflect 路由 ask_user<br/>附 reasoning_trace]
     C2_QC -->|用户确认/修正| C2a
-    C2a{opc_task_analysis_complete 复杂度路由}
-    C2a -->|low| FAST[opc_task_analysis_complete 路由 opc_quick_dispatch opc_quick_dispatch<br/>Agent 直接执行<br/>+ 自动标记 status=completed]
+    C2a{opc_flow_step_complete({step:"task_analysis"}) 复杂度路由}
+    C2a -->|low| FAST[opc_flow_step_complete 路由 opc_quick_dispatch<br/>Agent 直接执行<br/>+ 自动标记 status=completed]
     C2a -->|medium / high| DEC{需修改的 unit ≥ 2?}
-    DEC -->|是| DEC1[opc_task_analysis_complete 路由 task_decomposition<br/>Claude 拆分分析 + 收集 decomposition_evidence]
-    DEC1 --> DEC2[Claude 调 opc_decomposition_complete]
-    DEC2 --> DEC3{opc_decomposition_complete 路由判定}
-    DEC3 -->|validator pass + 无严重 objection| DEC5[opc_decomposition_complete 路由 brief_generation]
-    DEC3 -->|否| DEC4[opc_decomposition_complete 路由 brief_generation<br/>step_instruction 提示确认 + 附 reasoning_trace]
+    DEC -->|是| DEC1[opc_flow_step_complete({step:"task_analysis"}) 路由 task_decomposition<br/>Claude 拆分分析 + 收集 decomposition_evidence]
+    DEC1 --> DEC2[Claude 调 opc_flow_step_complete({step:"task_decomposition"})]
+    DEC2 --> DEC3{opc_flow_step_complete({step:"task_decomposition"}) 路由判定}
+    DEC3 -->|validator pass + 无严重 objection| DEC5[opc_flow_step_complete 路由 brief_generation]
+    DEC3 -->|否| DEC4[opc_flow_step_complete 路由 brief_generation<br/>step_instruction 提示确认 + 附 reasoning_trace]
     DEC4 -->|用户确认| DEC5
     DEC5 --> B6[Claude 生成 brief markdown]
     DEC -->|否| B6
-    B6 --> opc_decomposition_complete[Claude 调 opc_brief_complete<br/>opc_brief_complete 返回 next: opc_pipeline_create 预填全部参数]
+    B6 --> opc_decomposition_complete[Claude 调 opc_flow_step_complete({step:"brief_generation"})<br/>返回 next: opc_pipeline_create 预填全部参数]
     opc_decomposition_complete --> B7[Claude 调 opc_pipeline_create]
     B7 --> B7B[opc_pipeline_create 返回 flow_next: opc_knowledge_open]
     B7B --> B7C[Claude 调 opc_knowledge_open]
@@ -228,10 +228,10 @@ flowchart TD
 
     R --> S[按 blocked_by 顺序执行 node]
     S --> T[opc_node_start 返回 node_body + dispatch_instruction]
-    T --> T2[Claude 加载前置知识<br/>opc_knowledge_get_batch]
+    T --> T2[Claude 加载前置知识<br/>opc_knowledge_read({mode:"batch"})]
     T2 --> U[按 node_body 指令执行]
     U --> V{执行结果}
-    V -->|成功| W[opc_knowledge_write<br/>opc_node_complete<br/>返回 unblocked_nodes]
+    V -->|成功| W[opc_knowledge_write<br/>opc_node_finish({status:"completed"})<br/>返回 unblocked_nodes]
     W --> X{当前 phase<br/>全部 node 完成?}
     X -->|否| S
     X -->|是| Y[opc_phase_complete<br/>返回 pipeline_progress + next_phase]
@@ -240,9 +240,9 @@ flowchart TD
     Z -->|是, 需确认| ZA[提示用户推进] --> G
     Z -->|否| ZA2{next_sub_pipeline 非空?}
     ZA2 -->|是| G
-    ZA2 -->|否| ZB[opc_pipeline_complete]
+    ZA2 -->|否| ZB[opc_pipeline_lifecycle({action:"complete"})]
 
-    V -->|失败| ZC[opc_node_fail<br/>写入 error]
+    V -->|失败| ZC[opc_node_finish({status:"failed"})<br/>写入 error]
     ZC --> ZD[尝试修复 / retry]
     ZD -->|修复完成| S
     ZD -->|无法修复| ZE[pipeline → aborted]
@@ -316,10 +316,10 @@ opc_flow_query 返回 active=true
 
 | 工具 | 允许？ | 说明 |
 |---|---|---|
-| `opc_knowledge_search` / `opc_knowledge_get` / `opc_knowledge_list` | ✅ | 只读，回答项目相关问题 |
+| `opc_knowledge_read({mode:"search"\|"single"\|"list"})` | ✅ | 只读，回答项目相关问题 |
 | `Read` / `Grep` / `Bash`（只读命令） | ✅ | 回答代码相关问题 |
 | `opc_flow_*` 推进类 / `opc_pipeline_*` 写类 / `opc_node_*` | ❌ | 任何会改 state 的工具一律禁止 |
-| `opc_knowledge_write` / `opc_corrections_record` | ❌ | 写类禁止 |
+| `opc_knowledge_write` / `opc_corrections({action:"record"})` | ❌ | 写类禁止 |
 
 完整 schema 与设计原则详见 [02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md opc_flow_query](../02-opc-state-server/01-intent-analysis/02_flow-tools-entry-lifecycle.md#opc_flow_query)。
 

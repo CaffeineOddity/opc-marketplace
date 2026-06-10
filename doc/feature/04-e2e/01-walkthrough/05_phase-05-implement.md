@@ -146,7 +146,7 @@ opc_node_start("pipeline-20260606-001", "sub-1", "tdd-implementation")
 
 Agent 执行：
 ```
-① opc_knowledge_get_batch([
+① opc_knowledge_read({mode:"batch"})([
      {unit: "user-auth", section: "login", subsection: "api"},
      {unit: "user-auth", section: "register", subsection: "api"},
      {unit: "user-auth", section: "session", subsection: "api"},
@@ -175,7 +175,7 @@ Agent 执行：
 
 ⑤ 运行 lint → 0 errors, 2 warnings
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "tdd-implementation",
+opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "tdd-implementation",
   evidence: {
     summary: "TDD 实现完成：3 个测试文件，12/12 通过，lint 0 errors",
     test_results: { passed: 12, failed: 0, skipped: 0 },
@@ -215,7 +215,7 @@ opc_node_start("pipeline-20260606-001", "sub-1", "auth-integration")
 
 Agent 执行：
 ```
-① opc_knowledge_get_batch([
+① opc_knowledge_read({mode:"batch"})([
      {unit: "user-auth", section: "session", subsection: "model", min_version: 1}
    ])
    → session model v1 ✓
@@ -234,9 +234,9 @@ Agent 执行：
 ④ opc_knowledge_write("user-auth", "session", "api",
      "# 会话 API（更新）\n\n增加 token 刷新机制\n..."
    )
-   → opc_knowledge_get → 已有 v1 → merge → version: v2
+   → opc_knowledge_read({mode:"single"}) → 已有 v1 → merge → version: v2
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "auth-integration")
+opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "auth-integration")
 ```
 
 返回：
@@ -262,7 +262,7 @@ opc_node_start("security-review") → Agent:
 
   ② opc_knowledge_write(...)
 
-opc_node_complete → { unblocked_nodes: [] }
+opc_node_finish({status:"completed"}) → { unblocked_nodes: [] }
 ```
 
 ---

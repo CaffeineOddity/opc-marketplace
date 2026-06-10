@@ -7,12 +7,12 @@
 
 ## 3.0 Claude 生成 brief markdown
 
-Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本，然后调 opc_brief_complete：
+Claude 按 brief-generation.md 的模板生成完整的 brief.md 文本，然后调 opc_flow_step_complete({step:"brief_generation"})：
 
 ```
-Claude → opc_brief_complete({brief_content: "# 任务工作单\n..."})
+Claude → opc_flow_step_complete({step:"brief_generation"})({brief_content: "# 任务工作单\n..."})
 
-opc_brief_complete 返回（从 flow-state.accumulated 推导，预填全部参数）:
+opc_flow_step_complete({step:"brief_generation"}) 返回（从 flow-state.accumulated 推导，预填全部参数）:
 {
   step: "brief_completed",
   step_instruction: "下一步创建管线，参数已预填",
@@ -182,7 +182,7 @@ opc_knowledge_open(["user-auth"])
 | user-auth/login/architecture | create | — | 登录流程架构 |
 
 ## 准入检查
-- [x] 知识库 opc_knowledge_list 已执行
+- [x] 知识库 opc_knowledge_read({mode:"list"}) 已执行
 - [x] 知识库 opc_knowledge_open 已执行
 - [x] 目标 unit 已创建
 - [x] 用户约束已确认

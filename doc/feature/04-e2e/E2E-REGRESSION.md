@@ -34,7 +34,7 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 | opc-state-server | `opc_pipeline_create` | 1 | |
 | opc-state-server | `opc_phase_start` | 3 | phases 04, 05, 06 |
 | opc-state-server | `opc_node_start` | 4 | api-design, database-schema, tdd-implementation, integration-test |
-| opc-state-server | `opc_node_complete` | 4 | |
+| opc-state-server | `opc_node_finish({status:"completed"})` | 4 | |
 | opc-state-server | `opc_phase_complete` | 3 | |
 | opc-state-server | `opc_pipeline_status` | 1 | final aggregation check |
 | opc-knowledge-server | `opc_knowledge_open` | 1 | declares unit user-auth |
@@ -46,7 +46,7 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 
 | Tool | Where exercised | Why excluded from fixture |
 |---|---|---|
-| `opc_reflect_plan` / `opc_reflect_critique` / `opc_reflect_critique_complete` | M14.e stage-5 | The cumulative M14.g fixture skips the reflection round to keep the replay deterministic for marketplace/CLI replay. Reflection coverage lives in stage-5's dedicated test. |
+| `opc_reflect_plan` / `opc_reflect_execute({method:"critique"})` / `opc_reflect_complete({method:"critique"})` | M14.e stage-5 | The cumulative M14.g fixture skips the reflection round to keep the replay deterministic for marketplace/CLI replay. Reflection coverage lives in stage-5's dedicated test. |
 | `opc_flow_reflect` | M14.e stage-5 | Same — registry-guard semantics covered in stage-5. |
 
 ### Calls deferred from v1 e2e
@@ -56,7 +56,7 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 | `opc_flow_query` | Not exercised in e2e (only in unit tests) | Hook-driven idle query; the e2e harness drives the lifecycle directly without going through `opc_flow_query` since the test starts in-process. Covered by hook unit tests (`opc-hook.test.ts`) + `flow-server` unit tests. |
 | `opc_phase_confirm` | Doc-only step | The state-server does not implement a separate `opc_phase_confirm` tool — phase confirmation is handled implicitly by `phase_start`'s response. The walkthrough doc's "高置信度自动通过" path matches what stage-4/5/6 already exercise. |
 | `opc_phase_adjust` | Not exercised | The walkthrough lists `opc_phase_adjust` for the 5.2 scenario (overriding default node selection). v1 only exercises the default-selection path; adjust coverage lives in unit tests for phase-server. M15 will add an adjust scenario. |
-| `opc_pipeline_complete` | No dedicated tool exists | Pipeline aggregates to completed when the last phase_complete runs on the last phase (phase-server.ts L182-185). Confirmed by `opc_pipeline_status` in M14.g. The manifest.md generation step from the walkthrough doc is an M19 orchestrator concern. |
+| `opc_pipeline_lifecycle({action:"complete"})` | No dedicated tool exists | Pipeline aggregates to completed when the last phase_complete runs on the last phase (phase-server.ts L182-185). Confirmed by `opc_pipeline_status` in M14.g. The manifest.md generation step from the walkthrough doc is an M19 orchestrator concern. |
 | Sub-agent knowledge calls (~15 in walkthrough estimate) | Not in scope for orchestrator e2e | Sub-agents are dispatched by Task tool (real Claude Code only); the harness mocks them by writing knowledge directly. Sub-agent behavior is verified by kit-level integration tests in M15/M19. |
 
 ## 3. Validators triggered
@@ -64,10 +64,10 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 | Layer | Validator | Trigger point | Stage test |
 |---|---|---|---|
 | L0 | `min_version` on input knowledge | `opc_node_start` | node-server unit test (not e2e — would require pre-existing knowledge) |
-| L1 | Declared `output.knowledge` in `evidence.knowledge_written` | `opc_node_complete` | stage-4 happy + L1 negative |
-| L2 | `test_pass` (failed===0) | `opc_node_complete` with quality_gates | stage-5 happy + L2 negative, stage-6 happy + L2 negative |
+| L1 | Declared `output.knowledge` in `evidence.knowledge_written` | `opc_node_finish({status:"completed"})` | stage-4 happy + L1 negative |
+| L2 | `test_pass` (failed===0) | `opc_node_finish({status:"completed"})` with quality_gates | stage-5 happy + L2 negative, stage-6 happy + L2 negative |
 | V0.x | `phase_plan.order_validated`, phase pointer | `opc_phase_start` | phase-server unit tests |
-| V1-V5 | Reflection validators | `opc_reflect_plan` / `opc_reflect_critique_complete` | reflection-server unit tests + stage-5 happy path |
+| V1-V5 | Reflection validators | `opc_reflect_plan` / `opc_reflect_complete({method:"critique"})` | reflection-server unit tests + stage-5 happy path |
 | registry-guard | pending_reflections blocks node/phase ops | `opc_node_start`, `opc_phase_complete`, `opc_pipeline_create` | state-server unit tests; stage-5 exercises the post-clear path (registered=false) |
 | A4 | KIT_NOT_LOADED_PRE_FLIGHT | `opc_pipeline_create` | state-server host-contract test (`host-contract.test.ts`) |
 | C1/C2 | session_id derivation, transport-aware pid | `opc_flow_lifecycle` | host-contract test |
@@ -105,8 +105,8 @@ Listed via `opc_knowledge_read({mode: "list", unit: "user-auth"})` in M14.g; the
 |---|---|
 | Real-subprocess MCP framing (stdio/HTTP transport) | M14 validates the contract of every server method in-process. Wire-level framing is a separate concern that M19 (marketplace + CLI) will exercise via spawn-and-pipe. |
 | Sub-agent dispatch via Task tool | The harness mocks sub-agents by calling `opc_knowledge_write` directly. Real sub-agent behavior (Claude Code spawning child agents with kit-loaded tool whitelists) is verified by kit-level integration tests in M15. |
-| Manifest.md generation | The walkthrough doc shows `opc_pipeline_complete` returning a generated manifest.md aggregating code artifacts + knowledge artifacts. v1 only aggregates knowledge (the state-server has no concept of code artifacts at this layer); manifest generation is an M19 orchestrator concern. |
-| `opc_phase_adjust` / `opc_phase_reset` end-to-end | Phase adjustment + reset are covered by unit tests but not by e2e. M15 will add an adjust scenario (10+5 scenarios milestone). |
+| Manifest.md generation | The walkthrough doc shows `opc_pipeline_lifecycle({action:"complete"})` returning a generated manifest.md aggregating code artifacts + knowledge artifacts. v1 only aggregates knowledge (the state-server has no concept of code artifacts at this layer); manifest generation is an M19 orchestrator concern. |
+| `opc_phase_adjust` / `opc_flow_correct({action:"phase_reset"})` end-to-end | Phase adjustment + reset are covered by unit tests but not by e2e. M15 will add an adjust scenario (10+5 scenarios milestone). |
 | `opc_corrections_*` distillation flow | Reflection records interventions but the distiller runs async; v1 e2e doesn't exercise the full distillation→corrections-store→next-pipeline-load loop. M16 PoC. |
 
 ## 7. Action items
@@ -117,7 +117,7 @@ None for v1. M14 is complete:
 - ✅ Walkthrough doc parity: every prescribed step has corresponding test coverage or is explicitly deferred with rationale
 - ✅ L1 + L2 quality gates exercised positively and negatively
 - ✅ Reflection loop exercised (stage-5: plan→critique→critique_complete→flow_reflect)
-- ✅ Last-phase semantics correctly route to opc_pipeline_complete (stage-6, stage-7)
+- ✅ Last-phase semantics correctly route to opc_pipeline_lifecycle({action:"complete"}) (stage-6, stage-7)
 
 Open M15 (`#18`): 10 add-feature scenarios + 5 fix-bug scenarios.
 Open M19 (`#22`): marketplace + opc-kit CLI consumes the frozen fixture.

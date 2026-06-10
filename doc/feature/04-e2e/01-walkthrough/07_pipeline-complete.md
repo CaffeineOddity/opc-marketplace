@@ -1,14 +1,14 @@
-# 07 第七、八步：opc_pipeline_complete + 最终状态
+# 07 第七、八步：opc_pipeline_lifecycle({action:"complete"}) + 最终状态
 
 > 本文档是 [walkthrough 总览](00_overview.md) 的子文档。其他子文档：
 > [用户输入](01_user-input.md) · [流程启动](02_flow-startup.md) · [brief → create](03_brief-to-create.md) · [phase 04](04_phase-04-implement-design.md) · [phase 05](05_phase-05-implement.md) · [phase 06](06_phase-06-testing.md)
 
 ---
 
-## 第七步：opc_pipeline_complete
+## 第七步：opc_pipeline_lifecycle({action:"complete"})
 
 ```
-opc_pipeline_complete("pipeline-20260606-001")
+opc_pipeline_lifecycle({action:"complete"})("pipeline-20260606-001")
   → 校验: pipeline-plan.json 全部子管线 completed ✓
   → 汇总全部子管线产出 → 生成 manifest.md
 ```
@@ -91,23 +91,23 @@ node: "auth-integration"
 |------|---------|------|
 | 1 | — | 0 |
 | 2.0 | `opc_flow_query`（hook 引导，确认 active=false） | 1 |
-| 2.1 | `opc_flow_start` | 1 |
-| 2.2 | `opc_intent_complete` | 1 |
-| 2.3 | `opc_knowledge_list` + `opc_task_analysis_complete` | 2 |
-| 3.0 | `opc_brief_complete` | 1 |
+| 2.1 | `opc_flow_lifecycle({action:"start"})` | 1 |
+| 2.2 | `opc_flow_step_complete({step:"intent_analysis"})` | 1 |
+| 2.3 | `opc_knowledge_read({mode:"list"})` + `opc_flow_step_complete({step:"task_analysis"})` | 2 |
+| 3.0 | `opc_flow_step_complete({step:"brief_generation"})` | 1 |
 | 3.1 | `opc_pipeline_create` | 1 |
 | 3.4 | `opc_knowledge_open` | 1 |
 | 4.1 | `opc_phase_start` | 1 |
 | 4.3 | `opc_phase_confirm` | 1 |
-| 4.4 | `opc_node_start` → Task spawn sub-agent → `opc_node_complete` | 2 |
-| 4.5 | `opc_node_start` → Task spawn sub-agent → `opc_node_complete` | 2 |
+| 4.4 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"completed"})` | 2 |
+| 4.5 | `opc_node_start` → Task spawn sub-agent → `opc_node_finish({status:"completed"})` | 2 |
 | 4.6 | `opc_phase_complete` | 1 |
 | 5.1 | `opc_phase_start` | 1 |
 | 5.2 | `opc_phase_adjust` + `opc_phase_confirm` | 2 |
-| 5.3-5.5 | `opc_node_start`×3 + `opc_node_complete`×3 | 6 |
+| 5.3-5.5 | `opc_node_start`×3 + `opc_node_finish({status:"completed"})`×3 | 6 |
 | 5.6 | `opc_phase_complete` | 1 |
-| 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_complete` + `opc_phase_complete` | 5 |
-| 7 | `opc_pipeline_complete` | 1 |
+| 6 | `opc_phase_start` + `opc_phase_confirm` + `opc_node_start` + `opc_node_finish({status:"completed"})` + `opc_phase_complete` | 5 |
+| 7 | `opc_pipeline_lifecycle({action:"complete"})` | 1 |
 
 Claude 按需读取的 prompt 文档（非 MCP 调用，由 flow tools 返回的 methodology 指引）：
 
@@ -126,11 +126,11 @@ Claude 执行 node 期间 sub-agent 自主调用的知识工具：
 | Agent | 工具调用 |
 |-------|---------|
 | api-design | `opc_knowledge_write`×3 |
-| database-schema | `opc_knowledge_get_batch`×1 + `opc_knowledge_write`×2 |
-| tdd-implementation | `opc_knowledge_get_batch`×1 + `opc_knowledge_write`×0（只写代码） |
-| auth-integration | `opc_knowledge_get_batch`×1 + `opc_knowledge_write`×2 |
-| security-review | `opc_knowledge_get`×N + `opc_knowledge_write`×1 |
-| integration-test | `opc_knowledge_get`×N |
+| database-schema | `opc_knowledge_read({mode:"batch"})`×1 + `opc_knowledge_write`×2 |
+| tdd-implementation | `opc_knowledge_read({mode:"batch"})`×1 + `opc_knowledge_write`×0（只写代码） |
+| auth-integration | `opc_knowledge_read({mode:"batch"})`×1 + `opc_knowledge_write`×2 |
+| security-review | `opc_knowledge_read({mode:"single"})`×N + `opc_knowledge_write`×1 |
+| integration-test | `opc_knowledge_read({mode:"single"})`×N |
 
 **总计**：opc-state-server ~31 次调用（含 流程工具）+ opc-knowledge-server ~15 次调用 = ~46 次 MCP 调用，加上 Claude 按需读取 3-5 篇 prompts 文档，完成一个中等复杂度的功能实现。
 

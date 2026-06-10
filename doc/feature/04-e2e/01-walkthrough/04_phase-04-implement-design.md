@@ -201,7 +201,7 @@ sub-agent 执行:
 
 sub-agent 完成 → 回报 evidence 给主进程
 
-主进程 → opc_node_complete("pipeline-20260606-001", "sub-1", "api-design",
+主进程 → opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "api-design",
   evidence: {
     summary: "设计完成：3 个 API 端点，4 条知识写入",
     knowledge_written: [
@@ -243,7 +243,7 @@ opc_node_start("pipeline-20260606-001", "sub-1", "database-schema")
 
 Agent 执行：
 ```
-① opc_knowledge_get_batch([
+① opc_knowledge_read({mode:"batch"})([
      {unit: "user-auth", section: "login", subsection: "api"},
      {unit: "user-auth", section: "session", subsection: "api"}
    ])
@@ -261,7 +261,7 @@ Agent 执行：
    )
    → version: v1
 
-opc_node_complete("pipeline-20260606-001", "sub-1", "database-schema",
+opc_node_finish({status:"completed"})("pipeline-20260606-001", "sub-1", "database-schema",
   evidence: {
     summary: "数据库设计完成：users 表 + sessions 表，2 条知识写入",
     knowledge_written: [

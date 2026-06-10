@@ -111,7 +111,7 @@
 
 ## 边界场景扩展（同一 guard 的其他保护工具）
 
-guard 保护清单见 [06_call-sequence-contract.md 七 防御 3](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#受-reflection-registry-guard-保护的工具清单唯一真相源)。本测试聚焦 `opc_phase_confirm` 一个工具的 reject 路径；其他工具（`opc_task_analysis_complete` / `opc_decomposition_complete` / `opc_brief_complete` / `opc_pipeline_create` / `opc_node_start` / `opc_phase_complete` / `opc_pipeline_lifecycle({action:"complete"})`）的行为通过 9 张参数化单测覆盖，错误码、required_action shape 完全一致——本 e2e 不重复展开。
+guard 保护清单见 [06_call-sequence-contract.md 七 防御 3](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#受-reflection-registry-guard-保护的工具清单唯一真相源)。本测试聚焦 `opc_phase_confirm` 一个工具的 reject 路径；其他工具（`opc_flow_step_complete({step:"task_analysis"})` / `opc_flow_step_complete({step:"task_decomposition"})` / `opc_flow_step_complete({step:"brief_generation"})` / `opc_pipeline_create` / `opc_node_start` / `opc_phase_complete` / `opc_pipeline_lifecycle({action:"complete"})`）的行为通过 9 张参数化单测覆盖，错误码、required_action shape 完全一致——本 e2e 不重复展开。
 
 豁免清单（永远放行）：
 
