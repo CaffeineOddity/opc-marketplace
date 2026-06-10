@@ -114,11 +114,11 @@ const TOOL_DEFS = [
   {
     name: "opc_corrections",
     description:
-      "Corrections management. action=query searches corrections by step; action=record upserts a batch; action=unlearn removes a correction; action=reindex rebuilds the correction index.",
+      "Corrections management. action=query searches corrections by step; action=record upserts a batch; action=unlearn removes a correction; action=reindex rebuilds the correction index; action=promote promotes a correction to global-corrections.",
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["query", "record", "unlearn", "reindex"] },
+        action: { type: "string", enum: ["query", "record", "unlearn", "reindex", "promote"] },
         step: { type: "string" },
         keywords: { type: "array", items: { type: "string" } },
         limit: { type: "number" },
@@ -294,7 +294,7 @@ async function dispatchReflection(
           batch: (a("batch") ?? []) as CorrectionsActionRequest extends { action: "record" } ? CorrectionsActionRequest["batch"] : never,
         });
       }
-      // unlearn and reindex are not_implemented per CorrectionsActionResponse
+      // unlearn / reindex / promote go through crud facade
       return corrections.crud({
         action,
         ...(action === "unlearn"
@@ -302,6 +302,9 @@ async function dispatchReflection(
           : {}),
         ...(action === "reindex"
           ? { ...(args.scope ? { scope: args.scope as CorrectionsActionRequest extends { action: "reindex" } ? CorrectionsActionRequest["scope"] : never } : {}) }
+          : {}),
+        ...(action === "promote"
+          ? { correction_id: s("correction_id"), session_id: s("session_id"), ...(s("source_project") ? { source_project: s("source_project") } : {}) }
           : {}),
       } as CorrectionsActionRequest);
     }
