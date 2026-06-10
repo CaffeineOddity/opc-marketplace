@@ -6,7 +6,7 @@
 
 ---
 
-## 一、4 个 MCP 工具总览（含 corrections 子模块 1 个）
+## 一、5 个 MCP 工具总览
 
 按 discriminator 分支汇总：
 
@@ -197,7 +197,7 @@ type ValidatorArtifact = {
 }
 ```
 
-> 在主矩阵（P1–P8 表格）中，P6 / P7 的 Primary 列写 `(internal V1–V5)`，与 P1–P5/P8 的 `M3/M4/M5/M6` 严格区分。
+> 在主矩阵（P1–P8 表格）中，P6 / P7 的 Primary 列写 `(internal V1–V5)`，与 P1–P5/P8 的 `M2/M3/M4/M5/M6` 严格区分。
 
 ---
 
@@ -442,7 +442,7 @@ sequenceDiagram
 
 | 子文档 | 内容 |
 |------|------|
-| 01_tool-specs.md | 4 个工具 + corrections facade 的完整参数 / 返回 schema |
+| 01_tool-specs.md | 5 个工具（plan / execute / complete / admin / corrections）的完整参数 / 返回 schema |
 | 02_evidence-schema.md | P1–P8 evidence artifact 完整 schema + 例子 |
 | 03_validators.md | V1–V5 + 三兜底验证器的纯 TS 实现规范 |
 | 04_subagent-permissions.md | allowed_tools 白名单 + 反例 |
