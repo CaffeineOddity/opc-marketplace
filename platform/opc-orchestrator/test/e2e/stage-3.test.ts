@@ -138,7 +138,7 @@ describe("walkthrough stage 3 — decomposition + brief + pipeline + knowledge",
     expect(created.plan.sub_pipelines).toHaveLength(1);
     expect(created.plan.sub_pipelines[0]?.knowledge_unit).toEqual(["user-auth"]);
     expect(created.plan.status).toBe("in_progress");
-    expect(created.flow_next.tool).toBe("opc_phase_start");
+    expect(created.flow_next.tool).toBe("opc_knowledge_open");
 
     // 3d: knowledge_open — declares the unit so .opc/knowledge/units/user-auth
     // tree is materialized (empty), refs returned for related units (none yet).

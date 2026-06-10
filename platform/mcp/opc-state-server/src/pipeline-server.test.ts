@@ -164,7 +164,8 @@ describe("PipelineServer.create", () => {
     expect(r.pipeline_id).toMatch(/^pl-/);
     expect(r.plan.sub_pipelines.length).toBe(1);
     expect(r.plan.execution_order).toEqual([{ group: 0, sub_pipeline_ids: ["sub-1"] }]);
-    expect(r.flow_next.tool).toBe("opc_phase_start");
+    expect(r.flow_next.tool).toBe("opc_knowledge_open");
+    expect(r.flow_next.args?.units).toEqual(["auth"]);
     const brief = await readFile(
       join(
         root,

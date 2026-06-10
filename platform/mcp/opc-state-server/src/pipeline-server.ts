@@ -76,7 +76,7 @@ export interface PipelineCreateResponse {
   pipeline_id: string;
   created_at: string;
   plan: PipelinePlan;
-  flow_next: { tool: string; args?: Record<string, unknown> };
+  flow_next: { tool: string; args?: Record<string, unknown>; why?: string };
 }
 
 export interface PipelineStatusRequest {
@@ -332,12 +332,19 @@ export class PipelineServer {
     await saveFlowState(this.root, flow, now);
 
     const next = computeNextSubPipeline(subs, order);
-    const flow_next = next
+    const allKnowledgeUnits = [...new Set(subs.flatMap((s) => s.knowledge_unit ?? []))];
+    const flow_next = allKnowledgeUnits.length > 0
       ? {
-          tool: "opc_phase_start",
-          args: { pipeline_id, sub_pipeline_id: next.id },
+          tool: "opc_knowledge_open",
+          args: { units: allKnowledgeUnits },
+          why: "管线已创建，下一步初始化知识单元",
         }
-      : { tool: "opc_pipeline_status", args: { pipeline_id } };
+      : next
+        ? {
+            tool: "opc_phase_start",
+            args: { pipeline_id, sub_pipeline_id: next.id },
+          }
+        : { tool: "opc_pipeline_status", args: { pipeline_id } };
 
     return { pipeline_id, created_at: plan.created_at, plan, flow_next };
   }
