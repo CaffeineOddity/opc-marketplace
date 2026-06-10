@@ -50,6 +50,14 @@ export interface ReflectPlanRequest {
   artifact_summary?: string;
   prior_corrections?: string;
   budget_disable_secondary?: boolean;
+  context?: {
+    pipeline_id?: string;
+    phase?: string;
+    complexity?: string;
+    node_type?: string;
+    artifact_path?: string;
+  };
+  intensity?: "high" | "medium" | "low" | "off";
 }
 
 export interface ReflectPlanResponse {
@@ -60,6 +68,18 @@ export interface ReflectPlanResponse {
   prior_corrections: string[];
   theory_docs: string[];
   unlearned_methods: string[];
+  agent_spec?: {
+    subagent_type: string;
+    allowed_tools: string[];
+    input_contract: string;
+    output_contract: string;
+  };
+  intensity_suggestion?: {
+    recommended: string;
+    reason: string;
+    current: string;
+    auto_applied: boolean;
+  };
 }
 
 export interface ReflectCritiqueRequest {
@@ -297,6 +317,36 @@ export class ReflectionServer {
       prior_corrections: req.prior_corrections ? [req.prior_corrections] : [],
       theory_docs: theoryDocsFor(primary, secondary),
       unlearned_methods: unlearnedMethods,
+      agent_spec: req.context
+        ? {
+            subagent_type: primary === "debate"
+              ? "debater"
+              : primary === "tot"
+                ? "tot-explorer"
+                : primary === "cove"
+                  ? "cove-verifier"
+                  : "critic",
+            allowed_tools: [
+              "Read", "Grep", "Glob", "WebFetch", "WebSearch",
+              "opc_knowledge_open", "opc_knowledge_read", "opc_corrections",
+            ],
+            input_contract: `step=${req.step_id}, method=${primary}, phase=${req.context.phase ?? "any"}`,
+            output_contract: "objections[] with at least one blocker for each gap found",
+          }
+        : undefined,
+      intensity_suggestion: req.intensity
+        ? {
+            recommended: req.intensity,
+            reason: `user specified ${req.intensity} intensity for step ${req.step_id}`,
+            current: req.intensity,
+            auto_applied: false,
+          }
+        : {
+            recommended: "medium",
+            reason: "default intensity (no user preference)",
+            current: "medium",
+            auto_applied: true,
+          },
     };
   }
 

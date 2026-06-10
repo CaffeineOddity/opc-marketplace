@@ -42,6 +42,17 @@ const TOOL_DEFS = [
         artifact_summary: { type: "string" },
         prior_corrections: { type: "string" },
         budget_disable_secondary: { type: "boolean" },
+        context: {
+          type: "object",
+          properties: {
+            pipeline_id: { type: "string" },
+            phase: { type: "string" },
+            complexity: { type: "string" },
+            node_type: { type: "string" },
+            artifact_path: { type: "string" },
+          },
+        },
+        intensity: { type: "string", enum: ["high", "medium", "low", "off"] },
       },
       required: ["session_id", "step_id"],
     } as const,
