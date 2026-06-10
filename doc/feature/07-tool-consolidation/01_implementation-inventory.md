@@ -30,7 +30,7 @@
 | **opc_knowledge_write** | `KnowledgeServer.write` | ✅ 已对齐（base_version） | — |
 | **opc_knowledge_admin** | `KnowledgeServer.admin` | ✅ 已对齐（delete/reindex） | — |
 | **opc_reflect_plan** | `ReflectionServer.plan` | ✅ 已对齐 | — |
-| **opc_reflect_execute** | `ReflectionServer.execute` | ✅ 已对齐（M3/M4/M5/M6 + inline） | — |
+| **opc_reflect_execute** | `ReflectionServer.execute` | ✅ 已对齐（6 methods: cove/critique/debate/tot/reflexion/validator + inline） | — |
 | **opc_reflect_complete** | `ReflectionServer.complete` | ✅ 已对齐（6 method 分派） | — |
 | **opc_reflect_admin** | `ReflectionServer.admin` | ✅ 已对齐（record_interventions/explain/query_stats/unlearn/on_demand 五路分派） | — |
 | **opc_corrections** | `CorrectionsServer.crud` | ✅ 已对齐（query/record/unlearn/reindex/promote/migrate/endorse/freeze/delete 九路分派） | — |
