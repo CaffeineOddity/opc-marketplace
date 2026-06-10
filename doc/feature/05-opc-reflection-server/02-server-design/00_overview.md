@@ -1,6 +1,6 @@
 # 02 server 设计
 
-> opc-reflection-server 的工程实现：**4 个 MCP 工具**（`plan` / `execute({method})` / `complete({method})` / `admin({action})`）+ `opc_corrections({action})`、Evidence Schema、Deterministic Validator、sub-agent 权限白名单、meta-validator、可观测性、可解释性。**零 LLM 依赖**，所有 sub-agent 由 Claude Host 派发。
+> opc-reflection-server 的工程实现：**5 个 MCP 工具**（`plan` / `execute({method})` / `complete({method})` / `admin({action})`）+ `opc_corrections({action})`、Evidence Schema、Deterministic Validator、sub-agent 权限白名单、meta-validator、可观测性、可解释性。**零 LLM 依赖**，所有 sub-agent 由 Claude Host 派发。
 >
 > ⚠️ **驱动权契约**：reflection-server **所有工具禁止返回 `flow_next`**。`flow_next` 字段的发起权 100% 归 state-server。reflection-server 通过 `next_step_hint`（使用说明）+ `pending_reflection`（登记契约，含已写盘 artifact 路径）两种方式与 state-server 协作。完整命名约定 / 不变量 / 工具清单 / 契约见 [04-reflection-flow/06_call-sequence-contract.md](../04-reflection-flow/06_call-sequence-contract.md)。
 
@@ -40,7 +40,7 @@
 |  |  | `freeze` | 冻结纠正条目（停止注入但保留） |
 |  |  | `delete` | 软删除纠正条目 |
 
-> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
+> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex/promote/migrate/endorse/freeze/delete（9 个 action）` → `opc_corrections({action:"<name>"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 
