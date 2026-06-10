@@ -59,8 +59,8 @@ opc_phase_start → 扫描节点 → 匹配排序 → 收集 selection_evidence
   ],
   reflection_budget_hint: {
     max_rounds: 2,                 // rounds-guard 上限（按 phase + complexity 配置）
-    primary_method: "M4-Critique",
-    secondary_method: "M5-Debate"  // 仅 complexity ≥ medium 启用
+    primary_method: "critique",
+    secondary_method: "debate"  // 仅 complexity ≥ medium 启用
   },
   methodology: {
     docs: ["prompts/phase-execution.md", "prompts/reflection-node-selection.md"],
@@ -191,4 +191,4 @@ Claude 在 `opc_phase_confirm` 前内部生成；evidence_artifact 由 reflectio
 - [06_phase-complete-reset.md](06_phase-complete-reset.md) — auto_advance 4 条件（含 P5 evidence 通过）
 - [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — `opc_flow_reflect` 工具
 - [../../05-opc-reflection-server/02-server-design/00_overview.md](../../05-opc-reflection-server/02-server-design/00_overview.md) — evidence schema + V1-V5 validator
-- [../../05-opc-reflection-server/01-method-theory/00_overview.md](../../05-opc-reflection-server/01-method-theory/00_overview.md) — M4 Critique / M5 Debate 方法
+- [../../05-opc-reflection-server/01-method-theory/00_overview.md](../../05-opc-reflection-server/01-method-theory/00_overview.md) — critique / debate 方法

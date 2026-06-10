@@ -69,7 +69,7 @@
     {
       "step_id": "task_analysis",
       "round": 1,
-      "method": "M3-CoVe",
+      "method": "cove",
       "evidence_diff": {
         "added": ["requirements[+2]", "risks[+1]"],
         "modified": ["complexity: medium → high"],

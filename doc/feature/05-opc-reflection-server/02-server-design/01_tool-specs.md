@@ -90,7 +90,7 @@ type ReflectionResponse = {
 {
   // —— method 选择 ——
   method: "cove" | "critique" | "debate" | "tot",
-  secondary_method: "M2-reflexion" | "cove" | "critique" | "debate" | null,
+  secondary_method: "reflexion" | "cove" | "critique" | "debate" | null,
   method_choice_reason: "step=P5, complexity=medium → primary=critique",
 
   // —— agent spec ——

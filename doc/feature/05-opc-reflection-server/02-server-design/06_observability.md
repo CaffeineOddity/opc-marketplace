@@ -34,7 +34,7 @@ type TelemetryEvent = {
 
   // —— 反思上下文 ——
   step: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8'
-  method: 'M2-reflexion' | 'cove' | 'critique' | 'debate' | 'tot'
+  method: 'reflexion' | 'cove' | 'critique' | 'debate' | 'tot'
   reflection_id: string          // "rfl-<step>-r<n>-<ulid>"
   round: number                  // 当前 step 的第几轮反思
   pipeline_id?: string           // P5+ 时必填

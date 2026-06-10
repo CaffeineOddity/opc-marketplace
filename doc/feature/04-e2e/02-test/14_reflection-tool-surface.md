@@ -1,6 +1,6 @@
 # 14 反思工具面：5 步 ritual + 3 步 inline 对照
 
-> 本文档是 [test 总览](00_overview.md) 的子文档。覆盖 [reflection 工具面](../../05-opc-reflection-server/02-server-design/00_overview.md) 的两种调用模式：（A）完整 5 步 ritual（适合 high 复杂度 + 长 method 如 M5/M6 ToT，每步可观察）；（B）3 步 inline 折叠（适合 medium 复杂度 + 短 method 如 M3/M4，减少工具往返）。**两种模式登记锁、artifact 写盘、meta-validator 行为完全一致**，只是步骤数不同。
+> 本文档是 [test 总览](00_overview.md) 的子文档。覆盖 [reflection 工具面](../../05-opc-reflection-server/02-server-design/00_overview.md) 的两种调用模式：（A）完整 5 步 ritual（适合 high 复杂度 + 长 method 如 tot，每步可观察）；（B）3 步 inline 折叠（适合 medium 复杂度 + 短 method 如 critique/debate，减少工具往返）。**两种模式登记锁、artifact 写盘、meta-validator 行为完全一致**，只是步骤数不同。
 
 > 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。`opc_reflect_plan` / `opc_reflect_execute` / `opc_reflect_complete` 是反思工具面 3 件套；`opc_flow_reflect` 是登记/路由入口。
 
@@ -15,10 +15,10 @@
 
 ---
 
-## 模式 A：5 步 ritual（P5 / M5-ToT，high 复杂度）
+## 模式 A：5 步 ritual（P5 / tot，high 复杂度）
 
 ```
-当前: opc_phase_start("05-implement") 已返回候选 nodes + reflection_budget_hint{method:"M5-ToT", max_rounds:2}
+当前: opc_phase_start("05-implement") 已返回候选 nodes + reflection_budget_hint{method:"tot", max_rounds:2}
      flow_next: opc_reflect_plan({step:"node_selection"})
 
 [A1] Claude → opc_reflect_plan({
@@ -31,11 +31,11 @@
             })
             reflection-server:
               · 读 reflection_budget_hint
-              · 选 method = "M5-ToT"（Tree of Thoughts，3 branch × 2 depth）
+              · 选 method = "tot"（Tree of Thoughts，3 branch × 2 depth）
               · 计算 prompt_template、sub-agent 规格
             ← {
                 plan_id: "rpl-P5-r1-01HXYE",
-                method: "M5-ToT",
+                method: "tot",
                 spec: {
                   branches: 3,
                   depth: 2,
@@ -73,7 +73,7 @@
 [A4] Claude → opc_reflect_complete({
               reflection_id: "rfl-P5-r1-01HXYF",
               artifact: {
-                method: "M5-ToT",
+                method: "tot",
                 branches: [3 个 branch_result],
                 final_evidence: {selected_nodes, rationale, knowledge_refs},
                 kept_objections: [{id:"obj-1", text:"audit-logger 与 security-review 职责重叠", ...}]
@@ -123,7 +123,7 @@
 - 每步独立的工具调用，便于在中途插入 inspect / debug
 - `opc_reflect_plan` 输出 spec 可被人 review 后再决定是否 execute
 - `opc_reflect_execute({inline:false})` 仅返回 agents_to_spawn 规格，**不内置 Task**，Claude 主体保留对 Task 的完全控制
-- 适合 M5-ToT / M6-MAD 等高成本 method（值得 4 次工具往返）
+- 适合 tot / debate 等高成本 method（值得 4 次工具往返）
 
 ---
 
@@ -174,7 +174,7 @@
 - 工具往返从 5 → 3 次（plan/execute/Task/complete 4 步折叠成 1 个 `opc_reflect_execute`）
 - artifact / pending_reflection / registry-guard 行为**完全一致**（同一份 schema）
 - 通过 `_inline_internal_log` 字段保留可观察性（调试时可看到内部 plan_id 和 spawned tasks）
-- 适合 M3-debate / critique 等短链 method（节省 token 与延迟）
+- 适合 debate / critique 等短链 method（节省 token 与延迟）
 
 ---
 
@@ -199,8 +199,8 @@
 
 | 触发条件 | 选模式 | reflection_budget_hint.execution_mode |
 |---|---|---|
-| method ∈ {M5-ToT, M6-MAD} | A (5 步) | `"external"`（默认） |
-| method ∈ {M3-debate, critique} 且 max_rounds ≤ 2 | B (3 步 inline) | `"inline"` |
+| method ∈ {tot, debate} | A (5 步) | `"external"`（默认） |
+| method ∈ {debate, critique} 且 max_rounds ≤ 2 | B (3 步 inline) | `"inline"` |
 | complexity == "high" 且 step ∈ {P3 task_decomposition, P4 brief_generation} | A (5 步)（重决策值得透明) | `"external"` |
 | step ∈ {P6 node_execution, P7 phase_completion}（已由 Validator-only 路径覆盖） | **不走反思工具面** | n/a（见 [P6/P7 决策](../../05-opc-reflection-server/02-server-design/00_overview.md#p6p7-validator-only-路径)） |
 | 用户在 corrections.jsonl 中标记某 step 需要"全展开调试" | A (5 步)（强制 override) | `"external"` |
@@ -246,10 +246,10 @@
 
 同一 session 内不同 step 走不同模式是合法的：
 ```
-P2 task_analysis → 模式 A (M5-ToT, high)
-P3 task_decomposition → 模式 A (M5-ToT, high)
+P2 task_analysis → 模式 A (tot, high)
+P3 task_decomposition → 模式 A (tot, high)
 P4 brief_generation → 模式 B (critique, medium)
-P5 node_selection (sub-1) → 模式 A (M6-MAD, high)
+P5 node_selection (sub-1) → 模式 A (debate, high)
 P5 node_selection (sub-2) → 模式 B (critique, medium)
 ```
 断言：每个 step 各自的 `execution_mode` 独立决定，state-server 不强制统一；reflection_log 在 step 维度分别累积，互不影响。

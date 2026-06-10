@@ -85,7 +85,7 @@ sequenceDiagram
         C->>FL: opc_flow_step_complete({step:"task_analysis", analysis_result, evidence_artifact, knowledge_plan})
 
         alt V1-V5 validator 或 meta-validator 发现 objection
-            FL-->>C: { step: task_analysis_reflection, round, method: M3-CoVe, next: opc_flow_reflect }
+            FL-->>C: { step: task_analysis_reflection, round, method: cove, next: opc_flow_reflect }
             loop 反思循环（受 rounds-guard 约束）
                 C->>C: 按 reflection_plan 重新审视
                 C->>FL: opc_flow_reflect({round, evidence_diff})

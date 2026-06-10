@@ -16,13 +16,13 @@
 [01] Claude → opc_flow_step_complete({step:"task_analysis", analysis_result:{complexity:"high", ...}})
             state-server:
               · 写 flow-state.accumulated.task_analysis
-              · 计算反思预案：P2 高复杂度 → reflection_budget_hint{max_rounds:3, method:"M3-debate"}
-            ← flow_next: opc_reflect_execute({step:"task_analysis", method:"M3-debate", inline:true, ...})
+              · 计算反思预案：P2 高复杂度 → reflection_budget_hint{max_rounds:3, method:"debate"}
+            ← flow_next: opc_reflect_execute({step:"task_analysis", method:"debate", inline:true, ...})
 
-[02] Claude → opc_reflect_execute({step:"task_analysis", method:"M3-debate", inline:true,
+[02] Claude → opc_reflect_execute({step:"task_analysis", method:"debate", inline:true,
                                    artifact:{analysis_evidence-r1}})
             内部:
-              · opc_reflect_plan 选 M3-debate（2 debater + 1 judge）
+              · opc_reflect_plan 选 debate（2 debater + 1 judge）
               · Task spawn 3 sub-agents
               · meta-validator 保留 2 条 objection: ["scope 偏大", "knowledge_unit 缺 audit"]
               · 写盘 rfl-P2-r1-01HXYA.json
@@ -37,7 +37,7 @@
               · 追加 reflection_log[task_analysis][] = {round:1, artifact_path, verdict:"objections_remain"}
               · 清 pending_reflections[]
               · 计算：reflection_log[task_analysis].length(1) < max_rounds(3) → 继续反思
-            ← flow_next: opc_reflect_execute（round 2，继续 M3-debate 处理 objections）
+            ← flow_next: opc_reflect_execute（round 2，继续 debate 处理 objections）
 
 [04] Claude → opc_reflect_execute(inline:true, artifact:{修正后的 analysis_evidence-r2 试图回应 obj-1/obj-2})
             内部: meta-validator 仍保留 obj-1（"scope 仍偏大，仅缩小但未拆"）
@@ -66,7 +66,7 @@
                    question_id: "uq-P2-r3-01HXYD",
                    step_id: "task_analysis",
                    round: 3,
-                   reasoning_trace: "3 轮 M3-debate 始终在 'scope 边界' 上分歧",
+                   reasoning_trace: "3 轮 debate 始终在 'scope 边界' 上分歧",
                    kept_objections: [{id:"obj-1", text:"scope 边界无法收敛", ...}],
                    context_artifacts: [
                      "opc-logs/reflection/sess-xyz/rfl-P2-r1-01HXYA.json",
@@ -84,7 +84,7 @@
                   question_id: "uq-P2-r3-01HXYD",
                   display_to_user: {
                     summary: "task_analysis 反思已跑满 3 轮仍有未消解的反对意见，需要您裁定",
-                    reasoning_trace: "3 轮 M3-debate 始终在 'scope 边界' 上分歧",
+                    reasoning_trace: "3 轮 debate 始终在 'scope 边界' 上分歧",
                     kept_objections: [{id:"obj-1", text:"scope 边界无法收敛"}]
                   },
                   required_next_tool: "opc_flow_user_reply",

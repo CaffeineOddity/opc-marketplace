@@ -48,8 +48,8 @@ Scenario 加权:
   ],
   "reflection_budget_hint": {
     "max_rounds": 2,
-    "primary_method": "M4-Critique",
-    "secondary_method": "M5-Debate"
+    "primary_method": "critique",
+    "secondary_method": "debate"
   }
 }
 ```
