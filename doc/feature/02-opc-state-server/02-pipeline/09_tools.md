@@ -1,6 +1,9 @@
 # 09 MCP 工具
 
-管线层 7 个工具。流程层 13 个 `opc_flow_*` 工具见 [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md)。
+管线层 3 个工具（`opc_pipeline_create` / `opc_pipeline_status` / `opc_pipeline_lifecycle`）。
+流程层 7 个 `opc_flow_*` 工具见 [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md)。
+
+> 历史名 `opc_pipeline_complete` / `opc_pipeline_abort` / `opc_pipeline_replan` / `opc_pipeline_resume` 已折叠为 `opc_pipeline_lifecycle({action})` 的 discriminator 分支；`opc_pipeline_recover` 已折叠为 `opc_flow_lifecycle({action:"recover"})`。详见 [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md)。
 
 ---
 
@@ -8,20 +11,16 @@
 
 | # | 工具 | 说明 |
 |---|------|------|
-| 1 | `opc_pipeline_create` | 创建管线：`opc_brief_complete` 路由触发，参数已预填；写入文件并返回 flow_next |
+| 1 | `opc_pipeline_create` | 创建管线：`opc_flow_step_complete({step:"brief_generation"})` 路由触发，参数已预填；写入文件并返回 flow_next |
 | 2 | `opc_pipeline_status` | 读取管线状态（支持子管线筛选） |
-| 3 | `opc_pipeline_recover` | 手动恢复指定孤儿管线（通常由 `opc_flow_recover` 内部调用） |
-| 4 | `opc_pipeline_complete` | 管线完成：校验 + `manifest.md` |
-| 5 | `opc_pipeline_abort` | 管线取消：级联终止 + kill in_progress sub-agent + 同步调用 `opc_flow_abort` |
-| 6 | `opc_pipeline_replan` | 管线修改：细粒度增删节点、阶段，调整子管线列表和执行顺序（含插队子管线 `add_sub_pipeline + execution_priority`） |
-| 7 | `opc_pipeline_resume` | 从被插队挂起的 sub 恢复执行：把 `paused` 切回 `in_progress`，重置 active sub 指针 |
+| 3 | `opc_pipeline_lifecycle` | 管线生命周期统一入口：`action ∈ {complete, abort, replan, resume}`；恢复孤儿管线请走 `opc_flow_lifecycle({action:"recover"})` |
 
 ---
 
 ## opc_pipeline_create
 
 ```
-触发: opc_brief_complete 返回 next 字段预填全部参数
+触发: opc_flow_step_complete({step:"brief_generation"}) 返回 next 字段预填全部参数
 
 参数: description, tags, complexity, knowledge_unit,
       suggested_phases, phase_selection_rationale, scenario,
@@ -58,7 +57,7 @@
 }
 ```
 
-> phase_plan 校验失败时返回 `{ error: "phase_plan_invalid", failed_rules: [...], suggested_action: "opc_flow_restart(from_step: 'task_analysis')" }`。详见 [04_state-json.md 六](04_state-json.md#六phase_plan-校验规则deterministic)。
+> phase_plan 校验失败时返回 `{ error: "phase_plan_invalid", failed_rules: [...], suggested_action: {tool: "opc_flow_correct", args: {action: "restart", from_step: "task_analysis"}} }`。详见 [04_state-json.md 六](04_state-json.md#六phase_plan-校验规则deterministic)。
 
 ---
 
@@ -102,34 +101,33 @@
 
 ---
 
-## opc_pipeline_recover
+## opc_pipeline_lifecycle
+
+统一的管线生命周期入口。请求体顶层必含 `action` 字段（discriminator），根据 action 路由到对应分支。
 
 ```
-参数: pipeline_id
+公共参数:
+  action: "complete" | "abort" | "replan" | "resume"
+  pipeline_id: string
+  reason?: string
 
-行为:
-  → 检查 owner.pid 是否存活
-    ├── 存活 → 拒绝
-    └── 已死 → 更新 owner 为当前 session
-  → 检查 in_progress node 超时（默认 30 分钟无心跳）→ 自动标记 failed (error.type: timeout)
-  → 返回可恢复的 in_progress + failed node 列表
-  → 同时更新 flow-state.json：标记 step: pipeline_recovered
-
-返回:
-{
-  pipeline_id, owner_taken,
-  recoverable_nodes: [{name, status, suggested_action: "opc_node_retry"|"opc_node_start"}]
-}
+discriminator 分支:
+  action="complete"  → 见 §complete
+  action="abort"     → 见 §abort
+  action="replan"    → 见 §replan
+  action="resume"    → 见 §resume
 ```
+
+> **恢复孤儿管线**（owner.pid 已死）**不在本工具内**：走 `opc_flow_lifecycle({action:"recover"})`，由流程层统一接管 owner、重置 flow-state，并在内部更新 pipeline-plan 的 owner 字段。本工具的 4 个 action 都假定 owner 已归当前 session。
 
 ---
 
-## opc_pipeline_complete
+### opc_pipeline_lifecycle action=complete
 
-> ⚠️ **reflection-registry-guard 前置校验**：本工具受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，则 reject 并返回 `required_action`。完整契约见 [../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
+> ⚠️ **reflection-registry-guard 前置校验**：本分支受 registry-guard 保护。若 `flow-state.json.pending_reflections[]` 非空，则 reject 并返回 `required_action`。完整契约见 [../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)。
 
 ```
-参数: pipeline_id
+参数: { action: "complete", pipeline_id }
 
 行为:
   ⓪ registry-guard 前置校验 → pending_reflections 非空时 reject
@@ -150,10 +148,10 @@
 
 ---
 
-## opc_pipeline_abort
+### opc_pipeline_lifecycle action=abort
 
 ```
-参数: pipeline_id, kill_agents?: boolean (默认 true), reason?
+参数: { action: "abort", pipeline_id, kill_agents?: boolean (默认 true), reason? }
 
 行为:
   → pipeline-plan.json status → aborted
@@ -161,7 +159,7 @@
   → kill_agents=true → 向所有 in_progress node 的 sub-agent 发 SIGTERM（pid 存于 node.agent_pid）
   → 写入 abort_reason
   → owner 释放（knowledge 历史保留在 git）
-  → 若 flow-state.status=in_progress + pipeline_id 匹配 → 同步调用 opc_flow_abort
+  → 若 flow-state.status=in_progress + pipeline_id 匹配 → 同步调用 opc_flow_lifecycle({action:"abort"})
 
 返回:
 {
@@ -171,10 +169,10 @@
 
 ---
 
-## opc_pipeline_replan（细粒度）
+### opc_pipeline_lifecycle action=replan（细粒度）
 
 ```
-参数: pipeline_id, changes: {
+参数: { action: "replan", pipeline_id, changes: {
   add_phase_node?: [{phase, node, blocked_by?}],     // 增加节点到指定阶段
   remove_phase_node?: [{phase, node}],               // 移除节点（仅 pending 状态可移除）
   replace_phase_node?: [{phase, old_node, new_node}],// 替换节点
@@ -196,7 +194,7 @@
   }],
   remove_sub_pipeline?: [id],                        // 仅 pending 可移
   update_execution_order?: [...]
-}, reason?: string
+}, reason?: string }
 
 行为:
   ① 校验:
@@ -248,14 +246,14 @@
 
 ---
 
-## opc_pipeline_resume
+### opc_pipeline_lifecycle action=resume
 
 ```
 触发: 插队 sub 跑完（status=completed/aborted/failed）后，由 opc_phase_complete 内部
       检测到 pipeline-plan.json 存在 status=paused 的 sub 时自动调用；
       或用户主动调用以恢复指定挂起 sub。
 
-参数: pipeline_id, sub_pipeline_id
+参数: { action: "resume", pipeline_id, sub_pipeline_id }
 
 行为:
   ① 校验目标 sub:
@@ -295,7 +293,8 @@
 
 ## 相关文档
 
-- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 13 个流程层工具
+- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 7 个流程层工具
 - [06_lifecycle.md](06_lifecycle.md) — 工具在生命周期中的调用顺序
 - [10_complete-example.md](10_complete-example.md) — 完整调用链路
 - [11_insert-resume.md](11_insert-resume.md) — 插队/挂起/恢复完整契约
+- [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案

@@ -29,7 +29,7 @@ sequenceDiagram
     Note over C,K: ② 节点选择 + 反思
     C->>C: 语义匹配 + 收集 selection_evidence<br/>(matched_tags / scenario_hits /<br/>file_domain_conflicts / blocked_by_graph)
     alt V1-V5 validator 或 meta-validator 发现 objection
-        C->>PH: opc_flow_reflect()
+        C->>PH: opc_flow_reflect({action:"plan"})
         PH-->>C: 反思指令 (primary=M4 Critique)
         C->>C: 重新选择
     end
@@ -67,7 +67,7 @@ sequenceDiagram
     else 显式确认
         PH-->>C: 询问下一阶段
     else 全部完成
-        PH-->>C: flow_next: opc_pipeline_complete
+        PH-->>C: flow_next: opc_pipeline_lifecycle({action:"complete"})
     end
 ```
 
@@ -75,7 +75,7 @@ sequenceDiagram
 
 ## 阶段推进与回退决策流
 
-`opc_phase_complete` 后 auto_advance 判定，以及 `opc_phase_reset` 的分层回退：
+`opc_phase_complete` 后 auto_advance 判定，以及 `opc_flow_correct({action:"phase_reset"})` 的分层回退：
 
 ```mermaid
 flowchart TD
@@ -90,13 +90,13 @@ flowchart TD
     Ask --> NextA{order.next?}
 
     Next -->|存在| StartNext[opc_phase_start<br/>下一阶段]
-    Next -->|不存在| PC[opc_pipeline_complete]
+    Next -->|不存在| PC[opc_pipeline_lifecycle<br/>action:complete]
 
     NextA -->|存在| Decide{Claude 决策}
     NextA -->|不存在| PC
 
     Decide -->|前进| StartNext
-    Decide -->|回退| Reset[opc_phase_reset]
+    Decide -->|回退| Reset[opc_flow_correct<br/>action:phase_reset]
 
     Reset --> RType{回退层级}
     RType -->|L0<br/>仅当前 phase| L0[重置 phase nodes<br/>knowledge git checkout<br/>v+1 写回]
@@ -132,7 +132,7 @@ flowchart TD
 |------|------|------|
 | [04_phase-start.md](04_phase-start.md) | `opc_phase_start` + P5 selection_evidence 收集 + V1-V5 validator 路由 + 反思循环 | `opc_phase_start` / `opc_flow_reflect` |
 | [05_phase-confirm-execute.md](05_phase-confirm-execute.md) | `opc_phase_confirm` 锁定执行 + 逐 node 执行 | `opc_phase_confirm` / `opc_node_start` |
-| [06_phase-complete-reset.md](06_phase-complete-reset.md) | `opc_phase_complete` + auto_advance 规则 + `opc_phase_reset` + 分层回退 L0–L3 | `opc_phase_complete` / `opc_phase_reset` |
+| [06_phase-complete-reset.md](06_phase-complete-reset.md) | `opc_phase_complete` + auto_advance 规则 + `opc_flow_correct({action:"phase_reset"})` + 分层回退 L0–L3 | `opc_phase_complete` / `opc_flow_correct({action:"phase_reset"})` |
 | [08_tools-and-automation.md](08_tools-and-automation.md) | 节点来源 + 6 个阶段工具汇总 + 自动机制 |
 
 ---
@@ -141,7 +141,7 @@ flowchart TD
 
 - **进入阶段**：[`opc_phase_start`](04_phase-start.md#二opc_phase_start--扫描与返回) — 由 `opc_pipeline_create` / 上一 phase 的 `opc_phase_complete` 路由触发
 - **锁定执行**：[`opc_phase_confirm`](05_phase-confirm-execute.md#一opc_phase_confirm--锁定执行计划) — selection_evidence 通过 V1-V5 后调用
-- **回退**：[`opc_phase_reset`](06_phase-complete-reset.md#三opc_phase_reset--阶段重置) — git checkout 锚点写回 v+1，下游级联 pending
+- **回退**：[`opc_flow_correct({action:"phase_reset"})`](06_phase-complete-reset.md#三opc_flow_correctactionphase_reset--阶段重置) — git checkout 锚点写回 v+1，下游级联 pending
 
 ---
 
@@ -149,7 +149,7 @@ flowchart TD
 
 - **节点选择由 Claude 完成**：state-server 只做 tag 过滤和 scenario 标记，**不调 LLM**；语义匹配和 selection_evidence 收集由 Claude 在主循环承担
 - **Evidence 驱动确认**：V1-V5 validator + meta-validator 通过即自动确认；validator 失败或保留严重 objections → reflection 循环 → ask_user 兜底
-- **git 锚点保证可回退**：每次 `opc_phase_confirm` 把当时 knowledge `git commit` 并把 hash 记入 `confirm_commit_ref`，`opc_phase_reset` 据此 checkout 内容并以 v+1 写回（version 永远向前，乐观锁始终工作）
+- **git 锚点保证可回退**：每次 `opc_phase_confirm` 把当时 knowledge `git commit` 并把 hash 记入 `confirm_commit_ref`，`opc_flow_correct({action:"phase_reset"})` 据此 checkout 内容并以 v+1 写回（version 永远向前，乐观锁始终工作）
 - **auto_advance 严格判定**：complexity + selection_evidence + 节点完成率 + phase_plan.selected 4 条件全满足才自动推进
 
 ---

@@ -1,6 +1,8 @@
-# 06 opc_phase_complete、opc_phase_reset 与分层回退
+# 06 opc_phase_complete、opc_flow_correct(phase_reset) 与分层回退
 
 阶段完成与回退。完成时自动计算推进策略；reset 通过 git checkout 把 knowledge 恢复到 phase confirm 时的内容快照（**写为新 version**，不倒退），下游级联 pending。
+
+> 阶段回退入口已折叠为 `opc_flow_correct({action:"phase_reset"})` 的 discriminator 分支（state-server 内部仍调用 PhaseServer.reset 完成实际写入）。
 
 ---
 
@@ -20,7 +22,7 @@
   → 更新 flow-state.json:
       · 若 next_phase 存在 + auto_advance → current_pipeline_pointer = { sub_pipeline_id, phase: next_phase, node: null }
       · 若 next_phase 为 null + next_sub_pipeline 非空 → current_pipeline_pointer = { sub_pipeline_id: next_sub_pipeline.id, phase: null, node: null }
-      · 若全部完成 → current_pipeline_pointer 保留为最后位置，等待 opc_pipeline_complete
+      · 若全部完成 → current_pipeline_pointer 保留为最后位置，等待 opc_pipeline_lifecycle({action:"complete"})
       · last_heartbeat_at 刷新
 
 返回:
@@ -48,7 +50,7 @@
 - `next_phase != null` 且 `auto_advance: true` → 直接调 `opc_phase_start` 推进当前子管线
 - `next_phase != null` 且 `auto_advance: false` → 提示用户确认后推进
 - `next_phase == null` 且 `next_sub_pipeline != null` → 启动下一条子管线
-- `next_phase == null` 且 `next_sub_pipeline == null` + 全部 sub completed → 调 `opc_pipeline_complete`
+- `next_phase == null` 且 `next_sub_pipeline == null` + 全部 sub completed → 调 `opc_pipeline_lifecycle({action:"complete"})`
 
 ---
 
@@ -73,10 +75,10 @@ auto_advance = (
 
 ---
 
-## 三、opc_phase_reset — 阶段重置
+## 三、opc_flow_correct({action:"phase_reset"}) — 阶段重置
 
 ```
-参数: pipeline_id, sub_pipeline_id, phase
+参数: { action: "phase_reset", pipeline_id, sub_pipeline_id, phase }
 
 行为:
   → 查 state.json.phases[phase].confirm_commit_ref
@@ -124,9 +126,9 @@ auto_advance = (
 
 | 层 | 场景 | 工具 | 实现 |
 |----|------|------|------|
-| L0 | 调整节点选择 | `opc_phase_adjust` | 改 state.json 节点列表 |
-| L1 | 重做单个产出 | `opc_node_retry`（级联重置下游） | 节点级 retry |
-| L2 | 废弃整个 phase 知识 | `opc_phase_reset` | `git checkout` phase confirm 锚点 → 以 `v+1` 写回 knowledge |
+| L0 | 调整节点选择 | 反思循环内 Claude 自行重排（无显式工具） / `opc_pipeline_lifecycle({action:"replan"})` 细粒度修节点 | 改 state.json 节点列表 |
+| L1 | 重做单个产出 | `opc_node_finish({status:"retry"})`（级联重置下游） | 节点级 retry |
+| L2 | 废弃整个 phase 知识 | `opc_flow_correct({action:"phase_reset"})` | `git checkout` phase confirm 锚点 → 以 `v+1` 写回 knowledge |
 | L3 | 全量回退（知识+代码） | git checkout/revert（OPC 不封装） | 用户直接操作 git |
 
 L0–L2 是 OPC 内建的回退能力；L3 完全交给 git。**L2 与 L3 共享 git 基础设施**，只是 L2 由 OPC 自动定位 phase 锚点 commit，L3 由用户挑 commit。
@@ -137,5 +139,5 @@ L0–L2 是 OPC 内建的回退能力；L3 完全交给 git。**L2 与 L3 共享
 
 - [05_phase-confirm-execute.md](05_phase-confirm-execute.md) — confirm 时写 `confirm_commit_ref`
 - [08_tools-and-automation.md](08_tools-and-automation.md) — 自动机制完整列表
-- [../04-node/05_execution-and-retry.md](../04-node/05_execution-and-retry.md) — L1 `opc_node_retry`
+- [../04-node/05_execution-and-retry.md](../04-node/05_execution-and-retry.md) — L1 `opc_node_finish({status:"retry"})`
 - [../../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md § 2.10](../../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md#210-版本冲突与-3-way-diff-and-merge-契约) — reset 复用的 diff-and-merge 契约

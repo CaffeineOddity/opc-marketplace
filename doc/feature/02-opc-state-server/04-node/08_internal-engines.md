@@ -8,11 +8,11 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 
 ### 1.1 依赖解锁
 
-`opc_node_complete` 后自动检查 phase 内所有 pending node，将 blocked_by 已满足的标记为可执行。严格语义：必须 blocked_by 全部 completed，部分 completed 不算。
+`opc_node_finish({status:"completed"})` 后自动检查 phase 内所有 pending node，将 blocked_by 已满足的标记为可执行。严格语义：必须 blocked_by 全部 completed，部分 completed 不算。
 
 ### 1.2 节点超时自动重试
 
-`opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 调用时惰性检测 in_progress node 是否超时。超时且未达重试上限时自动 `opc_node_retry`（含级联重置）。
+`opc_pipeline_status`、`opc_phase_start`、`opc_node_start` 调用时惰性检测 in_progress node 是否超时。超时且未达重试上限时自动 `opc_node_finish({status:"retry", reset_retry_count:false})`（含级联重置）。
 
 ---
 
@@ -23,16 +23,17 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 对选中节点做依赖解析和拓扑排序，输出分组执行计划。同时检查并行组冲突。纯 TypeScript 确定性逻辑。
 
 - `resolve(phase, nodes)`: `opc_phase_confirm` 时解析依赖 + 冲突检测 + 拓扑排序
-- `adjust(phase, nodes)`: `opc_phase_adjust` 时重新生成预览（不锁定）
 - 输入: 选中节点列表（来自 Claude）
 - 输出: `[{ group: 1, nodes: [...], parallel: true }, { group: 2, nodes: [...], parallel: false }]`
+
+> 历史名 `adjust(phase, nodes)` 已删除：`opc_phase_adjust` 工具已下线，节点调整改由反思循环内 Claude 自行重排（或走 `opc_pipeline_lifecycle({action:"replan"})`），不再走预览引擎。
 
 ### 2.2 state-manager（state-server 内部，节点部分）
 
 - `validate_node_completion()` — L1（产出物存在性）+ L2（quality_gates）校验
 - `cascade_reset_after_retry()` — 计算下游影响面，自动重置受影响 node/phase
 - `check_node_timeout()` — 惰性检测 in_progress node 超时
-- `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_retry`（含级联重置）
+- `auto_retry_on_timeout()` — 超时后自动触发 `opc_node_finish({status:"retry", reset_retry_count:false})`（含级联重置）
 - `compute_unblocked_nodes()` — 严格语义：blocked_by 全部 completed 才纳入
 - `compute_next_sub_pipeline()` — 按 execution_order 顺序找第一个 `status=pending` 且 `blocked_by` 全 completed 且 upstream 无 failed 的 sub；若无则返回 null
 
@@ -52,4 +53,4 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 
 - [04_concurrency-and-deps.md](04_concurrency-and-deps.md) — node-resolver 的对外行为
 - [05_execution-and-retry.md](05_execution-and-retry.md) — state-manager 重试逻辑
-- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — flow-router 对外暴露的 13 个工具
+- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — flow-router 对外暴露的 7 个流程工具

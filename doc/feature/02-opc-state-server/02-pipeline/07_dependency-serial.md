@@ -99,7 +99,7 @@
 1. 当前子管线的最后 phase → opc_phase_complete
 2. 返回 pipeline_progress.next_sub_pipeline = {id: "sub-X", reason: "..."}
 3. Claude 调 opc_phase_start(sub-X) → 开始下一条子管线
-4. 若 next_sub_pipeline = null + 全部 sub completed → 调 opc_pipeline_complete
+4. 若 next_sub_pipeline = null + 全部 sub completed → 调 opc_pipeline_lifecycle({action:"complete"})
 ```
 
 ### 串行执行的保障
@@ -117,7 +117,7 @@
 | 场景 | 处理 |
 |---|---|
 | `blocked_by` 未满足的 sub | `next_sub_pipeline` 跳过该 sub，返回下一个 blocked_by 已满足的 pending sub |
-| 某 sub 执行中 `failed` | 其下游 sub 永久阻塞，直到 `opc_pipeline_recover` 或 `opc_pipeline_abort` |
+| 某 sub 执行中 `failed` | 其下游 sub 永久阻塞，直到 `opc_flow_lifecycle({action:"recover"})` 或 `opc_pipeline_lifecycle({action:"abort"})` |
 | 无 sub 可执行 | `next_sub_pipeline = null`，提示用户介入 |
 
 ---
@@ -156,8 +156,8 @@
 
 子管线 `failed` 阻塞所有依赖它的子管线。`failed` 子管线不会出现在 `next_sub_pipeline` 中，下游永久阻塞，直到：
 
-- 修复 → `opc_pipeline_recover` → 重新进入就绪
-- 放弃 → `opc_pipeline_abort` → 整条管线终止
+- 修复 → `opc_flow_lifecycle({action:"recover"})` → 重新进入就绪
+- 放弃 → `opc_pipeline_lifecycle({action:"abort"})` → 整条管线终止
 
 **串行场景下的失败处理**：
 
@@ -190,10 +190,10 @@ OPC 内部串行模型保证「**任何时刻只有一个 sub-pipeline 在跑**�
 | # | 约定 | 强度 |
 |---|---|---|
 | 1 | **反思进行中**（`pending_reflections.length > 0`），用户**禁止**手动改 `opc-knowledge/` 下任何已 completed 子管线的产物 | **约定（不强制锁）** |
-| 2 | 用户若需要修改 → 走 `opc_flow_abort` → 改文件 → `opc_flow_start` 重新跑；或走 `opc_phase_reset` 把当前 phase 回到反思前的状态再改 | 推荐路径 |
+| 2 | 用户若需要修改 → 走 `opc_flow_lifecycle({action:"abort"})` → 改文件 → `opc_flow_lifecycle({action:"start"})` 重新跑；或走 `opc_flow_correct({action:"phase_reset"})` 把当前 phase 回到反思前的状态再改 | 推荐路径 |
 | 3 | `opc-knowledge/` 文件**应纳入 git**，反思 artifact `artifact_path` 记录的 evidence 引用文件 + 行号，便于事后 `git diff` 复盘是否被改 | hard（artifact schema 已有 `evidence_ref`） |
 | 4 | reflection-server 的 `meta-validator` 在 `opc_reflect_*_complete` 时**stat 一次** evidence 引用的文件 `mtime`；若 mtime > artifact 创建时的反思任务派发时间 → 在 reasoning_trace 末尾追加一行 `warning: evidence file mutated during reflection` | 软告警 |
-| 5 | `opc_phase_confirm` V2 validator 跑 `referential` 检查时若发现引用的文件已不存在（用户删了）→ reject `error: knowledge_referent_missing`，要求用户先 `opc_phase_reset` 或恢复文件 | hard |
+| 5 | `opc_phase_confirm` V2 validator 跑 `referential` 检查时若发现引用的文件已不存在（用户删了）→ reject `error: knowledge_referent_missing`，要求用户先 `opc_flow_correct({action:"phase_reset"})` 或恢复文件 | hard |
 
 ### 为什么不做强锁
 

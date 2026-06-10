@@ -14,17 +14,17 @@
             └── 06-testing.md
 ```
 
-> **knowledge 历史不在 .opc/ 下**：phase 回退所需的 knowledge 历史快照走 git（`opc_phase_confirm` 时 commit + 记 `confirm_commit_ref`），不再有 `.opc/snapshots/` 目录。详见 [../03-phase/06_phase-complete-reset.md § 三](../03-phase/06_phase-complete-reset.md#三opc_phase_reset--阶段重置)。
+> **knowledge 历史不在 .opc/ 下**：phase 回退所需的 knowledge 历史快照走 git（`opc_phase_confirm` 时 commit + 记 `confirm_commit_ref`），不再有 `.opc/snapshots/` 目录。详见 [../03-phase/06_phase-complete-reset.md § 三](../03-phase/06_phase-complete-reset.md#三opc_flow_correctactionphase_reset--阶段重置)。
 
 ## 路径约定
 
 | 路径 | 写者 | 读者 |
 |------|------|------|
-| `pipeline-plan.json` | `opc_pipeline_create` / `opc_pipeline_replan` | 所有管线工具 |
+| `pipeline-plan.json` | `opc_pipeline_create` / `opc_pipeline_lifecycle({action:"replan"})` | 所有管线工具 |
 | `sub-pipelines/<id>/state.json` | `opc_phase_*` / `opc_node_*` | 所有阶段/节点工具 |
 | `sub-pipelines/<id>/brief.md` | `opc_pipeline_create`（Claude 提供内容） | Agent 执行时 |
 | `sub-pipelines/<id>/phases/*.md` | `opc_phase_complete` | 后续 phase / Agent |
-| `manifest.md` | `opc_pipeline_complete` | 用户最终查看 |
+| `manifest.md` | `opc_pipeline_lifecycle({action:"complete"})` | 用户最终查看 |
 
 ---
 

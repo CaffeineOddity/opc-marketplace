@@ -179,7 +179,7 @@ Claude 在 `opc_phase_confirm` 前内部生成；evidence_artifact 由 reflectio
           → opc_flow_reflect(round=2, evidence_diff={added:["database-schema"]}, validator_result={V1-V5:"ok"}, objections_kept_by_meta=1)
           → V1-V5 全 ok + meta-validator 保留 1 条非严重 objection → 路径 B 快速确认
 
-调整仍通过 `opc_phase_adjust(pipeline_id, sub_id, phase, nodes: [...])` 重新生成预览。与旧设计不同的是，**大部分常规任务的调整由 Claude 在反思循环中自行完成**，用户只在严重 objection 或 rounds 耗尽时介入。
+调整仍通过 `opc_flow_correct({action:"phase_reset"})`（整段重置）或在反思循环中由 Claude 自行重新提交 selection 重新生成预览。与旧设计不同的是，**大部分常规任务的调整由 Claude 在反思循环中自行完成**，用户只在严重 objection 或 rounds 耗尽时介入。
 ```
 
 ---

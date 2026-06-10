@@ -1,6 +1,6 @@
 # 05 opc_phase_confirm 与节点执行
 
-阶段锁定执行计划。`opc_phase_confirm` 由 node-resolver 解析依赖、检查文件域冲突、生成执行分组，并把当前 knowledge 状态记一个 git commit 锚点（供 `opc_phase_reset` 回退时定位）。
+阶段锁定执行计划。`opc_phase_confirm` 由 node-resolver 解析依赖、检查文件域冲突、生成执行分组，并把当前 knowledge 状态记一个 git commit 锚点（供 `opc_flow_correct({action:"phase_reset"})` 回退时定位）。
 
 ---
 
@@ -22,8 +22,8 @@
       · git add opc-knowledge/
       · git commit -m "opc: phase confirm <pipeline_id>/<sub>/<phase>" --allow-empty
       · 把 commit hash 写入 state.json.phases[phase].confirm_commit_ref
-      · 该 commit 是 opc_phase_reset 的回退锚点（详见 06_phase-complete-reset.md § 三）
-  → 锁定后不可再 opc_phase_adjust
+      · 该 commit 是 opc_flow_correct({action:"phase_reset"}) 的回退锚点（详见 06_phase-complete-reset.md § 三）
+  → 锁定后不可再重排（如需变更走 opc_pipeline_lifecycle({action:"replan"}) 或 opc_flow_correct({action:"phase_reset"})）
   → 更新 flow-state.json:
       · current_step = "phase_confirmed"
       · current_pipeline_pointer = { sub_pipeline_id, phase, node: null }
@@ -46,7 +46,7 @@
 逐组执行，每个 node 走完整流程（详见 [../04-node/00_overview.md](../04-node/00_overview.md)）：
 
 ```
-opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_node_fail
+opc_node_start → Agent 加载知识 → 执行 → opc_node_finish({status:"completed"|"failed"|"retry"})
 ```
 
 执行规则：
@@ -60,6 +60,6 @@ opc_node_start → Agent 加载知识 → 执行 → opc_node_complete / opc_nod
 ## 相关文档
 
 - [04_phase-start.md](04_phase-start.md) — `opc_phase_start` + 自省评估
-- [06_phase-complete-reset.md](06_phase-complete-reset.md) — `opc_phase_complete` + `opc_phase_reset`
+- [06_phase-complete-reset.md](06_phase-complete-reset.md) — `opc_phase_complete` + `opc_flow_correct({action:"phase_reset"})`
 - [../04-node/00_overview.md](../04-node/00_overview.md) — 节点定义与执行
 - [../04-node/04_concurrency-and-deps.md](../04-node/04_concurrency-and-deps.md) — 文件域冲突检测细节

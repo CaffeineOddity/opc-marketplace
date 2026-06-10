@@ -9,15 +9,15 @@
 ```
 用户消息
   → UserPromptSubmit hook 注入一行指令：先调 opc_flow_query
-  → Claude → opc_flow_query() → 返回 active=false + suggested_actions（含 opc_flow_start）
-  → Claude 判断任务消息 → opc_flow_start({user_message}) → 返回 intent_analysis 指令
-  → Claude 判断 intent=task → opc_intent_complete
-  → opc_intent_complete 路由 task 分支 → 返回 task_analysis 指令 + prerequisites:[opc_knowledge_list]
-  → Claude 调 opc_knowledge_list → 7 步分析 + 收集 task_analysis_evidence → opc_task_analysis_complete
-  → opc_task_analysis_complete 按 P2 V1-V5 + complexity + modify_unit_count 路由
-  → (需修改 unit ≥ 2: 路由 task_decomposition → Claude 拆分 → opc_decomposition_complete → 路由)
-  → opc_task_analysis_complete / opc_decomposition_complete 路由 brief_generation → Claude 生成 brief → opc_brief_complete
-  → opc_brief_complete 返回 next:opc_pipeline_create（预填全部参数）
+  → Claude → opc_flow_query() → 返回 active=false + suggested_actions（含 opc_flow_lifecycle({action:"start"})）
+  → Claude 判断任务消息 → opc_flow_lifecycle({action:"start", user_message}) → 返回 intent_analysis 指令
+  → Claude 判断 intent=task → opc_flow_step_complete({step:"intent_analysis"})
+  → 路由 task 分支 → 返回 task_analysis 指令 + prerequisites:[opc_knowledge_read({mode:"list"})]
+  → Claude 调 opc_knowledge_read({mode:"list"}) → 7 步分析 + 收集 task_analysis_evidence → opc_flow_step_complete({step:"task_analysis"})
+  → 按 P2 V1-V5 + complexity + modify_unit_count 路由
+  → (需修改 unit ≥ 2: 路由 task_decomposition → Claude 拆分 → opc_flow_step_complete({step:"task_decomposition"}) → 路由)
+  → 路由 brief_generation → Claude 生成 brief → opc_flow_step_complete({step:"brief_generation"})
+  → 返回 next:opc_pipeline_create（预填全部参数）
   → Claude 调 opc_pipeline_create
     → state-server: 写入 pipeline-plan.json + brief.md + state.json + 更新 flow-state.json
     → 返回 { pipeline_id, flow_next: opc_knowledge_open }
@@ -38,7 +38,7 @@
 
 ## 三、完成
 
-全部子管线 completed → `opc_pipeline_complete`：
+全部子管线 completed → `opc_pipeline_lifecycle({action:"complete"})`：
 
 - 校验全部子管线状态
 - 生成 `manifest.md`（汇总所有子管线的产物清单）
@@ -48,14 +48,14 @@
 
 ## 四、取消
 
-`opc_pipeline_abort`：级联终止。
+`opc_pipeline_lifecycle({action:"abort", reason})`：级联终止。
 
 - `pipeline-plan.json`: status → `aborted`
 - 所有 `in_progress` 子管线 / phase / node → `aborted`
 - 下游 `pending` 保持 `pending`（不再推进）
 - 释放 owner（knowledge 历史保留在 git）
 
-工具规范详见 [09_tools.md opc_pipeline_abort](09_tools.md#opc_pipeline_abort)。
+工具规范详见 [09_tools.md opc_pipeline_lifecycle](09_tools.md#opc_pipeline_lifecycle)。
 
 ---
 
@@ -72,17 +72,20 @@ Session 启动后用户首次发消息:
         active: true, owner: {pid: 12345, alive: false}, orphan: true,
         snapshot: {...},
         suggested_actions: [
-          {intent: "恢复流程", next: {tool: "opc_flow_recover"}},
-          {intent: "放弃并开新流程", next: {tools: ["opc_flow_abort", "opc_flow_start"]}}
+          {intent: "恢复流程", next: {tool: "opc_flow_lifecycle", args: {action: "recover"}}},
+          {intent: "放弃并开新流程", next: {tools: [
+            {tool: "opc_flow_lifecycle", args: {action: "abort"}},
+            {tool: "opc_flow_lifecycle", args: {action: "start"}}
+          ]}}
         ],
         orphan_pipelines: [
-          {id: "pipeline-001", last_active: "...", suggest: "opc_pipeline_recover"}
+          {id: "pipeline-001", last_active: "...", suggest: {tool: "opc_flow_lifecycle", args: {action: "recover"}}}
         ]
       }
 
 用户决定恢复:
-  Claude → opc_flow_recover()
-    → owner.pid 接管 → 若 current_pipeline_pointer 非空 → 内部调 opc_pipeline_recover
+  Claude → opc_flow_lifecycle({action:"recover"})
+    → owner.pid 接管 → 若 current_pipeline_pointer 非空 → 内部恢复管线指针
       · 检测 in_progress node 超时（默认 30 min 无心跳）→ 自动标 failed (error.type: timeout)
     → 返回 { resume_step, resume_pointer, next, recoverable_nodes }
     → 继续执行
@@ -92,6 +95,6 @@ Session 启动后用户首次发消息:
 
 ## 相关文档
 
-- [09_tools.md](09_tools.md) — 7 个管线级工具的完整规范
+- [09_tools.md](09_tools.md) — 3 个管线级工具的完整规范（create / status / lifecycle）
 - [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 13 个流程层工具
 - [../03-phase/00_overview.md](../03-phase/00_overview.md) — 阶段执行循环

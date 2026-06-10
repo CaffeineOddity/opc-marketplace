@@ -6,7 +6,7 @@
 
 ## 节点执行时序图
 
-`opc_node_start` → Agent 委派 → evidence 回报 → `opc_node_complete` 的完整链路（含 L1/L2 质量门校验与依赖解锁）：
+`opc_node_start` → Agent 委派 → evidence 回报 → `opc_node_finish({status:"completed"})` 的完整链路（含 L1/L2 质量门校验与依赖解锁）：
 
 ```mermaid
 sequenceDiagram
@@ -43,7 +43,7 @@ sequenceDiagram
     T-->>C: Agent 完成
 
     Note over C,FS: ③ 完成与校验
-    C->>ND: opc_node_complete({evidence})
+    C->>ND: opc_node_finish({status:"completed", evidence})
     ND->>SM: validate_node_completion
     SM->>SM: L1 校验<br/>(artifacts 存在性)
     SM->>SM: L2 校验<br/>(quality_gates)
@@ -69,12 +69,12 @@ sequenceDiagram
 flowchart TD
     Start([节点异常或重跑]) --> Type{触发场景}
 
-    Type -->|Agent 报错<br/>opc_node_fail| AF[node.status = failed<br/>retry_count += 1]
+    Type -->|Agent 报错<br/>opc_node_finish<br/>status:failed| AF[node.status = failed<br/>retry_count += 1]
     Type -->|超时<br/>惰性检测| TO[node.status = timeout]
-    Type -->|手动重跑<br/>opc_node_retry| MR[节点 + 下游<br/>已计算影响面]
+    Type -->|手动重跑<br/>opc_node_finish<br/>status:retry| MR[节点 + 下游<br/>已计算影响面]
 
     AF --> AFR{retry_count<br/>≤ max_retries?}
-    AFR -->|是| AFRetry[opc_node_retry<br/>不级联下游<br/>仅当前 node reset]
+    AFR -->|是| AFRetry[opc_node_finish<br/>status:retry<br/>不级联下游<br/>仅当前 node reset]
     AFR -->|否| AFFail[node 永久 failed<br/>阶段卡住]
 
     TO --> TOR{retry_count<br/>≤ max_retries?}
@@ -89,7 +89,7 @@ flowchart TD
     AutoRetry --> Resume
     Restart --> Resume
 
-    AFFail --> NeedFix[需 opc_phase_reset<br/>或人工介入]
+    AFFail --> NeedFix[需 opc_flow_correct<br/>action:phase_reset<br/>或人工介入]
     TOFail --> NeedFix
 
     Resume --> EndR([继续执行循环])
@@ -118,8 +118,8 @@ flowchart TD
 
 | 子文档 | 内容 | 涉及工具 |
 |------|------|------|
-| [05_execution-and-retry.md](05_execution-and-retry.md) | 完整执行流程 + 三种重试场景 + retry_count 规则 | 4 个 `opc_node_*` |
-| [07_tools.md](07_tools.md) | 4 个节点级工具完整规范 + Agent 委派模式 | 全部 |
+| [05_execution-and-retry.md](05_execution-and-retry.md) | 完整执行流程 + 三种重试场景 + retry_count 规则 | 2 个 `opc_node_*` |
+| [07_tools.md](07_tools.md) | 2 个节点级工具完整规范 + Agent 委派模式 | 全部 |
 
 ### 来源与引擎
 
@@ -133,8 +133,9 @@ flowchart TD
 ## 快速入口
 
 - **启动节点**：[`opc_node_start`](07_tools.md#opc_node_start) — 由 `opc_phase_confirm` 路由触发
-- **完成节点**：[`opc_node_complete`](07_tools.md#opc_node_complete) — Agent 回报 evidence 后调用
-- **重跑节点**：[`opc_node_retry`](07_tools.md#opc_node_retry) — 手动重跑，自动级联重置下游
+- **完成/失败/重跑节点**：[`opc_node_finish`](07_tools.md#opc_node_finish) — Agent 回报 evidence 后调用，`status ∈ {completed, failed, retry}` discriminator 路由
+
+> 历史名 `opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish({status})` 的 discriminator 分支。详见 [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md)。
 
 ---
 

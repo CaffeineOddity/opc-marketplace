@@ -9,13 +9,13 @@ task-analysis 输出中需要**修改**的 unit 数量 ≥ 2 时，触发 task-d
 - 修改的 unit 互相独立 → 拆分为独立子管线
 - 修改的 unit 有 `_refs` 依赖 → 合并或建立 `blocked_by`
 
-判定由 `opc_task_analysis_complete` 路由完成，详见 [intent-analysis task-analysis](../01-intent-analysis/06_task-analysis.md)。
+判定由 `opc_flow_step_complete({step:"task_analysis"})` 路由完成，详见 [intent-analysis task-analysis](../01-intent-analysis/06_task-analysis.md)。
 
 ---
 
 ## 二、单管线
 
-只有 1 条子管线（sub-1），`blocked_by` 为空，1 个 execution group。跳过 task-decomposition 环节，由 `opc_task_analysis_complete` 直接路由到 `brief_generation`。
+只有 1 条子管线（sub-1），`blocked_by` 为空，1 个 execution group。跳过 task-decomposition 环节，由 `opc_flow_step_complete({step:"task_analysis"})` 直接路由到 `brief_generation`。
 
 ```json
 {

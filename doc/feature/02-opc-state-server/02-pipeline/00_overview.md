@@ -8,7 +8,7 @@
 
 ## 管线生命周期时序图
 
-从 `opc_pipeline_create` 到 `opc_pipeline_complete` 的完整生命周期，含子管线就绪检测与跨 session 恢复：
+从 `opc_pipeline_create` 到 `opc_pipeline_lifecycle({action:"complete"})` 的完整生命周期，含子管线就绪检测与跨 session 恢复：
 
 ```mermaid
 sequenceDiagram
@@ -42,15 +42,15 @@ sequenceDiagram
 
     Note over U,K: ③ 完成 / 异常
     alt 全部 sub 成功
-        U->>PC: opc_pipeline_complete()
+        U->>PC: opc_pipeline_lifecycle({action:"complete"})
         PC->>PP: status=completed<br/>生成 manifest.md
         PC-->>U: 流程结束
     else 失败/中止
-        U->>PC: opc_pipeline_abort(reason)
+        U->>PC: opc_pipeline_lifecycle({action:"abort", reason})
         PC->>PP: status=aborted
         PC->>ST: 中止所有 in_progress
     else 跨 session 恢复
-        U->>PC: opc_pipeline_recover()
+        U->>PC: opc_flow_lifecycle({action:"recover"})
         PC->>PP: pid 存活校验<br/>识别孤儿管线
         PC-->>U: 接管 owner<br/>返回断点续传指令
     end
@@ -60,11 +60,11 @@ sequenceDiagram
 
 ## 单管线 vs 拆分管线决策流
 
-`opc_brief_complete` 后，state-server 按下图决定生成单管线还是拆分多 sub：
+`opc_flow_step_complete({step:"brief_generation"})` 后，state-server 按下图决定生成单管线还是拆分多 sub：
 
 ```mermaid
 flowchart TD
-    Brief([opc_brief_complete]) --> Cx{complexity}
+    Brief([opc_flow_step_complete<br/>step=brief_generation]) --> Cx{complexity}
 
     Cx -->|simple| Single1[单管线<br/>1 sub-pipeline]
     Cx -->|medium / high| Mod{modify_count}
@@ -116,9 +116,9 @@ flowchart TD
 
 | 子文档 | 内容 | 涉及工具 |
 |------|------|------|
-| [06_lifecycle.md](06_lifecycle.md) | 创建、执行、完成、取消、恢复 5 个生命周期阶段 | `opc_pipeline_create` / `opc_pipeline_recover` 等 |
-| [09_tools.md](09_tools.md) | 7 个 `opc_pipeline_*` 工具完整规范 | 全部 7 个管线级工具 |
-| [11_insert-resume.md](11_insert-resume.md) | sub-pipeline 插队、挂起、自动恢复完整契约 | `opc_pipeline_replan(add_sub_pipeline + immediate)` / `opc_pipeline_resume` |
+| [06_lifecycle.md](06_lifecycle.md) | 创建、执行、完成、取消、恢复 5 个生命周期阶段 | `opc_pipeline_create` / `opc_pipeline_lifecycle` / `opc_flow_lifecycle({action:"recover"})` 等 |
+| [09_tools.md](09_tools.md) | 3 个管线级工具完整规范（create / status / lifecycle） | 全部 3 个管线级工具 |
+| [11_insert-resume.md](11_insert-resume.md) | sub-pipeline 插队、挂起、自动恢复完整契约 | `opc_pipeline_lifecycle({action:"replan", add_sub_pipeline + immediate})` / `opc_pipeline_lifecycle({action:"resume"})` |
 
 ### 状态展示与示例
 
@@ -131,10 +131,10 @@ flowchart TD
 
 ## 快速入口
 
-- **创建管线**：[`opc_pipeline_create`](09_tools.md#opc_pipeline_create) — 由 `opc_brief_complete` 路由预填参数触发
+- **创建管线**：[`opc_pipeline_create`](09_tools.md#opc_pipeline_create) — 由 `opc_flow_step_complete({step:"brief_generation"})` 路由预填参数触发
 - **查看状态**：[`opc_pipeline_status`](09_tools.md#opc_pipeline_status) — 不带 sub_id 返回聚合视图 + `next_sub_pipeline`
-- **细粒度修改**：[`opc_pipeline_replan`](09_tools.md#opc_pipeline_replan细粒度) — 增删节点/阶段/子管线，不影响 in_progress
-- **插队子管线**：[`opc_pipeline_replan + add_sub_pipeline(execution_priority: immediate)`](11_insert-resume.md) — node 边界挂起当前 sub，插队 sub 完成后自动 resume
+- **细粒度修改**：[`opc_pipeline_lifecycle({action:"replan"})`](09_tools.md#opc_pipeline_lifecycle) — 增删节点/阶段/子管线，不影响 in_progress
+- **插队子管线**：[`opc_pipeline_lifecycle({action:"replan", add_sub_pipeline, execution_priority:"immediate"})`](11_insert-resume.md) — node 边界挂起当前 sub，插队 sub 完成后自动 resume
 
 ---
 
@@ -145,6 +145,8 @@ flowchart TD
 - **owner 进程隔离**：基于 pid 存活检测识别孤儿管线，支持跨 session 恢复
 - **依赖无环**：`blocked_by` 引用的 sub_id 必须存在且无环，`opc_pipeline_create` 时强制校验
 - **严格串行执行**：子管线按 `execution_order` 依次执行，`blocked_by` 阻塞未就绪的 sub。`opc_phase_complete` 返回 `next_sub_pipeline`，Claude 直接调下一条 `opc_phase_start`（详见 [07_dependency-serial.md](07_dependency-serial.md)）
+
+> **工具命名说明**：本章遵循 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 整合后的工具名。管线生命周期 4 个 action（complete / abort / replan / resume）合并到 `opc_pipeline_lifecycle`，跨 session 接管走 `opc_flow_lifecycle({action:"recover"})`（owner 校验在 flow 层完成）。
 
 ---
 

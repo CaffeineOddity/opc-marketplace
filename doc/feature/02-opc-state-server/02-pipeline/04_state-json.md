@@ -112,13 +112,13 @@
 | `dependency_failure` | 前置节点失败 |
 | `quality_gate_failed` | L1/L2 校验不通过，node 保持 in_progress |
 | `timeout` | 超时，retry_count 未达上限时自动重试 |
-| `user_abort` | 用户通过 opc_pipeline_abort 中断 |
+| `user_abort` | 用户通过 opc_pipeline_lifecycle({action:"abort"}) 中断 |
 
 ---
 
 ## 六、phase_plan 校验规则（deterministic）
 
-`opc_pipeline_create` / `opc_pipeline_replan` 写入 `phase_plan` 时，state-server 必须通过以下校验，否则 reject 并要求重新提交：
+`opc_pipeline_create` / `opc_pipeline_lifecycle({action:"replan"})` 写入 `phase_plan` 时，state-server 必须通过以下校验，否则 reject 并要求重新提交：
 
 | 规则 | 说明 | 失败处理 |
 |------|------|---------|

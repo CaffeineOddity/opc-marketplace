@@ -1,6 +1,6 @@
 # 03 pipeline-plan.json
 
-管线编排计划。由 `opc_pipeline_create` 生成、`opc_pipeline_replan` 修改、`opc_pipeline_complete` / `opc_pipeline_abort` 终结。
+管线编排计划。由 `opc_pipeline_create` 生成、`opc_pipeline_lifecycle({action:"replan"})` 修改、`opc_pipeline_lifecycle({action:"complete"/"abort"})` 终结。
 
 ---
 
