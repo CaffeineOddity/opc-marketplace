@@ -965,6 +965,70 @@ describe("M18.d unlearn_method circuit breaker", () => {
   });
 });
 
+describe("M18.e on_demand reflection dispatcher", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m18e-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  it("dispatches read-only sub-agent with step's primary method by default", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "on_demand",
+      session_id: "s-od",
+      step: "P5",
+      artifact_summary: "manual look at matching result",
+      reason: "user wants extra verification",
+    });
+    if (resp.action !== "on_demand") throw new Error("unexpected branch");
+    expect(resp.dispatched).toBe(true);
+    expect(resp.method).toBe("critique");
+    expect(resp.dispatch_spec.tools).toContain("Read");
+    expect(resp.dispatch_spec.tools).not.toContain("Write");
+    expect(resp.dispatch_spec.context.on_demand).toBe(true);
+    expect(resp.dispatch_spec.context.step).toBe("P5");
+    expect(resp.dispatch_spec.context.target_reflection_id).toBeNull();
+    expect(resp.dispatch_spec.prompt).toContain("manual look at matching result");
+    expect(resp.note).toMatch(/pending_reflection/);
+
+    const raw = await readFile(resp.log_path, "utf8");
+    const log = JSON.parse(raw);
+    expect(log.request_id).toBe(resp.request_id);
+    expect(log.step).toBe("P5");
+    expect(log.method).toBe("critique");
+    expect(log.target_reflection_id).toBeNull();
+    expect(log.reason).toBe("user wants extra verification");
+  });
+
+  it("honors user-supplied method and target_reflection_id", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "on_demand",
+      session_id: "s-od2",
+      step: "P3",
+      method: "tot",
+      reflection_id: "rf-prev",
+    });
+    if (resp.action !== "on_demand") throw new Error("unexpected branch");
+    expect(resp.method).toBe("tot");
+    expect(resp.dispatch_spec.context.method).toBe("tot");
+    expect(resp.dispatch_spec.context.target_reflection_id).toBe("rf-prev");
+  });
+});
+
 describe("ReflectionServer M17.e discriminator facades", () => {
   let root: string;
   beforeEach(async () => {
@@ -1063,26 +1127,6 @@ describe("ReflectionServer M17.e discriminator facades", () => {
         expect(resp.task_spec.dispatch_context.pipeline_id).toBe("pl-1");
       }
     });
-
-    it.each([["on_demand"]] as const)(
-      "action=%s returns not_implemented:true (deferred to M18)",
-      async (action) => {
-        const srv = newServer();
-        const req = { action, session_id: "s1" };
-        const resp = await srv.admin(req);
-        expect(resp.action).toBe(action);
-        if (
-          resp.action !== "record_interventions" &&
-          resp.action !== "query_stats" &&
-          resp.action !== "explain" &&
-          resp.action !== "unlearn_method"
-        ) {
-          expect(resp.not_implemented).toBe(true);
-          expect(resp.reason).toContain(action);
-          expect(resp.reason).toContain("M18");
-        }
-      },
-    );
 
     it("rejects unknown action with ReflectionServerError", async () => {
       const srv = newServer();

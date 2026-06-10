@@ -82,6 +82,13 @@ export type {
   UnlearnMethodResponse,
 } from "./unlearn.js";
 
+export { runOnDemand, ON_DEMAND_LOGS_DIR, onDemandLogPath } from "./on-demand.js";
+export type {
+  OnDemandRequest,
+  OnDemandResponse,
+  OnDemandDispatchSpec,
+} from "./on-demand.js";
+
 export {
   validateAll,
   validateV1Schema,

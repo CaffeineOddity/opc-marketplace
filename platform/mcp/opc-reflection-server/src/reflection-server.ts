@@ -25,6 +25,7 @@ import {
   type UnlearnMethodResponse,
   type UnlearnTrigger,
 } from "./unlearn.js";
+import { runOnDemand, type OnDemandResponse } from "./on-demand.js";
 import { appendTelemetry, type TelemetryEntry } from "./telemetry.js";
 import { validateAll, type ValidatorContext, type ValidatorResult } from "./validators.js";
 
@@ -183,7 +184,15 @@ export type ReflectCompleteResponse = ReflectCritiqueCompleteResponse & {
 
 export type ReflectAdminRequest =
   | ({ action: "record_interventions" } & ReflectRecordInterventionsRequest)
-  | { action: "on_demand"; session_id: string; reason?: string }
+  | {
+      action: "on_demand";
+      session_id: string;
+      step: StepId;
+      reflection_id?: string;
+      artifact_summary?: string;
+      method?: ReflectionMethod;
+      reason?: string;
+    }
   | { action: "explain"; session_id: string; reflection_id: string }
   | { action: "query_stats"; session_id: string; window?: string; flow_state_path?: string }
   | {
@@ -202,7 +211,7 @@ export type ReflectAdminResponse =
   | ({ action: "explain" } & ExplainResponse)
   | { action: "explain"; not_found: true; reflection_id: string; reason: string }
   | ({ action: "unlearn_method" } & UnlearnMethodResponse)
-  | { action: "on_demand"; not_implemented: true; reason: string };
+  | ({ action: "on_demand" } & OnDemandResponse);
 
 const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "Read",
@@ -509,12 +518,24 @@ export class ReflectionServer {
           throw err;
         }
       }
-      case "on_demand":
-        return {
-          action: req.action,
-          not_implemented: true,
-          reason: `opc_reflect_admin.${req.action} deferred to M18 (observability/admin tooling)`,
-        };
+      case "on_demand": {
+        const resp = await runOnDemand(
+          this.root,
+          {
+            session_id: req.session_id,
+            step: req.step,
+            ...(req.reflection_id !== undefined ? { reflection_id: req.reflection_id } : {}),
+            ...(req.artifact_summary !== undefined
+              ? { artifact_summary: req.artifact_summary }
+              : {}),
+            ...(req.method !== undefined ? { method: req.method } : {}),
+            ...(req.reason !== undefined ? { reason: req.reason } : {}),
+          },
+          this.now,
+          this.uuid,
+        );
+        return { action: "on_demand", ...resp };
+      }
       case "unlearn_method": {
         const resp = await unlearnMethod(
           this.root,
