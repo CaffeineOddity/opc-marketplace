@@ -417,19 +417,19 @@ opc_pipeline_create() 增量逻辑:
 
 ## 三、验证清单
 
-实施 OPC 前的 Host 行为验证。**V1 / V2 / V3 已通过 PoC 验证**，余下 V4–V7 在工程实施初期补做。
+实施 OPC 前的 Host 行为验证。**V1 / V2 / V3 / V6 / V7 已通过 PoC 验证**（截至 2026-06-10）；V4 / V5 待操作员按 spike runbook 执行。详见 [01_validation-log.md](./01_validation-log.md)。
 
 | # | 验证项 | 状态 | 验证方式 / 结果 |
 |---|---|---|---|
 | V1 | `process.ppid` 在 stdio MCP server 中等于 spawn 该 server 的 Claude Code 进程，且 `kill(pid, 0)` 探活语义正确 | ✅ **PASS** | 2026-06-10 PoC：`report_pid` 工具返 `server_ppid=43990`，`ps` 验证 ppid 是 `claude` 进程；headless 退出后 `kill -0 43990` 立刻 ESRCH。**caveat**：ppid 指向 spawn 该 server 的 claude，不是顶层 host claude（嵌套场景下两者不同）。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
 | V2 | Task spawn 的 sub-agent 能调父 conversation 注册的 MCP 工具 | ✅ **PASS** | 2026-06-10 PoC：`poc-v2-writer` sub-agent 调 `mcp__poc-host-contract__poc_echo_write` 成功写出 `artifacts/proof-1781020775701-jp9l68.txt`，`server_pid=43275` 与父进程关联。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
-| V3 | Task `tools` 白名单被 Host 强制 | ✅ **PASS（更强）** | 2026-06-10 PoC：`poc-v3-reader` 调未白名单的写工具直接报 `Error: No such tool available`——未白名单工具**不可见**，比"运行时拒绝"更彻底 |
-| V4 | UserPromptSubmit hook 与 system prompt 优先级 | ⏳ **待 PoC（阻塞 `loud` 默认）** | spike 让 hook 注入与 system 冲突的指令，看 Claude 服从哪个。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。失败 → 调整 hook 文本措辞或改用 SessionStart |
-| V5 | hook 注入文本是否进入 user message history（影响 token） | ⏳ **待 PoC（阻塞 `loud` 默认）** | 检查 long context 后历史里 hook 文本是否累积。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
-| V6 | HTTP/SSE 模式下 `Mcp-Session-Id` 跨请求稳定 + 协议级 disconnect 事件可监听 | ⏳ **待 PoC（阻塞 HTTP/SSE 官方支持）** | spike：启动 streamable-http transport，开两个 client 连同一 server；验证：① 同一 client 多次请求 `Mcp-Session-Id` 一致 ② client 强行断开后 server 能在 `DISCONNECT_GRACE` 内感知 ③ heartbeat ledger reaper 能正确将 owner 标 orphan。详见 2.7-pre C6（A1）|
-| V7 | `.opc/installed-kits.json` 中 mtime 与 session_started_at 的对账启发式准确度 | ⏳ **待 PoC（阻塞 KIT_PROBABLY_NOT_LOADED 警告）** | spike：①  session 启动后装 kit → 验证 `opc_flow_query` 返回 KIT_PROBABLY_NOT_LOADED ② session 启动前装 kit → 验证不误报 ③ 测 false positive 率 < 5%。详见 2.7.5（A4）|
+| V3 | Task `tools` 白名单被 Host 强制 | ✅ **PASS（更强）** | 2026-06-10 PoC：`poc-v3-reader` 调未白名单的写工具直接报 `Error: No such tool available`——未白名单工具**不可见**，比"运行时拒绝"更彻底。详见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md) |
+| V4 | UserPromptSubmit hook 与 system prompt 优先级 | ⏳ **待 PoC（阻塞 `loud` 默认）** | spike harness 已就绪（[poc/opc-host-contract-v4-v5/](../../../poc/opc-host-contract-v4-v5/)），需操作员按 runbook 执行 ~20min。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。失败 → 调整 hook 文本措辞或改用 SessionStart |
+| V5 | hook 注入文本是否进入 user message history（影响 token） | ⏳ **待 PoC（阻塞 `loud` 默认）** | spike harness 已就绪（同 V4），需操作员按 runbook 执行。**未通过前 `OPC_HOOK_INTENSITY` 默认 `quiet`**（A2）。累积 → 改用 SessionStart 一次注入约束 + UserPromptSubmit 只做关键词触发 |
+| V6 | HTTP/SSE 模式下 `Mcp-Session-Id` 跨请求稳定 + 协议级 disconnect 事件可监听 | ✅ **PASS** | 2026-06-10 PoC：close latency 41ms（240× 宽于 10s `DISCONNECT_GRACE`），同 client 多请求 sid 一致，client.terminateSession() → server 收到 `session_closed` 事件，reaper 正确仅标记 stale-inactive owner。详见 [poc/opc-host-contract-v6/RESULTS.md](../../../poc/opc-host-contract-v6/RESULTS.md) |
+| V7 | `.opc/installed-kits.json` 中 mtime 与 session_started_at 的对账启发式准确度 | ✅ **PASS** | 2026-06-10 PoC：4102 次试验，TN FP 率 1.84%（< 5% 阈值），TP FN = 0。±2s 时钟偏移下推荐 `grace_ms=5000`（M18 落地参数）。详见 [poc/opc-host-contract-v7/RESULTS.md](../../../poc/opc-host-contract-v7/RESULTS.md) |
 
-V1/V2/V3 完整复现指令与原始返回见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)。后续 V4–V7 验证结果按需追加到 `doc/feature/06-host-contract/01_validation-log.md`。
+V1/V2/V3 完整复现指令与原始返回见 [poc/opc-host-contract-v2-v3/RESULTS.md](../../../poc/opc-host-contract-v2-v3/RESULTS.md)。V6 / V7 结果见 [poc/opc-host-contract-v6/RESULTS.md](../../../poc/opc-host-contract-v6/RESULTS.md) / [poc/opc-host-contract-v7/RESULTS.md](../../../poc/opc-host-contract-v7/RESULTS.md)。V4 / V5 spike runbook 见 [poc/opc-host-contract-v4-v5/runbook/protocol.md](../../../poc/opc-host-contract-v4-v5/runbook/protocol.md)。聚合索引见 [01_validation-log.md](./01_validation-log.md)。
 
 ---
 
@@ -467,7 +467,7 @@ session_id 由 Claude Code pid + 启动 ts 派生，详见
 
 | 子文档 | 状态 | 内容 |
 |---|---|---|
-| 01_validation-log.md | 占位 | PoC 阶段 V1–V7 验证结果记录 |
+| 01_validation-log.md | ✅ 已落地（2026-06-10） | V1–V7 PoC 验证结果聚合索引（V1/V2/V3/V6/V7 已 PASS，V4/V5 待操作员运行 spike runbook）|
 | 02_subagent-fallback-plans.md | 占位 | C3 降级方案（代理模式 / 延迟写入）的详细工程规范 |
 | 03_kit-agent-conventions.md | 占位 | 每个 kit 的 `agents/*.md` 必须声明的字段规范（含 `tools` 强制）|
 | 04_http-sse-deployment.md | 占位（A1 落地后补） | HTTP/SSE 模式部署指南：Mcp-Session-Id 配置、heartbeat 参数、advisory lock 实施 |
