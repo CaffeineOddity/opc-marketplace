@@ -66,9 +66,9 @@ export async function promoteToGlobal(
     section: correction.section,
     subsection: correction.subsection,
     lesson: correction.lesson,
-    rationale: correction.rationale,
+    ...(correction.rationale !== undefined ? { rationale: correction.rationale } : {}),
     keywords: correction.applies_when.keywords ?? [],
-    source_project: opts.source_project,
+    ...(opts.source_project !== undefined ? { source_project: opts.source_project } : {}),
     promoted_at: now.toISOString(),
     promoted_by_session_id: opts.session_id,
   };

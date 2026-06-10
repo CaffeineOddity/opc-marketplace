@@ -356,8 +356,8 @@ export class CorrectionsServer {
         );
         const entry = await promoteToGlobal(correction, {
           session_id,
-          source_project,
-          root: this.globalCorrectionsRoot,
+          ...(source_project !== undefined ? { source_project } : {}),
+          ...(this.globalCorrectionsRoot !== undefined ? { root: this.globalCorrectionsRoot } : {}),
           now: this.now,
         });
         return {

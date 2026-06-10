@@ -330,22 +330,44 @@ describe("scenario 16 — opc_corrections", () => {
       }
     });
 
-    it("returns not_implemented for unlearn", async () => {
+    it("unlearns an existing correction", async () => {
+      // Create a correction first
+      const created = await app.corrections.upsert({
+        batch: [{ operation: "create", correction: makeCorrection() }],
+      });
+      const correctionId = created.written_ids[0]!;
+
       const resp = await app.corrections.crud({
         action: "unlearn",
-        correction_id: "corr-123",
+        correction_id: correctionId,
       });
       expect(resp.action).toBe("unlearn");
-      expect(resp.not_implemented).toBe(true);
+      if (resp.action === "unlearn") {
+        expect(resp.tombstoned_id).toBe(correctionId);
+        expect(resp.frozen).toBe(true);
+        expect(resp.reason).toContain("manual unlearn");
+      }
+
+      // Verify the correction is now frozen and deprecated
+      const q = await app.corrections.query({ step: stepId });
+      expect(q.items.find((c) => c.id === correctionId)).toBeUndefined();
     });
 
-    it("returns not_implemented for reindex", async () => {
+    it("runs reindex and returns indexed count", async () => {
+      // Pre-populate a correction so there's something to index
+      await app.corrections.upsert({
+        batch: [{ operation: "create", correction: makeCorrection() }],
+      });
+
       const resp = await app.corrections.crud({
         action: "reindex",
         scope: "all",
       });
       expect(resp.action).toBe("reindex");
-      expect(resp.not_implemented).toBe(true);
+      if (resp.action === "reindex") {
+        expect(resp.indexed).toBeGreaterThanOrEqual(1);
+        expect(resp.duration_ms).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 });

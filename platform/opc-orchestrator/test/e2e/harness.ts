@@ -155,7 +155,7 @@ export async function bootstrap(opts: BootstrapOptions = {}): Promise<Bootstrap>
   const phase = new PhaseServer({ root, now: clock.now, uuid, pid: () => pid });
   const node = new NodeServer({ root, now: clock.now, uuid, pid: () => pid });
   const reflection = new ReflectionServer({ root, now: clock.now, uuid });
-  const corrections = new CorrectionsServer({ root, now: clock.now, uuid });
+  const corrections = new CorrectionsServer({ root, now: clock.now, uuid, autoDecay: false });
 
   const recorder = makeRecorder(clock);
 
