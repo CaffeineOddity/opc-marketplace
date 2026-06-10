@@ -1,4 +1,6 @@
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 
 import { loadFlowState, saveFlowState } from "./flow-state.js";
@@ -157,9 +159,22 @@ export interface PipelineAbortResponse {
   failed_kill_pids: number[];
 }
 
+export interface DirtyPath {
+  path: string;
+  hint: string;
+}
+
+export interface ResumePointer {
+  phase: string;
+  node: string;
+}
+
 export interface PipelineResumeResponse {
   pipeline_id: string;
   resumed_sub_pipeline: string | null;
+  paused_for_ms: number | null;
+  resume_pointer: ResumePointer | null;
+  dirty_paths: DirtyPath[];
   flow_next: { tool: string; args?: Record<string, unknown>; why?: string };
 }
 
@@ -728,6 +743,12 @@ export class PipelineServer {
    * given, picks the earliest paused sub; otherwise validates the named
    * sub is paused. The state-manager normally calls this automatically
    * on node boundaries; the tool is exposed for manual recovery.
+   *
+   * Runs a dirty_paths consistency probe before resuming: for each
+   * completed phase with a confirm_commit_ref, compares the git-confirmed
+   * knowledge content against the current filesystem. Differences are
+   * reported as advisory dirty_paths (does NOT block resume — the next
+   * opc_knowledge_write will enter 3-way diff-and-merge).
    */
   async resume(req: {
     session_id: string;
@@ -750,7 +771,55 @@ export class PipelineServer {
         { required_action: "only paused sub_pipelines can be resumed; check sub_pipeline status and use opc_pipeline_lifecycle({action:\"abort\"}) if the sub_pipeline is stuck" },
       );
     }
+
     const now = this.now();
+    const dirty_paths: DirtyPath[] = [];
+    let paused_for_ms: number | null = null;
+    let resume_pointer: ResumePointer | null = null;
+
+    // Consistency probe: compare git-confirmed knowledge against filesystem.
+    if (target?.paused_at) {
+      const pausedAt = new Date(target.paused_at.at).getTime();
+      paused_for_ms = now.getTime() - pausedAt;
+      resume_pointer = { phase: target.paused_at.phase, node: target.paused_at.node };
+
+      try {
+        const stateJson = await loadStateJson(
+          this.root,
+          req.session_id,
+          req.pipeline_id,
+          target.id,
+        );
+        for (const phase of stateJson.phases) {
+          if (phase.status !== "completed" || !phase.confirm_commit_ref) continue;
+          for (const node of phase.nodes) {
+            for (const artifact of node.output) {
+              if (!artifact.path.startsWith("opc-knowledge/")) continue;
+              const relPath = artifact.path;
+              try {
+                const confirmed = execSync(
+                  `git show ${phase.confirm_commit_ref}:${relPath}`,
+                  { cwd: this.root, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+                );
+                const current = readFileSync(`${this.root}/${relPath}`, "utf-8");
+                if (confirmed !== current) {
+                  dirty_paths.push({
+                    path: relPath,
+                    hint: `${relPath}: knowledge diverged while paused (phase ${phase.phase}); next opc_knowledge_write will enter 3-way diff-and-merge (base_version=${phase.confirm_commit_ref})`,
+                  });
+                }
+              } catch {
+                // git show may fail if file didn't exist at that ref (new file).
+                // readFileSync may fail if file was deleted. Skip silently.
+              }
+            }
+          }
+        }
+      } catch {
+        // state.json may not exist yet — skip probe, resume normally.
+      }
+    }
+
     if (target) {
       target.status = "in_progress";
       delete target.paused_at;
@@ -763,7 +832,10 @@ export class PipelineServer {
       step: "pipeline_resume",
       tool: "opc_pipeline_lifecycle",
       input: { action: "resume", ...req },
-      output: { resumed: target?.id ?? null },
+      output: {
+        resumed: target?.id ?? null,
+        ...(dirty_paths.length > 0 ? { dirty_paths } : {}),
+      },
       at: now.toISOString(),
     });
     await saveFlowState(this.root, flow, now);
@@ -781,6 +853,9 @@ export class PipelineServer {
     return {
       pipeline_id: plan.id,
       resumed_sub_pipeline: target?.id ?? null,
+      paused_for_ms,
+      resume_pointer,
+      dirty_paths,
       flow_next,
     };
   }
