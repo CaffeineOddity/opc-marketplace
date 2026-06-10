@@ -20,7 +20,7 @@
 ### 03 opc-knowledge-server — 知识库
 
 - [知识模型与存储](../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — unit→section→subsection 三层结构、.md frontmatter、.opc-knowledge.json（_refs）、版本管理、智能复用
-- [知识 MCP API](../03-opc-knowledge-server/02-knowledge-api/00_overview.md) — 8 个工具完整规范、初始化时序、与 state-server 协作
+- [知识 MCP API](../03-opc-knowledge-server/02-knowledge-api/00_overview.md) — 4 个工具（open / read / write / admin）完整规范、初始化时序、与 state-server 协作
 
 
 
@@ -34,17 +34,17 @@
 
 - [反思总览](../05-opc-reflection-server/00_index.md) — 8 核心原则 + 12 个关键设计点 + 端到端反思链路时序
 - [反思方法学](../05-opc-reflection-server/01-method-theory/00_overview.md) — 5 种学术方法（CoVe/Critique/Debate/Reflexion/ToT）+ 8 step × 方法决策表
-- [server 设计](../05-opc-reflection-server/02-server-design/00_overview.md) — 13 个工具 + Evidence schema + V1-V5 validator + sub-agent 权限 + meta-validator
+- [server 设计](../05-opc-reflection-server/02-server-design/00_overview.md) — 5 个工具（plan / execute / complete / admin / corrections）+ Evidence schema + V1-V5 validator + sub-agent 权限 + meta-validator
 - [corrections 存储](../05-opc-reflection-server/03-corrections-store/00_overview.md) — L1/L2/L3 三层存储 + 三层模型 + 4 个膨胀控制 + seed 冷启动
 - [反思流程](../05-opc-reflection-server/04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户自治 + meta-reflection + phase_reset 交互
 
 
 ### 06 Host 契约（Claude Code MCP Host 行为约束）
 
-- [Host 契约总览](../06-host-contract/00_overview.md) — 5 项契约点（pid 派生 session_id / sub-agent MCP 继承 / allowed_tools enforce / hook 优先级 / 验证清单）+ 降级方案 + PoC 验证门槛
+- [Host 契约总览](../06-host-contract/00_overview.md) — 6 项契约点（pid 派生 session_id / sub-agent MCP 继承 / allowed_tools enforce / hook 优先级 / HTTP/SSE session 归属 / 验证清单）+ 降级方案 + PoC 验证门槛
 
 
-### 07 工具合并规范（54 → 28）
+### 07 工具合并规范（54 → 24）
 
 - [工具合并总览](../07-tool-consolidation/00_overview.md) — discriminator 模式映射表、内联反思（6 步 → 3 步）、registry-guard 保护清单同步、迁移策略
 
