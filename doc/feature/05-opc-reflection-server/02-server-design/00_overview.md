@@ -17,10 +17,14 @@
 |  |  | `critique` | 派 critic sub-agent，列 objection |
 |  |  | `debate` | 派 2+ debater sub-agent，对立立场辩论 |
 |  |  | `tot` | Tree-of-Thoughts：多分支搜索 + 评估剪枝 |
+|  |  | `reflexion` | 反思教训记忆：检索历史纠正 + 注入 enhanced_prompt |
+|  |  | `validator` | 确定性校验：V1-V5 + 三兜底纯 TS 函数 |
 | `opc_reflect_complete` | `method` | `cove` | 收 CoVe 结果，跑 meta-validator |
 |  |  | `critique` | 收 objection，meta-validator + 路由 |
 |  |  | `debate` | 收辩论结论 + dissent |
 |  |  | `tot` | 收最佳路径 + 剪枝理由 |
+|  |  | `reflexion` | 记录反思教训到 L2 corrections |
+|  |  | `validator` | 收 validator 结果，记录 artifact |
 | `opc_reflect_admin` | `action` | `record_interventions` | pipeline 结束，派 distiller 提炼用户介入 |
 |  |  | `on_demand` | 用户主动触发反思 |
 |  |  | `explain` | 返回某次反思的 reasoning_trace |
@@ -28,8 +32,13 @@
 |  |  | `unlearn_method` | 临时禁用某反思方法 |
 | `opc_corrections` | `action` | `query` | 按 step / keywords 查纠正库 |
 |  |  | `record` | 写入新纠正（distiller / 用户 / 反思器） |
-|  |  | `unlearn` | 删除过期/错误纠正 |
+|  |  | `unlearn` | 标记过期/错误纠正 |
 |  |  | `reindex` | 全文索引重建 |
+|  |  | `promote` | L2→L3 晋升到全局纠正库 |
+|  |  | `migrate` | 跨 step 迁移纠正条目 |
+|  |  | `endorse` | 标记纠正为已验证采纳 |
+|  |  | `freeze` | 冻结纠正条目（停止注入但保留） |
+|  |  | `delete` | 软删除纠正条目 |
 
 > 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
@@ -172,7 +181,7 @@ P6（节点执行）/ P7（阶段完成）在主矩阵（[07_three-server-seam-m
 | 是否受 reflection-registry-guard 保护 | ✅ 是 | ❌ 否（无 pending 元素需要 guard）|
 | Artifact 落盘路径 | `opc-logs/reflection/<session_id>/<reflection_id>.json` | **`opc-logs/validator/<session_id>/<step>-<n>.json`** |
 | 失败处理 | `verdict=objections_remain` → 二次反思 / ask_user | 直接 reject 当前调用（`opc_node_finish({status:"failed"})` / `opc_phase_complete` 拒绝），由 Claude 调 retry / reset |
-| 何时升级到 reflection 工具面 | — | Claude 主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion", method:"M4-critique"\|"M3-cove"})` 显式升级（典型场景：L2 通过但 evidence diff 异常 / quality_gate 多次自动跑失败） |
+| 何时升级到 reflection 工具面 | — | Claude 主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion", method:"critique"\|"cove"})` 显式升级（典型场景：L2 通过但 evidence diff 异常 / quality_gate 多次自动跑失败） |
 
 **为什么这么设计**：V1–V5 是确定性 TS 函数，纯函数校验跨 MCP 服务调用是 overkill；P6/P7 走 reflection 工具面只会增加跨服务握手次数，且 Validator-only 路径没有 sub-agent 产物可登记。把这两步收敛到 state-manager 内部既能复用同一套 V1–V5 实现（与 P1–P5/P8 共享 [02-server-design 三](#三deterministic-validatorv1v5--三个工程兜底)），又能避免"为校验而握手"的反模式。
 
@@ -360,7 +369,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 
 ```json
 {
-  "method_choice_reason": "step=P5, complexity=medium → primary=M4-critique, secondary=M5-debate disabled by budget",
+  "method_choice_reason": "step=P5, complexity=medium → primary=critique, secondary=debate disabled by budget",
   "prior_corrections_used": ["correction-id-1", "..."],
   "evidence_input": {...},
   "objections_raised": [...],
