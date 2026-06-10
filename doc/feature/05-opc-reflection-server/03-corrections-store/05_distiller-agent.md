@@ -227,7 +227,7 @@ applies_when_overlap =
 
 ### 6.3 衰减（与 distiller 解耦）
 
-distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期跑（详见 [03_expansion-controls.md 占位]）。distiller 只负责增量。
+distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期跑（详见 [03_expansion-controls.md]）。distiller 只负责增量。
 
 ---
 
