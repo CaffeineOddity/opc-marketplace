@@ -13,12 +13,12 @@ import {
 
 describe("ALIAS_MAP", () => {
   it("ALIAS_MAP + TOMBSTONES round up to all named legacy tools", () => {
-    // Spec §1.1 inventories 55 legacy tool slots across all milestones.
-    // 54 of those are rewritten through ALIAS_MAP (retained-verbatim
+    // Spec §1.1 inventories 56 legacy tool slots across all milestones.
+    // 55 of those are rewritten through ALIAS_MAP (retained-verbatim
     // tools map to themselves with discriminator=null; absorbed tools
     // map to a facade + discriminator pair). The remaining 1 is
     // opc_phase_adjust, which is hard-removed (TOMBSTONES).
-    expect(Object.keys(ALIAS_MAP).length).toBe(54);
+    expect(Object.keys(ALIAS_MAP).length).toBe(55);
     expect(Object.keys(TOMBSTONES).length).toBe(1);
   });
 

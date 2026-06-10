@@ -312,8 +312,10 @@ describe("PhaseServer.reset", () => {
     ).rejects.toThrow(/not in phase_plan\.selected/);
   });
 
-  it("PhaseValidationError class is exported", () => {
-    expect(new PhaseValidationError("x").name).toBe("PhaseValidationError");
+  it("PhaseValidationError class is exported and carries required_action", () => {
+    const e = new PhaseValidationError("x", { required_action: "retry" });
+    expect(e.name).toBe("PhaseValidationError");
+    expect(e.required_action).toBe("retry");
   });
 });
 

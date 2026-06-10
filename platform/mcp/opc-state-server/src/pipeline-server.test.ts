@@ -202,7 +202,7 @@ describe("PipelineServer.create", () => {
       { group: 0, sub_pipeline_ids: ["back"] },
       { group: 1, sub_pipeline_ids: ["front"] },
     ]);
-    expect(r.flow_next.args).toEqual({ pipeline_id: r.pipeline_id, sub_pipeline_id: "back" });
+    expect(r.flow_next.args).toEqual({ units: ["auth", "billing"] });
   });
 
   it("updates flow-state pipeline_id and current_step", async () => {
@@ -421,8 +421,10 @@ describe("PipelineServer.replan add_sub_pipeline", () => {
     expect(inserted?.inserted_at).toBe(fixedNow().toISOString());
   });
 
-  it("PipelineConflictError class is exported", () => {
-    expect(new PipelineConflictError("x").name).toBe("PipelineConflictError");
+  it("PipelineConflictError class is exported and carries required_action", () => {
+    const e = new PipelineConflictError("x", { required_action: "retry" });
+    expect(e.name).toBe("PipelineConflictError");
+    expect(e.required_action).toBe("retry");
   });
 });
 

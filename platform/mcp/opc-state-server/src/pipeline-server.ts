@@ -186,9 +186,11 @@ export interface PipelineReplanResponse {
 }
 
 export class PipelineConflictError extends Error {
-  constructor(message: string) {
+  public readonly required_action?: string;
+  constructor(message: string, opts: { required_action?: string } = {}) {
     super(message);
     this.name = "PipelineConflictError";
+    if (opts.required_action) this.required_action = opts.required_action;
   }
 }
 
@@ -232,17 +234,19 @@ export class PipelineServer {
   async create(req: PipelineCreateRequest): Promise<PipelineCreateResponse> {
     const flow = await loadFlowState(this.root, req.session_id);
     if (flow.status !== "in_progress") {
-      throw new Error(`session ${req.session_id} is ${flow.status}; cannot create pipeline`);
+      throw new PipelineConflictError(`session ${req.session_id} is ${flow.status}; cannot create pipeline`, { required_action: `session must be in_progress to create a pipeline; current status is ${flow.status}. If aborted, use opc_flow_lifecycle({action:"recover"}). If completed, start a new session via opc_flow_lifecycle({action:"start"})` });
     }
     if (flow.pending_reflections.length > 0) {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PipelineConflictError(
         `reflection-registry-guard: opc_pipeline_create blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+        { required_action: "call opc_flow_reflect to register pending reflections, then retry opc_pipeline_create" },
       );
     }
     if (flow.pending_user_question) {
       throw new PipelineConflictError(
         `pending-question-guard: opc_pipeline_create blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_pipeline_create` },
       );
     }
     // Spec §06-host-contract §2.7.5 (A4) hard gate: reject when required
@@ -373,7 +377,7 @@ export class PipelineServer {
     };
     if (req.sub_pipeline_id) {
       const sub = subs.find((s) => s.id === req.sub_pipeline_id);
-      if (!sub) throw new Error(`sub_pipeline ${req.sub_pipeline_id} not found`);
+      if (!sub) throw new PipelineConflictError(`sub_pipeline ${req.sub_pipeline_id} not found`, { required_action: "verify the sub_pipeline_id against the pipeline plan's sub_pipelines array" });
       response.sub = sub;
     }
     return response;
@@ -385,11 +389,13 @@ export class PipelineServer {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PipelineConflictError(
         `reflection-registry-guard: opc_pipeline_replan blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+        { required_action: "call opc_flow_reflect to register pending reflections, then retry opc_pipeline_replan" },
       );
     }
     if (flow.pending_user_question) {
       throw new PipelineConflictError(
         `pending-question-guard: opc_pipeline_replan blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_pipeline_replan` },
       );
     }
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
@@ -444,11 +450,13 @@ export class PipelineServer {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PipelineConflictError(
         `reflection-registry-guard: opc_pipeline_complete blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+        { required_action: "call opc_flow_reflect to register pending reflections, then retry opc_pipeline_complete" },
       );
     }
     if (flow.pending_user_question) {
       throw new PipelineConflictError(
         `pending-question-guard: opc_pipeline_complete blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_pipeline_complete` },
       );
     }
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
@@ -460,6 +468,7 @@ export class PipelineServer {
         `cannot complete pipeline ${plan.id}: sub_pipelines [${unfinished
           .map((s) => `${s.id}=${s.status}`)
           .join(",")}] not settled`,
+        { required_action: "ensure all sub_pipelines reach a terminal state (completed/aborted/failed) before completing the pipeline; use opc_pipeline_lifecycle({action:\"abort\"}) to terminate stuck sub-pipelines" },
       );
     }
     const now = this.now();
@@ -605,11 +614,13 @@ export class PipelineServer {
     if (req.sub_pipeline_id && !target) {
       throw new PipelineConflictError(
         `sub_pipeline ${req.sub_pipeline_id} not found in pipeline ${plan.id}`,
+        { required_action: "verify the sub_pipeline_id against the pipeline plan's sub_pipelines array" },
       );
     }
     if (target && target.status !== "paused") {
       throw new PipelineConflictError(
         `cannot resume sub_pipeline ${target.id}: status=${target.status} (expected paused)`,
+        { required_action: "only paused sub_pipelines can be resumed; check sub_pipeline status and use opc_pipeline_lifecycle({action:\"abort\"}) if the sub_pipeline is stuck" },
       );
     }
     const now = this.now();
@@ -684,6 +695,7 @@ export class PipelineServer {
         const exhaustive: never = req;
         throw new PipelineConflictError(
           `opc_pipeline_lifecycle: unknown action ${JSON.stringify(exhaustive)}`,
+          { required_action: "use a valid action: complete, abort, replan, or resume" },
         );
       }
     }
@@ -693,7 +705,7 @@ export class PipelineServer {
   private applyAddSubPipeline(plan: PipelinePlan, spec: AddSubPipelineSpec, now: Date): void {
     const id = spec.id ?? `sub-${this.uuid()}`;
     if (plan.sub_pipelines.some((s) => s.id === id)) {
-      throw new PipelineConflictError(`sub_pipeline ${id} already exists`);
+      throw new PipelineConflictError(`sub_pipeline ${id} already exists`, { required_action: "use a unique sub_pipeline id, or remove the existing sub_pipeline first via replan" });
     }
     const priority: ExecutionPriority = spec.execution_priority ?? "normal";
     if (priority === "immediate") {
@@ -701,18 +713,20 @@ export class PipelineServer {
       if (!current) {
         throw new PipelineConflictError(
           `add_sub_pipeline(immediate) requires an in_progress sub_pipeline; none found`,
+          { required_action: "ensure at least one sub_pipeline is in_progress before inserting with immediate priority, or use execution_priority:\"normal\" instead" },
         );
       }
       const overlap = spec.knowledge_unit.filter((u) => current.knowledge_unit.includes(u));
       if (overlap.length > 0) {
         throw new PipelineConflictError(
           `knowledge_unit overlap with in_progress sub ${current.id}: [${overlap.join(",")}]`,
+          { required_action: `resolve knowledge_unit conflicts: wait for sub_pipeline ${current.id} to complete, or reassign overlapping units [${overlap.join(",")}] to avoid concurrent modification` },
         );
       }
     }
     for (const dep of spec.blocked_by ?? []) {
       if (!plan.sub_pipelines.some((s) => s.id === dep)) {
-        throw new PipelineConflictError(`blocked_by references unknown sub: ${dep}`);
+        throw new PipelineConflictError(`blocked_by references unknown sub: ${dep}`, { required_action: `verify the blocked_by references; sub_pipeline ${dep} does not exist in the plan` });
       }
     }
     const newSub: SubPipeline = {
@@ -739,7 +753,7 @@ export class PipelineServer {
       // rollback
       plan.sub_pipelines.pop();
       plan.execution_order.pop();
-      if (err instanceof TopologyError) throw new PipelineConflictError(err.message);
+      if (err instanceof TopologyError) throw new PipelineConflictError(err.message, { required_action: "fix the DAG topology: ensure no cycles exist and all blocked_by references point to valid sub_pipelines" });
       throw err;
     }
   }

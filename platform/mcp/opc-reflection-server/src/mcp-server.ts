@@ -173,8 +173,9 @@ export async function startReflectionServer(opts: ReflectionMcpOptions): Promise
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const name = err instanceof Error ? err.name : "Error";
+      const required_action = (err as { required_action?: string }).required_action;
       return {
-        content: [{ type: "text", text: JSON.stringify({ error: message, code: name }) }],
+        content: [{ type: "text", text: JSON.stringify({ error: message, code: name, ...(required_action ? { required_action } : {}) }) }],
         isError: true,
       };
     }

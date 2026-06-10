@@ -52,6 +52,15 @@ export interface FlowServerOptions {
   isAlive?: (pid: number) => boolean;
 }
 
+export class FlowGuardError extends Error {
+  public readonly required_action?: string;
+  constructor(message: string, opts: { required_action?: string } = {}) {
+    super(message);
+    this.name = "FlowGuardError";
+    if (opts.required_action) this.required_action = opts.required_action;
+  }
+}
+
 export type FlowNext =
   | { tool: "opc_flow_step_complete"; step: FlowStep }
   | { tool: "opc_flow_reflect" }
@@ -465,7 +474,7 @@ export class FlowServer {
     this.assertOpen(state);
     const q = state.pending_user_question;
     if (!q || q.question_id !== req.question_id) {
-      throw new Error(`no pending user question with id ${req.question_id}`);
+      throw new FlowGuardError(`no pending user question with id ${req.question_id}`, { required_action: "verify the question_id matches the current pending_user_question in the flow state; the question may have already been resolved or expired" });
     }
     const isExpiredFlow = q.question_id.startsWith("uq-expired-");
     const isUnavailableFlow = q.question_id.startsWith("uq-rs-unavailable-");
@@ -583,13 +592,15 @@ export class FlowServer {
     const reflection_id = q.question_id.replace(/^uq-expired-/, "");
     const target = state.pending_reflections.find((p) => p.reflection_id === reflection_id);
     if (!target) {
-      throw new Error(
+      throw new FlowGuardError(
         `expired reflection ${reflection_id} not found in pending_reflections; question_id=${q.question_id} is stale`,
+        { required_action: "the pending_reflections state has changed since the question was raised; re-query the flow state and retry with the current pending_reflections" },
       );
     }
     if (!disposition) {
-      throw new Error(
+      throw new FlowGuardError(
         `resolution.disposition is required for expired-reflection user_reply (one of: resume | discard | skip)`,
+        { required_action: "set resolution.disposition to one of: resume, discard, or skip" },
       );
     }
     const intervention_id = `intv-${this.uuid()}`;
@@ -708,8 +719,9 @@ export class FlowServer {
   assertReflectionsClean(state: FlowState, callerTool: string): void {
     if (state.pending_reflections.length > 0) {
       const ids = state.pending_reflections.map((p) => p.reflection_id).join(",");
-      throw new Error(
+      throw new FlowGuardError(
         `reflection-registry-guard: ${callerTool} blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+        { required_action: `call opc_flow_reflect to register pending reflections [${ids}], then retry ${callerTool}` },
       );
     }
   }
@@ -717,8 +729,9 @@ export class FlowServer {
   /** Throws if there is a pending user question. */
   assertNoPendingQuestion(state: FlowState, callerTool: string): void {
     if (state.pending_user_question) {
-      throw new Error(
+      throw new FlowGuardError(
         `pending-question-guard: ${callerTool} blocked; resolve question_id=${state.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${state.pending_user_question.question_id}, then retry ${callerTool}` },
       );
     }
   }
@@ -726,8 +739,9 @@ export class FlowServer {
   registerPendingReflection(state: FlowState, p: PendingReflection): void {
     if (state.pending_reflections.length > 0) {
       const existing = state.pending_reflections.map((x) => x.reflection_id).join(",");
-      throw new Error(
+      throw new FlowGuardError(
         `pending_reflections_max_1_violated: cannot register ${p.reflection_id}; existing=[${existing}]; this indicates a reflection-server bug or missing opc_flow_reflect call`,
+        { required_action: `call opc_flow_reflect to register pending reflection [${existing}] before registering a new one; only one pending reflection is allowed at a time` },
       );
     }
     state.pending_reflections.push(p);
@@ -873,14 +887,15 @@ export class FlowServer {
 
   private assertOpen(state: FlowState): void {
     if (state.status !== "in_progress") {
-      throw new Error(`session ${state.session_id} is ${state.status}`);
+      throw new FlowGuardError(`session ${state.session_id} is ${state.status}`, { required_action: `session must be in_progress to accept write operations; current status is ${state.status}. If completed, start a new session. If aborted, use opc_flow_lifecycle({action:"recover"})` });
     }
   }
 
   private assertCurrentStep(state: FlowState, expected: FlowStep): void {
     if (state.current_step !== expected) {
-      throw new Error(
+      throw new FlowGuardError(
         `expected current_step=${expected} but was ${state.current_step} (session ${state.session_id})`,
+        { required_action: `the flow is at step ${state.current_step} but the caller expected ${expected}; follow the flow_next contract from the previous step, or use opc_flow_correct to realign` },
       );
     }
   }

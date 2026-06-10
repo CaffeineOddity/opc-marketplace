@@ -32,9 +32,11 @@ export interface PhaseServerOptions {
 }
 
 export class PhaseValidationError extends Error {
-  constructor(message: string) {
+  public readonly required_action?: string;
+  constructor(message: string, opts: { required_action?: string } = {}) {
     super(message);
     this.name = "PhaseValidationError";
+    if (opts.required_action) this.required_action = opts.required_action;
   }
 }
 
@@ -134,7 +136,7 @@ export class PhaseServer {
     this.validatePhaseStart(state, req.phase);
 
     const phase = state.phases.find((p) => p.phase === req.phase);
-    if (!phase) throw new PhaseValidationError(`phase ${req.phase} not found in state.json`);
+    if (!phase) throw new PhaseValidationError(`phase ${req.phase} not found in state.json`, { required_action: "verify the phase name against state.json phases array and phase_plan.selected" });
     phase.status = "in_progress";
     if (sub.status === "pending") sub.status = "in_progress";
     state.status = "in_progress";
@@ -187,11 +189,12 @@ export class PhaseServer {
 
     const phase = state.phases.find((p) => p.phase === req.phase);
     if (!phase) {
-      throw new PhaseValidationError(`phase ${req.phase} not found in state.json`);
+      throw new PhaseValidationError(`phase ${req.phase} not found in state.json`, { required_action: "verify the phase name against state.json phases array and phase_plan.selected" });
     }
     if (phase.status !== "in_progress") {
       throw new PhaseValidationError(
         `phase ${req.phase} cannot confirm from status=${phase.status}`,
+        { required_action: "ensure the phase is in_progress before confirming; if stuck, use opc_phase_reset to reset it" },
       );
     }
 
@@ -200,11 +203,13 @@ export class PhaseServer {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PhaseValidationError(
         `reflection-registry-guard: opc_phase_confirm blocked; pending_reflections=[${ids}]`,
+        { required_action: "call opc_flow_reflect to register pending reflections before confirming the phase" },
       );
     }
     if (flow.pending_user_question) {
       throw new PhaseValidationError(
         `pending-question-guard: opc_phase_confirm blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_phase_confirm` },
       );
     }
 
@@ -290,10 +295,11 @@ export class PhaseServer {
     const state = await loadStateJson(this.root, req.session_id, req.pipeline_id, req.sub_pipeline_id);
 
     const phase = state.phases.find((p) => p.phase === req.phase);
-    if (!phase) throw new PhaseValidationError(`phase ${req.phase} not found`);
+    if (!phase) throw new PhaseValidationError(`phase ${req.phase} not found`, { required_action: "verify the phase name against state.json phases array and phase_plan.selected" });
     if (phase.status !== "in_progress") {
       throw new PhaseValidationError(
         `phase ${req.phase} cannot complete from status=${phase.status}`,
+        { required_action: "ensure the phase is in_progress before completing; if stuck, use opc_phase_reset to reset it" },
       );
     }
 
@@ -302,11 +308,13 @@ export class PhaseServer {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PhaseValidationError(
         `reflection-registry-guard: opc_phase_complete blocked; pending_reflections=[${ids}]`,
+        { required_action: "call opc_flow_reflect to register pending reflections before completing the phase" },
       );
     }
     if (flow.pending_user_question) {
       throw new PhaseValidationError(
         `pending-question-guard: opc_phase_complete blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_phase_complete` },
       );
     }
     const incompleteNodes = phase.nodes.filter((n) => n.status !== "completed");
@@ -436,7 +444,7 @@ export class PhaseServer {
 
     const selectedIdx = state.phase_plan.selected.indexOf(req.phase);
     if (selectedIdx < 0) {
-      throw new PhaseValidationError(`phase ${req.phase} is not in phase_plan.selected`);
+      throw new PhaseValidationError(`phase ${req.phase} is not in phase_plan.selected`, { required_action: "verify the phase name against phase_plan.selected array in state.json; only phases in the selected list can be reset" });
     }
     const downstreamNames = state.phase_plan.selected.slice(selectedIdx + 1);
 
@@ -498,7 +506,7 @@ export class PhaseServer {
     const plan = await loadPipelinePlan(this.root, session_id, pipeline_id);
     const sub = plan.sub_pipelines.find((s) => s.id === sub_pipeline_id);
     if (!sub) {
-      throw new PhaseValidationError(`sub_pipeline ${sub_pipeline_id} not found in pipeline ${pipeline_id}`);
+      throw new PhaseValidationError(`sub_pipeline ${sub_pipeline_id} not found in pipeline ${pipeline_id}`, { required_action: "verify the sub_pipeline_id against the pipeline plan's sub_pipelines array" });
     }
     return { plan, sub };
   }
@@ -512,6 +520,7 @@ export class PhaseServer {
       if (!ns) {
         throw new PhaseValidationError(
           `opc_phase_confirm: node ${ov.name} not found in phase ${phase.phase}`,
+          { required_action: `verify the node name against phase.nodes in state.json for phase ${phase.phase}` },
         );
       }
       if (ov.blocked_by) ns.blocked_by = [...ov.blocked_by];
@@ -526,20 +535,20 @@ export class PhaseServer {
   private validatePhaseStart(state: StateJson, phase: string): void {
     const { phase_plan } = state;
     if (!phase_plan.selected.includes(phase)) {
-      throw new PhaseValidationError(`V0.4: phase ${phase} not in phase_plan.selected`);
+      throw new PhaseValidationError(`V0.4: phase ${phase} not in phase_plan.selected`, { required_action: "run opc_phase_confirm with a corrected phase plan that includes this phase in phase_plan.selected" });
     }
     if (!phase_plan.selected_by) {
-      throw new PhaseValidationError("V0.5: phase_plan.selected_by must be set");
+      throw new PhaseValidationError("V0.5: phase_plan.selected_by must be set", { required_action: "set phase_plan.selected_by to a non-empty string identifying the selector (agent name or pipeline_id)" });
     }
     if (!phase_plan.selection_rationale || phase_plan.selection_rationale.length === 0) {
-      throw new PhaseValidationError("V0.6: phase_plan.selection_rationale must be non-empty");
+      throw new PhaseValidationError("V0.6: phase_plan.selection_rationale must be non-empty", { required_action: "set phase_plan.selection_rationale with a human-readable explanation of why these phases were selected" });
     }
     const supersetOk = phase_plan.selected.every((s) => phase_plan.available.includes(s));
     if (!supersetOk) {
-      throw new PhaseValidationError("V0.7: phase_plan.selected must be subset of available");
+      throw new PhaseValidationError("V0.7: phase_plan.selected must be subset of available", { required_action: "ensure all phases in phase_plan.selected also appear in phase_plan.available; remove any phases that are not available" });
     }
     if (phase_plan.order_validated !== true) {
-      throw new PhaseValidationError("V0.8: phase_plan.order_validated must be true");
+      throw new PhaseValidationError("V0.8: phase_plan.order_validated must be true", { required_action: "set phase_plan.order_validated to true after verifying phase ordering satisfies all dependencies" });
     }
     const idx = phase_plan.selected.indexOf(phase);
     if (idx > 0) {
@@ -548,6 +557,7 @@ export class PhaseServer {
       if (!prevState || prevState.status !== "completed") {
         throw new PhaseValidationError(
           `V0.3: previous phase ${prev} must be completed before starting ${phase}`,
+          { required_action: `complete phase ${prev} before starting ${phase}, or adjust phase ordering via opc_phase_confirm` },
         );
       }
     }
