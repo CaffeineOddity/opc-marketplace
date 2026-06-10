@@ -1,7 +1,8 @@
 # Intent Analysis Method (P0 → P1)
 
-> Methodology for `opc_intent_complete`. Loaded as a docs reference when
-> Claude is at `current_step = intent_analysis`. Spec source:
+> Methodology for `opc_flow_step_complete({step:"intent_analysis"})`.
+> Loaded as a docs reference when Claude is at
+> `current_step = intent_analysis`. Spec source:
 > [doc/feature/02-opc-state-server/01-intent-analysis/05_intent-recognition.md](../../../../doc/feature/02-opc-state-server/01-intent-analysis/05_intent-recognition.md).
 
 ## 1. Purpose
@@ -15,7 +16,7 @@ can validate the call.
 | Intent | When it fires | Routing after `opc_intent_complete` |
 |---|---|---|
 | `task` | User wants to ship code / produce a deliverable. | `task_analysis` (next state) |
-| `project_question` | Question about *this* project / repo. | `knowledge_search` → answer |
+| `project_question` | Question about *this* project / repo. | `opc_knowledge_read({mode:"search"})` → answer |
 | `general_question` | Knowledge question with no project context. | `done` — Claude answers directly |
 | `chat` | Greeting, ack, off-topic. | `done` |
 
@@ -88,13 +89,13 @@ V1–V5 / M3 / M4 definitions:
 
 | Phrase | Tool to call |
 |---|---|
-| "不用启动管线" / "just answer" | `opc_flow_abort` |
-| "先不做了" / "cancel" | `opc_flow_abort` (auto-cascades `opc_pipeline_abort`) |
-| "这不是任务" / "not a task" | `opc_flow_abort({reason:"marked_as_question_sample"})` |
-| "重新分析" | `opc_flow_restart({from_step:"task_analysis"})` |
-| "改 complexity 为 high" | `opc_flow_revise({field:"complexity",value:"high"})` |
-| "还要加 X" | `opc_flow_restart({from_step:"task_analysis",additional_input:"X"})` |
-| "回到分析重做拆分" | `opc_flow_restart({from_step:"task_decomposition"})` |
+| "不用启动管线" / "just answer" | `opc_flow_lifecycle({action:"abort"})` |
+| "先不做了" / "cancel" | `opc_flow_lifecycle({action:"abort"})` (auto-cascades `opc_pipeline_lifecycle({action:"abort"})`) |
+| "这不是任务" / "not a task" | `opc_flow_lifecycle({action:"abort",reason:"marked_as_question_sample"})` |
+| "重新分析" | `opc_flow_correct({action:"restart",from_step:"task_analysis"})` |
+| "改 complexity 为 high" | `opc_flow_correct({action:"revise",field:"complexity",value:"high"})` |
+| "还要加 X" | `opc_flow_correct({action:"restart",from_step:"task_analysis",additional_input:"X"})` |
+| "回到分析重做拆分" | `opc_flow_correct({action:"restart",from_step:"task_decomposition"})` |
 | "继续" / "嗯" | Honor previous `flow_next`, no flow tool needed |
 
 ## 7. Explicit prefixes (bypass P1 reflection)
@@ -115,5 +116,5 @@ V1–V5 / M3 / M4 definitions:
 ```
 
 If `next.tool` disagrees with `intent` (e.g. intent=`chat` but next=
-`task_analysis`), `opc_intent_complete` raises a hard validation
-error — these MUST stay aligned.
+`task_analysis`), `opc_flow_step_complete({step:"intent_analysis"})`
+raises a hard validation error — these MUST stay aligned.
