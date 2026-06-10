@@ -150,3 +150,5 @@ export {
 export type { SimilarityInput, SimilarityResult } from "./similarity.js";
 export { startReflectionServer } from "./mcp-server.js";
 export type { ReflectionMcpOptions } from "./mcp-server.js";
+
+export { loadSeedCorrections, seedCorrectionsCount } from "./seed-loader.js";

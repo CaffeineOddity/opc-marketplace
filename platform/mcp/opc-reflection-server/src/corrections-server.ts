@@ -11,6 +11,7 @@ import {
   type CorrectionTrigger,
   type LinkedIntervention,
 } from "./corrections-store.js";
+import { loadSeedCorrections } from "./seed-loader.js";
 import { similarity, SIM_MERGE_THRESHOLD } from "./similarity.js";
 import type { StepId } from "./store.js";
 
@@ -96,7 +97,15 @@ export class CorrectionsServer {
   }
 
   async query(req: CorrectionsQueryRequest): Promise<CorrectionsQueryResponse> {
-    const all = await listCorrectionsByStep(this.root, req.step);
+    const projectCorrections = await listCorrectionsByStep(this.root, req.step);
+
+    // If project has corrections for this step, use them (project-first per spec §五).
+    // Otherwise fall back to seed corrections for cold-start.
+    const all =
+      projectCorrections.length > 0
+        ? projectCorrections
+        : (await loadSeedCorrections()).filter((c) => c.step === req.step);
+
     const kw = (req.keywords ?? []).map((s) => s.toLowerCase());
     const scored = all.map((c) => {
       const overlap =

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
   availableMethodsForStep,
@@ -1608,3 +1608,46 @@ describe("CorrectionsServer", () => {
     });
   });
 });
+
+describe("seed corrections", () => {
+  let seedLoader: typeof import("./seed-loader.js");
+
+  beforeAll(async () => {
+    seedLoader = await import("./seed-loader.js");
+  });
+
+  it("loads seed corrections from disk", async () => {
+    const seeds = await seedLoader.loadSeedCorrections();
+    expect(seeds.length).toBeGreaterThanOrEqual(5);
+    for (const s of seeds) {
+      expect(s.source).toBe("seed");
+      expect(s.hotness).toBe(3);
+      expect(s.id).toMatch(/^corr-seed-/);
+    }
+  });
+
+  it("seedCorrectionsCount returns a positive number", async () => {
+    const count = await seedLoader.seedCorrectionsCount();
+    expect(count).toBeGreaterThanOrEqual(5);
+  });
+
+  it("seed corrections cover all major steps", async () => {
+    const seeds = await seedLoader.loadSeedCorrections();
+    const steps = new Set(seeds.map((s) => s.step));
+    expect(steps.has("intent_analysis")).toBe(true);
+    expect(steps.has("task_decomposition")).toBe(true);
+    expect(steps.has("node_selection")).toBe(true);
+    expect(steps.has("brief_generation")).toBe(true);
+  });
+
+  it("query falls back to seeds when project has no corrections", async () => {
+    const root = await mkdtemp(join(tmpdir(), "corr-seed-"));
+    const srv = new CorrectionsServer({ root });
+    const resp = await srv.query({ step: "intent_analysis" });
+    // Should return seeds since no project-level corrections exist
+    expect(resp.items.length).toBeGreaterThan(0);
+    expect(resp.items.every((c) => c.source === "seed")).toBe(true);
+    await rm(root, { recursive: true, force: true });
+  });
+});
+

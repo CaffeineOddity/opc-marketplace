@@ -1,0 +1,25 @@
+{
+  "id": "corr-seed-tight-interface",
+  "step": "task_decomposition",
+  "unit": "decomposition",
+  "section": "sub-pipeline-coupling",
+  "subsection": "tight-interface",
+  "lesson": "When decomposing a task into sub-pipelines, each sub-pipeline boundary must define an explicit interface contract (shared schema, API spec, or data model). If two sub-pipelines share a unit without a documented interface, merge them.",
+  "rationale": "Tightly coupled sub-pipelines without documented interfaces cause integration failures in later phases. The decomposition validator should require an interface_spec for every entry in dependency_graph, not just a dependency arrow.",
+  "applies_when": {
+    "keywords": ["coupling", "interface", "sub-pipeline", "dependency", "boundary", "integration"],
+    "step": "P3",
+    "phase_id": ["02-design", "03-decompose"]
+  },
+  "source": "seed",
+  "trigger": "intervention",
+  "linked_reflection_artifacts": [],
+  "linked_interventions": [],
+  "hotness": 3,
+  "frozen": false,
+  "schema_version": 2,
+  "created_at": "2026-06-10T00:00:00Z",
+  "updated_at": "2026-06-10T00:00:00Z",
+  "related": [],
+  "deprecated_by": null
+}
