@@ -688,6 +688,132 @@ describe("M18.b query_stats aggregation", () => {
   });
 });
 
+describe("M18.c explain artifact reader", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m18c-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  it("explains a clean reflection with telemetry-matched objection counts", async () => {
+    const srv = newServer();
+    const writeResp = await srv.critiqueComplete({
+      session_id: "se-clean",
+      step_id: "P5",
+      method: "critique",
+      objections: [
+        { id: "o1", severity: "minor", category: "style", text: "nit", resolution: "dismissed" },
+      ],
+      reasoning_trace: ["step 1", "step 2"],
+      round: 1,
+      max_rounds: 3,
+    });
+    const reflection_id = writeResp.pending_reflection.reflection_id;
+
+    const resp = await srv.admin({
+      action: "explain",
+      session_id: "se-clean",
+      reflection_id,
+    });
+    expect(resp.action).toBe("explain");
+    if (resp.action !== "explain" || "not_found" in resp) throw new Error("unexpected");
+    expect(resp.reflection_id).toBe(reflection_id);
+    expect(resp.step).toBe("P5");
+    expect(resp.method).toBe("critique");
+    expect(resp.verdict).toBe("clean");
+    expect(resp.objections_raised.count).toBe(1);
+    expect(resp.objections_raised.source).toBe("telemetry");
+    expect(resp.objections_kept).toEqual([]);
+    expect(resp.fallback_chain).toEqual(["critique → clean"]);
+    expect(resp.final_decision).toMatch(/proceed/);
+    expect(resp.reasoning_trace).toEqual(["step 1", "step 2"]);
+    expect(resp.data_completeness.telemetry_matched).toBe(true);
+    expect(resp.data_completeness.evidence_input_recorded).toBe(false);
+  });
+
+  it("explains a rounds_exceeded reflection and reports fallback_triggered", async () => {
+    const srv = newServer();
+    const writeResp = await srv.critiqueComplete({
+      session_id: "se-exc",
+      step_id: "P3",
+      method: "debate",
+      objections: [
+        { id: "o-keep", severity: "blocker", category: "logic", text: "broken" },
+      ],
+      reasoning_trace: ["analyzed", "rejected"],
+      round: 4,
+      max_rounds: 3,
+      evidence_diff: { changed: ["a.md"] },
+      telemetry: { fallback_triggered: true },
+    });
+    const resp = await srv.admin({
+      action: "explain",
+      session_id: "se-exc",
+      reflection_id: writeResp.pending_reflection.reflection_id,
+    });
+    if (resp.action !== "explain" || "not_found" in resp) throw new Error("unexpected");
+    expect(resp.verdict).toBe("rounds_exceeded");
+    expect(resp.fallback_chain).toEqual(["debate → fallback_triggered"]);
+    expect(resp.final_decision).toMatch(/ask_user/);
+    expect(resp.evidence_input.available).toBe(true);
+    expect(resp.objections_kept).toHaveLength(1);
+  });
+
+  it("returns not_found when the reflection_id does not exist", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "explain",
+      session_id: "se-missing",
+      reflection_id: "rf-does-not-exist",
+    });
+    if (resp.action !== "explain") throw new Error("unexpected");
+    if (!("not_found" in resp)) throw new Error("expected not_found branch");
+    expect(resp.not_found).toBe(true);
+    expect(resp.reflection_id).toBe("rf-does-not-exist");
+    expect(resp.reason).toContain("not found");
+  });
+
+  it("reconstructs objections_raised from artifact when no telemetry row matches", async () => {
+    const srv = newServer();
+    const writeResp = await srv.critiqueComplete({
+      session_id: "se-recon",
+      step_id: "P5",
+      method: "cove",
+      objections: [
+        { id: "o1", severity: "blocker", category: "logic", text: "x" },
+      ],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    const reflection_id = writeResp.pending_reflection.reflection_id;
+    const telPath = telemetryPath(root, "se-recon");
+    await writeFile(telPath, "", "utf8");
+
+    const resp = await srv.admin({
+      action: "explain",
+      session_id: "se-recon",
+      reflection_id,
+    });
+    if (resp.action !== "explain" || "not_found" in resp) throw new Error("unexpected");
+    expect(resp.objections_raised.source).toBe("reconstructed_from_artifact");
+    expect(resp.objections_raised.count).toBe(1);
+    expect(resp.data_completeness.telemetry_matched).toBe(false);
+  });
+});
+
 describe("ReflectionServer M17.e discriminator facades", () => {
   let root: string;
   beforeEach(async () => {
@@ -789,21 +915,22 @@ describe("ReflectionServer M17.e discriminator facades", () => {
 
     it.each([
       ["on_demand"],
-      ["explain"],
       ["unlearn_method"],
     ] as const)(
       "action=%s returns not_implemented:true (deferred to M18)",
       async (action) => {
         const srv = newServer();
         const req =
-          action === "explain"
-            ? { action, session_id: "s1", reflection_id: "rf-1" }
-            : action === "unlearn_method"
-              ? { action, session_id: "s1", method: "critique" as const }
-              : { action, session_id: "s1" };
+          action === "unlearn_method"
+            ? { action, session_id: "s1", method: "critique" as const }
+            : { action, session_id: "s1" };
         const resp = await srv.admin(req);
         expect(resp.action).toBe(action);
-        if (resp.action !== "record_interventions" && resp.action !== "query_stats") {
+        if (
+          resp.action !== "record_interventions" &&
+          resp.action !== "query_stats" &&
+          resp.action !== "explain"
+        ) {
           expect(resp.not_implemented).toBe(true);
           expect(resp.reason).toContain(action);
           expect(resp.reason).toContain("M18");

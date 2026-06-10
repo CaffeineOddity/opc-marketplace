@@ -60,6 +60,9 @@ export type {
   ExpiryMetrics,
 } from "./query-stats.js";
 
+export { explainReflection, ExplainNotFoundError } from "./explain.js";
+export type { ExplainRequest, ExplainResponse } from "./explain.js";
+
 export {
   validateAll,
   validateV1Schema,

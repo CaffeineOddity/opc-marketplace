@@ -12,6 +12,11 @@ import {
   type StepId,
 } from "./store.js";
 import {
+  explainReflection,
+  ExplainNotFoundError,
+  type ExplainResponse,
+} from "./explain.js";
+import {
   aggregateTelemetry,
   type QueryStatsResponse,
 } from "./query-stats.js";
@@ -181,7 +186,9 @@ export type ReflectAdminRequest =
 export type ReflectAdminResponse =
   | ({ action: "record_interventions" } & ReflectRecordInterventionsResponse)
   | ({ action: "query_stats" } & QueryStatsResponse)
-  | { action: "on_demand" | "explain" | "unlearn_method"; not_implemented: true; reason: string };
+  | ({ action: "explain" } & ExplainResponse)
+  | { action: "explain"; not_found: true; reflection_id: string; reason: string }
+  | { action: "on_demand" | "unlearn_method"; not_implemented: true; reason: string };
 
 const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "Read",
@@ -469,8 +476,26 @@ export class ReflectionServer {
         });
         return { action: "query_stats", ...stats };
       }
+      case "explain": {
+        try {
+          const detail = await explainReflection(this.root, {
+            session_id: req.session_id,
+            reflection_id: req.reflection_id,
+          });
+          return { action: "explain", ...detail };
+        } catch (err) {
+          if (err instanceof ExplainNotFoundError) {
+            return {
+              action: "explain",
+              not_found: true,
+              reflection_id: req.reflection_id,
+              reason: err.message,
+            };
+          }
+          throw err;
+        }
+      }
       case "on_demand":
-      case "explain":
       case "unlearn_method":
         return {
           action: req.action,
