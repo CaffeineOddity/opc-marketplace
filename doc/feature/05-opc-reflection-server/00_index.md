@@ -162,7 +162,7 @@ state-server 调用 reflection-server 的所有入口（4 个工具按 discrimin
 | evidence 通过 validator 后 | flow_next: opc_reflect_plan | 返回方法 + 历史纠正 + max_rounds |
 | 执行反思方法 | opc_reflect_execute({method:"cove"\|"critique"\|"debate"\|"tot"\|"reflexion"\|"validator"}) | 返回 sub-agent spec |
 | 反思完成 | opc_reflect_complete({method:"<同上>"}) | 返回路由 + meta-validator 结果 |
-| 用户跳过 | opc_flow_skip_reflection | 记录 skip，可能触发降级建议 |
+| 用户跳过 | opc_flow_user_reply({disposition:"skip"}) | 记录 skip，设置 skip_reflection_once_for_step |
 | 用户主动反思 | opc_reflect_admin({action:"on_demand"}) | 返回 on_demand_reflection_log |
 | pipeline 结束 | opc_reflect_admin({action:"record_interventions"}) | 提炼归档 + 更新全局画像 |
 | 健康度查询 | opc_reflect_admin({action:"query_stats"}) | 返回方法健康度 + 反思开销统计 |

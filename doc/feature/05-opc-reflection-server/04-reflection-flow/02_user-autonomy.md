@@ -78,15 +78,26 @@ opc_reflect_plan 被调用时：
 
 ### 3.1 API
 
+Skip 通过 A3 ask_user 回灌路径触发：当反思 rounds 耗尽触发 `ask_user` 时，用户可选择 skip disposition。
+
 ```
-opc_flow_skip_reflection({step: "P4", reason: "brief 是纯格式输出，不需要反思"})
+opc_flow_user_reply({
+  question_id: "uq-P5-r3-<ulid>",
+  user_reply: "<用户原话>",
+  resolution: {
+    disposition: "skip",
+    notes: "brief 是纯格式输出，不需要反思"
+  }
+})
 ```
+
+另外，用户可通过 `intensity: off`（见 二·2.2）全局跳过所有 LLM 反思（V1-V5 validator 仍然执行）。
 
 ### 3.2 行为
 
-- 当前 step 的 reflection 跳过，直接走 validator-only
+- 当前 step 的 reflection 跳过，state-server 内部设置 `skip_reflection_once_for_step`，下次 `opc_flow_step_complete` 自动清除
 - skip 只影响当前 pipeline 的当前 step，不持久化
-- skip 记录写入 `reflection_log[]`，标记 `skipped: true` + `skip_reason`
+- skip 记录写入 `reflection_log[]`，标记 `verdict: "skipped_by_user"` + skip_reason
 - 若 step 已被 skip 但 validator 判定 objection，仍会 ask_user（不静默放行）
 
 ### 3.3 不可跳过的步骤

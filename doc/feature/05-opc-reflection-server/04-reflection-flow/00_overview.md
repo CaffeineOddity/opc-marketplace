@@ -79,7 +79,7 @@ sequenceDiagram
 | `intensity: medium` (默认) | 同上 | step P3/P5/P8 跑 primary + secondary，其余 primary |
 | `intensity: low` | 同上 | 只在 step P3 / P5 跑 primary，其他仅 validator |
 | `intensity: off` | 同上 | 全部跳过反思，仅 validator-only |
-| `skip once` | `opc_flow_skip_reflection({step})` | 仅当前 step 跳过 |
+| `skip once` | `opc_flow_user_reply({disposition:"skip"})` | 仅当前 step 跳过（A3 ask_user 路径） |
 | `on_demand` | `opc_reflect_admin({action:"on_demand", target})` | 用户主动触发对历史 step 的事后反思 |
 
 **降级建议**：如果某 step 近 N 次反思 FP 率 > 阈值，server 会建议 `intensity` 降级或 `opc_reflect_admin({action:"unlearn_method"})`，但**最终权在用户**。
