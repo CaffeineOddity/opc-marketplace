@@ -3,8 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "OPC UserPromptSubmit hook plugin (quiet default).",
+  "description": "OPC UserPromptSubmit hook plugin (quiet default) + e2e walkthrough harness.",
   "scripts": {
     "test": "echo \"orchestrator tests run via root vitest\""
+  },
+  "dependencies": {
+    "@opc/knowledge-server": "workspace:*",
+    "@opc/state-server": "workspace:*",
+    "@opc/reflection-server": "workspace:*"
   }
 }

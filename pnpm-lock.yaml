@@ -48,6 +48,18 @@ importers:
         specifier: workspace:*
         version: link:../../../shared/memory-store
 
+  platform/opc-orchestrator:
+    dependencies:
+      '@opc/knowledge-server':
+        specifier: workspace:*
+        version: link:../mcp/opc-knowledge-server
+      '@opc/reflection-server':
+        specifier: workspace:*
+        version: link:../mcp/opc-reflection-server
+      '@opc/state-server':
+        specifier: workspace:*
+        version: link:../mcp/opc-state-server
+
   shared/memory-store: {}
 
 packages:
