@@ -7,7 +7,7 @@
 
 ## 流程工具总览（M17.g 后 7 工具）
 
-按 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#21-合并映射表54--28) 的 discriminator 模式，原 14 个 `opc_flow_*` / `opc_*_complete` 已合并为 **7 个工具**——本系列是工具规范的唯一真相源，其他文档只通过锚点链接引用。
+按 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#21-合并映射表54--24) 的 discriminator 模式，原 14 个 `opc_flow_*` / `opc_*_complete` 已合并为 **7 个工具**——本系列是工具规范的唯一真相源，其他文档只通过锚点链接引用。
 
 | 工具 | discriminator | 一句话职责 | 详见 |
 |---|---|---|---|
@@ -19,7 +19,7 @@
 | `opc_quick_dispatch` | —（保留，low 通道独立语义） | low 复杂度快速通道：agent_hint + knowledge_context | [步骤路由篇](03_flow-tools-step-routing.md#opc_quick_dispatch) |
 | `opc_flow_correct` | `action: "revise"\|"restart"\|"phase_reset"` | 用户主动纠错通道（豁免所有 guard，含吸收的 phase_reset） | [修订与纠错篇](04_flow-tools-revise-restart.md#opc_flow_correct) |
 
-> Deprecated 别名（旧工具名 → 新 `(tool, discriminator)` 对）由 M19 wire 层透明转发，期间 server 同时响应新旧两套调用并 warn 一次。映射表见 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#21-合并映射表54--28)；运行期数据见 [`@opc/tool-aliases`](../../../shared/tool-aliases)。
+> Deprecated 别名（旧工具名 → 新 `(tool, discriminator)` 对）由 M19 wire 层透明转发，期间 server 同时响应新旧两套调用并 warn 一次。映射表见 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#21-合并映射表54--24)；运行期数据见 [`@opc/tool-aliases`](../../../shared/tool-aliases)。
 
 本篇覆盖 **入口（`opc_flow_query`）+ 生命周期（`opc_flow_lifecycle`）** 2 个工具。
 
@@ -263,4 +263,4 @@ opc_flow_lifecycle({action: "recover"})
 - [03_flow-tools-step-routing.md](03_flow-tools-step-routing.md) — 步骤路由类工具（`opc_flow_step_complete` / `opc_flow_reflect` / `opc_flow_user_reply` / `opc_quick_dispatch`）
 - [04_flow-tools-revise-restart.md](04_flow-tools-revise-restart.md) — `opc_flow_correct`（revise / restart / phase_reset）+ 前置校验
 - [10_flow-state-schema.md](10_flow-state-schema.md) — flow-state.json 完整字段定义
-- [07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54 → 28 工具合并规范（本文件遵循 §2.1 flow 段）
+- [07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54 → 24 工具合并规范（本文件遵循 §2.1 flow 段）

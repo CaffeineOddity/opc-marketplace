@@ -297,4 +297,4 @@ discriminator 分支:
 - [06_lifecycle.md](06_lifecycle.md) — 工具在生命周期中的调用顺序
 - [10_complete-example.md](10_complete-example.md) — 完整调用链路
 - [11_insert-resume.md](11_insert-resume.md) — 插队/挂起/恢复完整契约
-- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→24 工具合并方案

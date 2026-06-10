@@ -371,4 +371,4 @@ opc_quick_dispatch({description, tags, knowledge_unit})
 - [06_task-analysis.md](06_task-analysis.md) — `opc_flow_step_complete({step:"task_analysis"})` 的方法论
 - [07_task-decomposition.md](07_task-decomposition.md) — `opc_flow_step_complete({step:"task_decomposition"})` 的方法论
 - [08_brief-generation.md](08_brief-generation.md) — `opc_flow_step_complete({step:"brief_generation"})` 的方法论
-- [07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md#21-合并映射表54--28) — step discriminator 映射规范
+- [07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md#21-合并映射表54--24) — step discriminator 映射规范

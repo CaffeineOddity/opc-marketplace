@@ -400,4 +400,4 @@ opc_knowledge_read({
 - [00_overview.md](00_overview.md#4-个工具速览) — 工具速览
 - [03_initialization-flow.md](03_initialization-flow.md) — 流程启动中的工具时序
 - [00_overview.md](00_overview.md#与-state-server-协作矩阵) — 与 state-server 的协作分工
-- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→24 工具合并方案

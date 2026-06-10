@@ -163,4 +163,4 @@ evidence 结构:
 - [05_execution-and-retry.md](05_execution-and-retry.md) — 执行流程 + 三种重试语义
 - [06_source-and-override.md](06_source-and-override.md) — Agent 可用性来自 `plugin.json`
 - [08_internal-engines.md](08_internal-engines.md) — state-manager 内部校验逻辑
-- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→24 工具合并方案
