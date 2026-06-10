@@ -89,7 +89,11 @@ export type CorrectionsActionRequest =
   | ({ action: "record" } & CorrectionsUpsertRequest)
   | { action: "unlearn"; correction_id: string; reason?: string }
   | { action: "reindex"; scope?: "all" | { step: StepId } }
-  | PromoteRequest;
+  | PromoteRequest
+  | { action: "migrate"; source_step?: StepId; target_step?: StepId; correction_ids?: string[] }
+  | { action: "endorse"; correction_id: string; endorser?: string }
+  | { action: "freeze"; correction_id: string; reason?: string }
+  | { action: "delete"; correction_id: string; reason?: string };
 
 export interface UnlearnResponse {
   tombstoned_id: string;
@@ -107,12 +111,39 @@ export interface PromoteResponse {
   l2_source_id: string;
 }
 
+export interface MigrateResponse {
+  migrated: number;
+  source_step?: string;
+  target_step?: string;
+}
+
+export interface EndorseResponse {
+  correction_id: string;
+  endorsed: boolean;
+  endorsed_by?: string;
+}
+
+export interface FreezeResponse {
+  correction_id: string;
+  frozen: boolean;
+  reason: string;
+}
+
+export interface DeleteResponse {
+  correction_id: string;
+  deleted: boolean;
+}
+
 export type CorrectionsActionResponse =
   | ({ action: "query" } & CorrectionsQueryResponse)
   | ({ action: "record" } & CorrectionsUpsertResponse)
   | ({ action: "unlearn" } & UnlearnResponse)
   | ({ action: "reindex" } & ReindexResponse)
-  | ({ action: "promote" } & PromoteResponse);
+  | ({ action: "promote" } & PromoteResponse)
+  | ({ action: "migrate" } & MigrateResponse)
+  | ({ action: "endorse" } & EndorseResponse)
+  | ({ action: "freeze" } & FreezeResponse)
+  | ({ action: "delete" } & DeleteResponse);
 
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
@@ -274,6 +305,7 @@ export class CorrectionsServer {
       linked_interventions: inc.linked_interventions ?? [],
       hotness: inc.hotness ?? 1,
       frozen: inc.frozen ?? false,
+      endorsed_by: inc.endorsed_by,
       schema_version: inc.schema_version ?? 2,
       created_at: now,
       updated_at: now,
@@ -366,6 +398,30 @@ export class CorrectionsServer {
           l2_source_id: correction_id,
         };
       }
+      case "migrate": {
+        const { action: _m, ...params } = req;
+        void _m;
+        const resp = await this.migrate(params);
+        return { action: "migrate", ...resp };
+      }
+      case "endorse": {
+        const { action: _e, ...params } = req;
+        void _e;
+        const resp = await this.endorse(params);
+        return { action: "endorse", ...resp };
+      }
+      case "freeze": {
+        const { action: _f, ...params } = req;
+        void _f;
+        const resp = await this.freezeCorrection(params);
+        return { action: "freeze", ...resp };
+      }
+      case "delete": {
+        const { action: _d, ...params } = req;
+        void _d;
+        const resp = await this.deleteCorrection(params);
+        return { action: "delete", ...resp };
+      }
       default: {
         const _exhaustive: never = req;
         throw new CorrectionsServerError(
@@ -418,6 +474,79 @@ export class CorrectionsServer {
 
     const duration_ms = Math.round(performance.now() - start);
     return { indexed: filtered.length, duration_ms };
+  }
+
+  private async migrate(params: {
+    source_step?: StepId;
+    target_step?: StepId;
+    correction_ids?: string[];
+  }): Promise<MigrateResponse> {
+    if (!params.target_step) {
+      throw new CorrectionsServerError("target_step required for migrate");
+    }
+    const all = await listAllCorrections(this.root);
+    let candidates = all.map((x) => x.correction);
+    if (params.source_step) {
+      candidates = candidates.filter((c) => c.step === params.source_step);
+    }
+    if (params.correction_ids && params.correction_ids.length > 0) {
+      const idSet = new Set(params.correction_ids);
+      candidates = candidates.filter((c) => idSet.has(c.id));
+    }
+    const now = this.now().toISOString();
+    for (const c of candidates) {
+      const updated: Correction = { ...c, step: params.target_step, updated_at: now };
+      await saveCorrection(this.root, updated);
+    }
+    return {
+      migrated: candidates.length,
+      source_step: params.source_step,
+      target_step: params.target_step,
+    };
+  }
+
+  private async endorse(params: {
+    correction_id: string;
+    endorser?: string;
+  }): Promise<EndorseResponse> {
+    const { correction } = await loadCorrectionById(this.root, params.correction_id);
+    const endorser = params.endorser ?? "system";
+    const updated: Correction = {
+      ...correction,
+      endorsed_by: endorser,
+      updated_at: this.now().toISOString(),
+    };
+    await saveCorrection(this.root, updated);
+    return { correction_id: updated.id, endorsed: true, endorsed_by: endorser };
+  }
+
+  private async freezeCorrection(params: {
+    correction_id: string;
+    reason?: string;
+  }): Promise<FreezeResponse> {
+    const { correction } = await loadCorrectionById(this.root, params.correction_id);
+    const updated: Correction = {
+      ...correction,
+      frozen: true,
+      updated_at: this.now().toISOString(),
+    };
+    await saveCorrection(this.root, updated);
+    return { correction_id: updated.id, frozen: true, reason: params.reason ?? "manual freeze" };
+  }
+
+  private async deleteCorrection(params: {
+    correction_id: string;
+    reason?: string;
+  }): Promise<DeleteResponse> {
+    const { correction } = await loadCorrectionById(this.root, params.correction_id);
+    const updated: Correction = {
+      ...correction,
+      frozen: true,
+      deprecated_by: `deleted: ${params.reason ?? "manual delete"}`,
+      updated_at: this.now().toISOString(),
+    };
+    await saveCorrection(this.root, updated);
+    return { correction_id: updated.id, deleted: true };
   }
 
   async runDecayIfDue(): Promise<DecayMeta | null> {
@@ -530,6 +659,7 @@ export function buildCorrection(
     linked_interventions: partial.linked_interventions ?? [],
     hotness: partial.hotness ?? 1,
     frozen: partial.frozen ?? false,
+    endorsed_by: partial.endorsed_by,
     schema_version: partial.schema_version ?? 2,
     related: partial.related ?? [],
     deprecated_by: partial.deprecated_by ?? null,

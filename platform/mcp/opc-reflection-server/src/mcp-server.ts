@@ -125,11 +125,11 @@ const TOOL_DEFS = [
   {
     name: "opc_corrections",
     description:
-      "Corrections management. action=query searches corrections by step; action=record upserts a batch; action=unlearn removes a correction; action=reindex rebuilds the correction index; action=promote promotes a correction to global-corrections.",
+      "Corrections management. action=query searches corrections by step; action=record upserts a batch; action=unlearn removes a correction; action=reindex rebuilds the correction index; action=promote promotes a correction to global-corrections; action=migrate moves corrections between steps; action=endorse marks a correction as endorsed; action=freeze freezes a correction; action=delete soft-deletes a correction.",
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["query", "record", "unlearn", "reindex", "promote"] },
+        action: { type: "string", enum: ["query", "record", "unlearn", "reindex", "promote", "migrate", "endorse", "freeze", "delete"] },
         step: { type: "string" },
         keywords: { type: "array", items: { type: "string" } },
         limit: { type: "number" },
@@ -137,6 +137,11 @@ const TOOL_DEFS = [
         correction_id: { type: "string" },
         reason: { type: "string" },
         scope: {},
+        source_step: { type: "string" },
+        target_step: { type: "string" },
+        correction_ids: { type: "array", items: { type: "string" } },
+        endorser: { type: "string" },
+        source_project: { type: "string" },
       },
       required: ["action"],
     } as const,
@@ -319,7 +324,7 @@ async function dispatchReflection(
           batch: (a("batch") ?? []) as CorrectionsActionRequest extends { action: "record" } ? CorrectionsActionRequest["batch"] : never,
         });
       }
-      // unlearn / reindex / promote go through crud facade
+      // unlearn / reindex / promote / migrate / endorse / freeze / delete go through crud facade
       return corrections.crud({
         action,
         ...(action === "unlearn"
@@ -330,6 +335,18 @@ async function dispatchReflection(
           : {}),
         ...(action === "promote"
           ? { correction_id: s("correction_id"), session_id: s("session_id"), ...(s("source_project") ? { source_project: s("source_project") } : {}) }
+          : {}),
+        ...(action === "migrate"
+          ? { ...(s("source_step") ? { source_step: s("source_step") as StepId } : {}), ...(s("target_step") ? { target_step: s("target_step") as StepId } : {}), ...(a("correction_ids") ? { correction_ids: a("correction_ids") as string[] } : {}) }
+          : {}),
+        ...(action === "endorse"
+          ? { correction_id: s("correction_id"), ...(s("endorser") ? { endorser: s("endorser") } : {}) }
+          : {}),
+        ...(action === "freeze"
+          ? { correction_id: s("correction_id"), ...(s("reason") ? { reason: s("reason") } : {}) }
+          : {}),
+        ...(action === "delete"
+          ? { correction_id: s("correction_id"), ...(s("reason") ? { reason: s("reason") } : {}) }
           : {}),
       } as CorrectionsActionRequest);
     }

@@ -42,6 +42,7 @@ export interface Correction {
   linked_interventions: LinkedIntervention[];
   hotness: number;
   frozen: boolean;
+  endorsed_by?: string;
   schema_version: number;
   created_at: string;
   updated_at: string;
