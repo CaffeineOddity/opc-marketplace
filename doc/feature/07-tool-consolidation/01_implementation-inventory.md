@@ -33,7 +33,7 @@
 | **opc_reflect_execute** | `ReflectionServer.execute` | ✅ 已对齐（M3/M4/M5/M6 + inline） | — |
 | **opc_reflect_complete** | `ReflectionServer.complete` | ✅ 已对齐（6 method 分派） | — |
 | **opc_reflect_admin** | `ReflectionServer.admin` | ✅ 已对齐（record_interventions/explain/query_stats/unlearn/on_demand 五路分派） | — |
-| **opc_corrections** | `CorrectionsServer.crud` | ✅ 已对齐（query/record/unlearn/reindex/promote 五路分派） | — |
+| **opc_corrections** | `CorrectionsServer.crud` | ✅ 已对齐（query/record/unlearn/reindex/promote/migrate/endorse/freeze/delete 九路分派） | — |
 
 ## 关键判断
 
