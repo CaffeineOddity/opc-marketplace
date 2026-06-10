@@ -34,7 +34,7 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 | opc-state-server | `opc_pipeline_create` | 1 | |
 | opc-state-server | `opc_phase_start` | 3 | phases 04, 05, 06 |
 | opc-state-server | `opc_node_start` | 4 | api-design, database-schema, tdd-implementation, integration-test |
-| opc-state-server | `opc_node_finish({status:"completed"})` | 4 | |
+| opc-state-server | `opc_node_finish({status:"success"})` | 4 | |
 | opc-state-server | `opc_phase_complete` | 3 | |
 | opc-state-server | `opc_pipeline_status` | 1 | final aggregation check |
 | opc-knowledge-server | `opc_knowledge_open` | 1 | declares unit user-auth |
@@ -64,8 +64,8 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 | Layer | Validator | Trigger point | Stage test |
 |---|---|---|---|
 | L0 | `min_version` on input knowledge | `opc_node_start` | node-server unit test (not e2e — would require pre-existing knowledge) |
-| L1 | Declared `output.knowledge` in `evidence.knowledge_written` | `opc_node_finish({status:"completed"})` | stage-4 happy + L1 negative |
-| L2 | `test_pass` (failed===0) | `opc_node_finish({status:"completed"})` with quality_gates | stage-5 happy + L2 negative, stage-6 happy + L2 negative |
+| L1 | Declared `output.knowledge` in `evidence.knowledge_written` | `opc_node_finish({status:"success"})` | stage-4 happy + L1 negative |
+| L2 | `test_pass` (failed===0) | `opc_node_finish({status:"success"})` with quality_gates | stage-5 happy + L2 negative, stage-6 happy + L2 negative |
 | V0.x | `phase_plan.order_validated`, phase pointer | `opc_phase_start` | phase-server unit tests |
 | V1-V5 | Reflection validators | `opc_reflect_plan` / `opc_reflect_complete({method:"critique"})` | reflection-server unit tests + stage-5 happy path |
 | registry-guard | pending_reflections blocks node/phase ops | `opc_node_start`, `opc_phase_complete`, `opc_pipeline_create` | state-server unit tests; stage-5 exercises the post-clear path (registered=false) |

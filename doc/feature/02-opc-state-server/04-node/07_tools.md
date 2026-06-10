@@ -61,7 +61,7 @@
 - sub-agent 在隔离 context 中执行 `node_body`
 - sub-agent **继承父进程注册的所有 MCP server 连接**，可直接调 `opc_knowledge_read({mode:"batch"})` / `opc_knowledge_write` 等工具（已通过 PoC 验证，详见 [06-host-contract/00_overview.md § 2.4 C3](../../06-host-contract/00_overview.md#24-c3sub-agent-的-mcp-连接继承)）
 - 主进程必须把 `dispatch_context` 完整传入 Task 工具的 prompt，确保 sub-agent 在调用 `opc_knowledge_write` 时带 metadata
-- sub-agent 完成后回报 evidence 给主进程，主进程据此调 `opc_node_finish({status:"completed"})`
+- sub-agent 完成后回报 evidence 给主进程，主进程据此调 `opc_node_finish({status:"success"})`
 
 这种模式带来 context 隔离 + Skill 按需加载，避免主进程被 node body 污染。
 
@@ -69,25 +69,25 @@
 
 ## opc_node_finish
 
-统一的节点终态入口。请求体顶层必含 `status` 字段（discriminator），路由到 completed / failed / retry 分支。
+统一的节点终态入口。请求体顶层必含 `status` 字段（discriminator），路由到 success / failed / retry 分支。
 
 ```
 公共参数:
-  status: "completed" | "failed" | "retry"
+  status: "success" | "failed" | "retry"
   pipeline_id, sub_pipeline_id, node_name
 
 discriminator 分支:
-  status="completed"  → 见 §completed
-  status="failed"     → 见 §failed
-  status="retry"      → 见 §retry
+  status="success"  → 见 §success
+  status="failed"   → 见 §failed
+  status="retry"    → 见 §retry
 ```
 
 ---
 
-### opc_node_finish status=completed
+### opc_node_finish status=success
 
 ```
-参数: { status: "completed", pipeline_id, sub_pipeline_id, node_name, evidence? }
+参数: { status: "success", pipeline_id, sub_pipeline_id, node_name, evidence? }
 
 行为:
   ① L1 — 产出物存在性校验（始终执行）
@@ -105,7 +105,7 @@ discriminator 分支:
 
 返回:
 {
-  status: "completed",
+  status: "success",
   output: [...],
   evidence: {...},
   unblocked_nodes: ["next-node-a", ...],   ← 严格语义：blocked_by 全满足才返回

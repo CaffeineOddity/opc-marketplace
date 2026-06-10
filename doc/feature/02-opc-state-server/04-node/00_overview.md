@@ -6,7 +6,7 @@
 
 ## 节点执行时序图
 
-`opc_node_start` → Agent 委派 → evidence 回报 → `opc_node_finish({status:"completed"})` 的完整链路（含 L1/L2 质量门校验与依赖解锁）：
+`opc_node_start` → Agent 委派 → evidence 回报 → `opc_node_finish({status:"success"})` 的完整链路（含 L1/L2 质量门校验与依赖解锁）：
 
 ```mermaid
 sequenceDiagram
@@ -43,7 +43,7 @@ sequenceDiagram
     T-->>C: Agent 完成
 
     Note over C,FS: ③ 完成与校验
-    C->>ND: opc_node_finish({status:"completed", evidence})
+    C->>ND: opc_node_finish({status:"success", evidence})
     ND->>SM: validate_node_completion
     SM->>SM: L1 校验<br/>(artifacts 存在性)
     SM->>SM: L2 校验<br/>(quality_gates)
@@ -133,7 +133,7 @@ flowchart TD
 ## 快速入口
 
 - **启动节点**：[`opc_node_start`](07_tools.md#opc_node_start) — 由 `opc_phase_confirm` 路由触发
-- **完成/失败/重跑节点**：[`opc_node_finish`](07_tools.md#opc_node_finish) — Agent 回报 evidence 后调用，`status ∈ {completed, failed, retry}` discriminator 路由
+- **完成/失败/重跑节点**：[`opc_node_finish`](07_tools.md#opc_node_finish) — Agent 回报 evidence 后调用，`status ∈ {success, failed, retry}` discriminator 路由
 
 > 历史名 `opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish({status})` 的 discriminator 分支。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 

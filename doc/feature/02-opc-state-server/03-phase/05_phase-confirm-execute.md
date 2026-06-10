@@ -46,7 +46,7 @@
 逐组执行，每个 node 走完整流程（详见 [../04-node/00_overview.md](../04-node/00_overview.md)）：
 
 ```
-opc_node_start → Agent 加载知识 → 执行 → opc_node_finish({status:"completed"|"failed"|"retry"})
+opc_node_start → Agent 加载知识 → 执行 → opc_node_finish({status:"success"|"failed"|"retry"})
 ```
 
 执行规则：

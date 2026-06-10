@@ -24,9 +24,9 @@ Claude (主进程) 收到 dispatch_instruction 后:
     → 产出知识时调用 opc_knowledge_write
     → 产出代码时直接写入 src/、tests/ 等目录
     → 执行完毕后回报 evidence
-  → 主进程据 evidence 调 opc_node_finish({status:"completed", evidence})
+  → 主进程据 evidence 调 opc_node_finish({status:"success", evidence})
 
-opc_node_finish({status:"completed", pipeline_id, sub_id, node_name, evidence})
+opc_node_finish({status:"success", pipeline_id, sub_id, node_name, evidence})
   → L1: 检查 output.knowledge 和 output.artifacts 存在
   → L2: 检查 quality_gates（如有声明）
   → 写入 output + evidence + status: completed

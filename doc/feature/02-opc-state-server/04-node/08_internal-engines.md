@@ -8,7 +8,7 @@ state-server 内部的纯 TypeScript 引擎，**全部零 LLM 依赖**。
 
 ### 1.1 依赖解锁
 
-`opc_node_finish({status:"completed"})` 后自动检查 phase 内所有 pending node，将 blocked_by 已满足的标记为可执行。严格语义：必须 blocked_by 全部 completed，部分 completed 不算。
+`opc_node_finish({status:"success"})` 后自动检查 phase 内所有 pending node，将 blocked_by 已满足的标记为可执行。严格语义：必须 blocked_by 全部 completed，部分 completed 不算。
 
 ### 1.2 节点超时自动重试
 
