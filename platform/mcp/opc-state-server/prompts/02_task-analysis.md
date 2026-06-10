@@ -99,8 +99,9 @@ matching variants ("auth" vs existing "user-auth").
 
 Scan `scenarios/`, pick 1–2 closest:
 
-`add-feature` · `fix-bug` · `redesign-product` · `performance-optimize`
-· `security-audit` · `launch-product` · `incident-response`
+`add-feature` · `fix-bug` · `build-saas` · `build-mobile-app`
+· `redesign-product` · `performance-optimize` · `security-audit`
+· `launch-product` · `incident-response`
 
 ### 3.7 ⑦ Knowledge operation plan
 

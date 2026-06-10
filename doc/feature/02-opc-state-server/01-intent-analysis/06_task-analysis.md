@@ -84,7 +84,7 @@ opc_flow_step_complete({step: "intent_analysis", intent: "task", intent_evidence
 
 **⑥ 匹配 Scenario** — Claude 扫描 `scenarios/` 目录，选择最匹配的 1-2 个：
 
-`add-feature` / `fix-bug` / `redesign-product` / `performance-optimize` / `security-audit` / `launch-product` / `incident-response`
+`add-feature` / `fix-bug` / `build-saas` / `build-mobile-app` / `redesign-product` / `performance-optimize` / `security-audit` / `launch-product` / `incident-response`
 
 **⑦ 生成知识操作计划** — 逐条知识路径标注操作类型（read / update / create）和当前状态。
 
