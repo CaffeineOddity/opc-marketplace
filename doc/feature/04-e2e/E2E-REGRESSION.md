@@ -55,7 +55,7 @@ The walkthrough doc (`01-walkthrough/07_pipeline-complete.md` §"MCP 调用汇�
 |---|---|---|
 | `opc_flow_query` | Not exercised in e2e (only in unit tests) | Hook-driven idle query; the e2e harness drives the lifecycle directly without going through `opc_flow_query` since the test starts in-process. Covered by hook unit tests (`opc-hook.test.ts`) + `flow-server` unit tests. |
 | `opc_phase_confirm` | Now implemented | `PhaseServer.confirm()` exists with registry-guard anchor + commit confirmation. Exercised in stage-4/5/6 via phase-complete flow. Dedicated confirm scenario deferred to M15. |
-| `opc_phase_adjust` | Not exercised | The walkthrough lists `opc_phase_adjust` for the 5.2 scenario (overriding default node selection). v1 only exercises the default-selection path; adjust coverage lives in unit tests for phase-server. M15 will add an adjust scenario. |
+| ~~`opc_phase_adjust`~~ (deleted in v2) | N/A | **Deleted** in v2 tool consolidation — replaced by reflection loop self-correction + `opc_pipeline_lifecycle({action:"replan"})`. Unit tests for the old tool were removed in M17. |
 | `opc_pipeline_lifecycle({action:"complete"})` | No dedicated tool exists | Pipeline aggregates to completed when the last phase_complete runs on the last phase (phase-server.ts L182-185). Confirmed by `opc_pipeline_status` in M14.g. The manifest.md generation step from the walkthrough doc is an M19 orchestrator concern. |
 | Sub-agent knowledge calls (~15 in walkthrough estimate) | Not in scope for orchestrator e2e | Sub-agents are dispatched by Task tool (real Claude Code only); the harness mocks them by writing knowledge directly. Sub-agent behavior is verified by kit-level integration tests in M15/M19. |
 
@@ -106,7 +106,7 @@ Listed via `opc_knowledge_read({mode: "list", unit: "user-auth"})` in M14.g; the
 | Real-subprocess MCP framing (stdio/HTTP transport) | M14 validates the contract of every server method in-process. Wire-level framing is a separate concern that M19 (marketplace + CLI) will exercise via spawn-and-pipe. |
 | Sub-agent dispatch via Task tool | The harness mocks sub-agents by calling `opc_knowledge_write` directly. Real sub-agent behavior (Claude Code spawning child agents with kit-loaded tool whitelists) is verified by kit-level integration tests in M15. |
 | Manifest.md generation | The walkthrough doc shows `opc_pipeline_lifecycle({action:"complete"})` returning a generated manifest.md aggregating code artifacts + knowledge artifacts. v1 only aggregates knowledge (the state-server has no concept of code artifacts at this layer); manifest generation is an M19 orchestrator concern. |
-| `opc_phase_adjust` / `opc_flow_correct({action:"phase_reset"})` end-to-end | Phase adjustment + reset are covered by unit tests but not by e2e. M15 will add an adjust scenario (10+5 scenarios milestone). |
+| ~~`opc_phase_adjust`~~ (deleted in v2) / `opc_flow_correct({action:"phase_reset"})` end-to-end | `opc_phase_adjust` deleted in v2 (→ reflection loop + `opc_pipeline_lifecycle({action:"replan"})`). `phase_reset` is covered by unit tests but not by e2e. |
 | `opc_corrections` distillation flow | `CorrectionsServer.crud()` + opc-distiller agent (M21.d) implemented. v1 e2e exercises corrections via scenario-16 (M21.b). Full distillation→corrections-store→next-pipeline-load loop deferred to M16 PoC. |
 
 ## 7. Action items
