@@ -8,6 +8,7 @@ import { sessionDir } from "./flow-state.js";
 export const PIPELINES_SUBDIR = "pipelines";
 export const PIPELINE_PLAN_FILENAME = "pipeline-plan.json";
 export const SUB_PIPELINES_SUBDIR = "sub-pipelines";
+export const MANIFEST_FILENAME = "manifest.md";
 
 export type PipelineStatus = "pending" | "in_progress" | "completed" | "failed" | "aborted";
 export type SubPipelineStatus =
@@ -97,6 +98,10 @@ export function subPipelineDir(
   sub_pipeline_id: string,
 ): string {
   return join(pipelineDir(root, session_id, pipeline_id), SUB_PIPELINES_SUBDIR, sub_pipeline_id);
+}
+
+export function manifestPath(root: string, session_id: string, pipeline_id: string): string {
+  return join(pipelineDir(root, session_id, pipeline_id), MANIFEST_FILENAME);
 }
 
 export class PipelineNotFoundError extends Error {

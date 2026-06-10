@@ -67,6 +67,7 @@ export type {
   PipelineLifecycleRequest,
   PipelineLifecycleResponse,
   PipelineCompleteResponse,
+  ProducedUnit,
   PipelineAbortResponse,
   PipelineResumeResponse,
   SubPipelineCreateSpec,
@@ -79,10 +80,12 @@ export {
   pipelineDir,
   pipelinePlanPath,
   subPipelineDir,
+  manifestPath,
   PipelineNotFoundError,
   PIPELINES_SUBDIR,
   PIPELINE_PLAN_FILENAME,
   SUB_PIPELINES_SUBDIR,
+  MANIFEST_FILENAME,
 } from "./pipeline-plan.js";
 export type {
   PipelinePlan,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 
 import { loadFlowState, saveFlowState } from "./flow-state.js";
 import {
@@ -11,8 +12,10 @@ import {
   type SubPipeline,
   type SubPipelineStatus,
   loadPipelinePlan,
+  manifestPath,
   savePipelinePlan,
 } from "./pipeline-plan.js";
+import { loadStateJson, type IoArtifact, type NodeState, type PhaseState } from "./state-json.js";
 import { newStateJson, saveStateJson, writeBrief } from "./state-json.js";
 import {
   TopologyError,
@@ -121,10 +124,22 @@ export type PipelineLifecycleRequest =
       sub_pipeline_id?: string;
     };
 
+export interface ProducedUnit {
+  type: "code" | "knowledge";
+  path: string;
+  version?: number;
+  source_node: string;
+  source_sub_pipeline: string;
+}
+
 export interface PipelineCompleteResponse {
   pipeline_id: string;
   status: "completed";
   completed_at: string;
+  manifest_path: string;
+  produced_units: ProducedUnit[];
+  total_nodes: number;
+  total_phases: number;
   flow_next: { tool: string; args?: Record<string, unknown> };
 }
 
@@ -441,6 +456,64 @@ export class PipelineServer {
       );
     }
     const now = this.now();
+
+    // Collect produced units from all sub-pipelines
+    const produced_units: ProducedUnit[] = [];
+    let total_nodes = 0;
+    let total_phases = 0;
+    const subManifests: Array<{
+      sub_id: string;
+      title: string;
+      phases: string[];
+      nodes: Array<{ name: string; status: string; output_count: number }>;
+    }> = [];
+
+    for (const sub of plan.sub_pipelines) {
+      try {
+        const state = await loadStateJson(
+          this.root, req.session_id, req.pipeline_id, sub.id,
+        );
+        total_phases += state.phases.length;
+        const subNodes: typeof subManifests[0]["nodes"] = [];
+        for (const ph of state.phases) {
+          for (const node of ph.nodes) {
+            total_nodes += 1;
+            let output_count = 0;
+            for (const artifact of node.output) {
+              const unitType = artifact.type === "knowledge" ? "knowledge" : "code";
+              const entry: ProducedUnit = {
+                type: unitType,
+                path: artifact.path,
+                source_node: node.name,
+                source_sub_pipeline: sub.id,
+              };
+              if (artifact.version != null) entry.version = artifact.version;
+              produced_units.push(entry);
+              output_count += 1;
+            }
+            subNodes.push({
+              name: node.name,
+              status: node.status,
+              output_count,
+            });
+          }
+        }
+        subManifests.push({
+          sub_id: sub.id,
+          title: sub.title,
+          phases: state.phases.map((p) => p.phase),
+          nodes: subNodes,
+        });
+      } catch {
+        // sub-pipeline state not found — skip (may have been deleted)
+      }
+    }
+
+    // Write manifest.md
+    const mdPath = manifestPath(this.root, req.session_id, plan.id);
+    const mdContent = renderManifest(plan, subManifests, produced_units, now);
+    await writeFile(mdPath, mdContent, "utf8");
+
     plan.status = "completed";
     plan.last_active_at = now.toISOString();
     await savePipelinePlan(this.root, req.session_id, plan, now);
@@ -448,7 +521,7 @@ export class PipelineServer {
       step: "pipeline_complete",
       tool: "opc_pipeline_lifecycle",
       input: { action: "complete", ...req },
-      output: { pipeline_id: plan.id },
+      output: { pipeline_id: plan.id, manifest_path: mdPath, produced_units_count: produced_units.length },
       at: now.toISOString(),
     });
     await saveFlowState(this.root, flow, now);
@@ -456,6 +529,10 @@ export class PipelineServer {
       pipeline_id: plan.id,
       status: "completed",
       completed_at: now.toISOString(),
+      manifest_path: mdPath,
+      produced_units,
+      total_nodes,
+      total_phases,
       flow_next: {
         tool: "opc_flow_lifecycle",
         args: { action: "start" },
@@ -696,4 +773,64 @@ export function aggregatePipelineStatus(subs: SubPipeline[]): PipelineStatus {
   if (subs.some((s) => s.status === "in_progress" || s.status === "paused")) return "in_progress";
   if (subs.length > 0 && subs.every((s) => s.status === "completed")) return "completed";
   return "pending";
+}
+
+function renderManifest(
+  plan: PipelinePlan,
+  subManifests: Array<{
+    sub_id: string;
+    title: string;
+    phases: string[];
+    nodes: Array<{ name: string; status: string; output_count: number }>;
+  }>,
+  produced_units: ProducedUnit[],
+  now: Date,
+): string {
+  const lines: string[] = [];
+  lines.push(`# 产物清单 — ${plan.id}`);
+  lines.push("");
+  lines.push("## 管线信息");
+  lines.push(`- 描述: ${plan.description}`);
+  lines.push(`- 复杂度: ${plan.complexity}`);
+  lines.push(`- 完成时间: ${now.toISOString()}`);
+  lines.push(`- 子管线数: ${plan.sub_pipelines.length}`);
+  lines.push("");
+  lines.push("## 代码产物");
+  lines.push("| 路径 | 来源 Node | 来源子管线 |");
+  lines.push("|------|----------|----------|");
+  const codeUnits = produced_units.filter((u) => u.type === "code");
+  if (codeUnits.length > 0) {
+    for (const u of codeUnits) {
+      lines.push(`| ${u.path} | ${u.source_node} | ${u.source_sub_pipeline} |`);
+    }
+  } else {
+    lines.push("| (无代码产物) | | |");
+  }
+  lines.push("");
+  lines.push("## 知识产物");
+  lines.push("| 路径 | 版本 | 来源 Node | 来源子管线 |");
+  lines.push("|------|------|----------|----------|");
+  const knowledgeUnits = produced_units.filter((u) => u.type === "knowledge");
+  if (knowledgeUnits.length > 0) {
+    for (const u of knowledgeUnits) {
+      lines.push(
+        `| ${u.path} | v${u.version ?? "?"} | ${u.source_node} | ${u.source_sub_pipeline} |`,
+      );
+    }
+  } else {
+    lines.push("| (无知识产物) | | | |");
+  }
+  lines.push("");
+  lines.push("## 子管线执行摘要");
+  for (const sm of subManifests) {
+    lines.push(`### ${sm.sub_id}: ${sm.title}`);
+    lines.push(`- 阶段: ${sm.phases.join(" → ")}`);
+    lines.push("| Node | 状态 | 产出数 |");
+    lines.push("|------|------|------|");
+    for (const n of sm.nodes) {
+      lines.push(`| ${n.name} | ${n.status} | ${n.output_count} |`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n") + "\n";
 }
