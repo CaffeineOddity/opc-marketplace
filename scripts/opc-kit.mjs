@@ -30,6 +30,7 @@ Usage:
   opc-kit list                  List installed kits
   opc-kit validate <kit-path>   Validate agent.md files in a kit directory
   opc-kit doctor               Health check all installed kits
+  opc-kit repair   <kit-name>   Reinstall a kit's agents + MCP config
   opc-kit --help                Show this help
 
 Install/update/remove require a Claude Code project directory as CWD
@@ -332,7 +333,7 @@ async function doctorKit(projectRoot) {
  * @param {string} projectRoot
  * @param {string} kitName
  * @param {object} kitPlugin manifest from marketplace.json
- * @param {"install"|"update"} mode
+ * @param {"install"|"update"|"repair"} mode
  */
 async function installKit(projectRoot, kitName, kitPlugin, mode) {
   const claudeAgentsDir = join(projectRoot, ".claude", "agents");
@@ -371,8 +372,8 @@ async function installKit(projectRoot, kitName, kitPlugin, mode) {
 
   await saveInstalled(projectRoot, installed);
 
-  const action = mode === "install" ? "Installed" : "Updated";
-  console.log(`✓ Kit ${mode === "install" ? "installed" : "updated"}: ${kitName}`);
+  const action = mode === "install" ? "Installed" : mode === "repair" ? "Repaired" : "Updated";
+  console.log(`✓ Kit ${mode === "install" ? "installed" : mode === "repair" ? "repaired" : "updated"}: ${kitName}`);
   console.log(`  Wrote .claude/agents/*.md  (${written} files)`);
 
   const mcpServers = kitPlugin.mcpServers || [];
@@ -457,11 +458,12 @@ async function main(argv) {
     cmd !== "update" &&
     cmd !== "list" &&
     cmd !== "validate" &&
-    cmd !== "doctor"
+    cmd !== "doctor" &&
+    cmd !== "repair"
   ) {
     console.error(`Unknown command: ${cmd}`);
     console.error(
-      "Usage: opc-kit [install|remove|update|list|validate|doctor] [kit-name|kit-path]",
+      "Usage: opc-kit [install|remove|update|list|validate|doctor|repair] [kit-name|kit-path]",
     );
     process.exit(2);
   }
@@ -520,6 +522,14 @@ async function main(argv) {
   }
 
   if (cmd === "install" || cmd === "update") {
+    await installKit(projectRoot, kitName, kitPlugin, cmd);
+  } else if (cmd === "repair") {
+    // Verify kit is installed before attempting repair
+    const installed = await loadInstalled(projectRoot);
+    if (!installed.kits.find((k) => k.name === kitName)) {
+      console.error(`Kit not installed: ${kitName}. Use 'opc-kit install ${kitName}' instead.`);
+      process.exit(1);
+    }
     await installKit(projectRoot, kitName, kitPlugin, cmd);
   } else if (cmd === "remove") {
     await removeKit(projectRoot, kitName);
