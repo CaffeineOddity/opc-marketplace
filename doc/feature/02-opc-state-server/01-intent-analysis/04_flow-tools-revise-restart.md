@@ -116,7 +116,7 @@ opc_flow_correct({action: "phase_reset", pipeline_id, sub_pipeline_id, target_ph
   → state-server 内部级联：
       · pipeline_id + sub_pipeline_id 命中的 sub-pipeline 回退到 target_phase
       · 走 git checkout + 版本号 +1（不快照倒退，保持线性可审计）—— 与
-        [phase_reset & sub-pipeline insertion](../../../../memory/project_phase_reset_and_insert.md)
+        [phase_reset & sub-pipeline insertion](../../05-opc-reflection-server/04-reflection-flow/05_phase-reset-interaction.md)
         策略一致
       · 该 phase 之后的所有 phase / node 状态清零，artifacts 移到 opc-logs/discarded/
   → 写 L1 user_interventions[]:
