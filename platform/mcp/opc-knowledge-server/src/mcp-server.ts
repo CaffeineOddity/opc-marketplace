@@ -139,6 +139,10 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
       return errorResult(`unknown tool: ${rawName}`);
     }
 
+    if (resolved.deprecated) {
+      emitDeprecation(rawName, resolved.tool);
+    }
+
     const toolName = resolved.tool;
 
     try {
@@ -157,6 +161,15 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
   const stdioTransport = new StdioServerTransport();
   await mcpServer.connect(stdioTransport);
   process.stderr.write("opc-knowledge-server READY\n");
+}
+
+const _deprecationWarned = new Set<string>();
+function emitDeprecation(legacyName: string, canonical: string) {
+  if (_deprecationWarned.has(legacyName)) return;
+  _deprecationWarned.add(legacyName);
+  process.stderr.write(
+    `[opc-knowledge-server] DEPRECATED: "${legacyName}" → use "${canonical}" instead\n`,
+  );
 }
 
 function errorResult(message: string) {

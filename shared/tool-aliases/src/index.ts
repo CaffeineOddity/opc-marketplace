@@ -36,6 +36,8 @@ export interface MappingTarget {
   tool: string;
   discriminator: { field: DiscriminatorField; value: string } | null;
   notes?: string;
+  /** True when the requested name is a legacy alias, not the canonical tool name. */
+  deprecated?: boolean;
 }
 
 /**
@@ -400,7 +402,10 @@ export function resolveAlias(toolName: string): MappingTarget | null {
     );
   }
   const direct = ALIAS_MAP[toolName];
-  if (direct) return direct;
+  if (direct) {
+    const isLegacy = direct.tool !== toolName || direct.discriminator !== null;
+    return { ...direct, deprecated: isLegacy };
+  }
   if ((NEW_TOOLS as readonly string[]).includes(toolName)) {
     return { tool: toolName, discriminator: null };
   }
