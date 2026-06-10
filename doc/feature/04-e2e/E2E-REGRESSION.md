@@ -19,7 +19,7 @@ doc (`01-walkthrough/`) prescribes, and lists deferred items.
 
 **Total: 13 e2e tests + 1 frozen fixture (27 calls / 28.4 KB).**
 
-All tests pass under `pnpm test` (265 tests across the full suite).
+All tests pass under `pnpm test` (500 tests across the full suite).
 
 ## 2. Tool-call tally — walkthrough doc vs. M14.g fixture
 
@@ -117,7 +117,7 @@ None for v1. M14 is complete:
 - ✅ Walkthrough doc parity: every prescribed step has corresponding test coverage or is explicitly deferred with rationale
 - ✅ L1 + L2 quality gates exercised positively and negatively
 - ✅ Reflection loop exercised (stage-5: opc_reflect_plan → opc_reflect_execute → opc_reflect_complete → opc_flow_reflect)
-- ✅ Corrections CRUD exercised (opc_corrections query/record/unlearn/reindex)
+- ✅ Corrections CRUD exercised (opc_corrections query/record/unlearn/reindex/promote/migrate/endorse/freeze/delete)
 - ✅ Last-phase semantics correctly route to opc_pipeline_lifecycle({action:"complete"}) (stage-6, stage-7)
 
 Open M15 (`#18`): 10 add-feature scenarios + 5 fix-bug scenarios.

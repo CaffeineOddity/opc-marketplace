@@ -180,9 +180,14 @@
 | `opc_corrections({action:"record"})` | `opc_corrections` | `action: "record"` |
 | `opc_corrections({action:"unlearn"})` | `opc_corrections` | `action: "unlearn"` |
 | `opc_corrections({action:"reindex"})` | `opc_corrections` | `action: "reindex"` |
+| —（新增）| `opc_corrections` | `action: "promote"`（L2→L3 晋升）|
+| —（新增）| `opc_corrections` | `action: "migrate"`（跨 step 迁移）|
+| —（新增）| `opc_corrections` | `action: "endorse"`（标记采纳）|
+| —（新增）| `opc_corrections` | `action: "freeze"`（冻结条目）|
+| —（新增）| `opc_corrections` | `action: "delete"`（软删除）|
 
 **新工具列表（1 个）**：
-1. `opc_corrections`（query/record/unlearn/reindex）
+1. `opc_corrections`（query/record/unlearn/reindex/promote/migrate/endorse/freeze/delete）
 
 ---
 
@@ -214,7 +219,7 @@
 | 反思方法类（M3/M4/M5/M6） | `method` | `"M3-cove"` / `"M4-critique"` / `"M5-debate"` / `"M6-tot"` |
 | 读取模式类（single/batch/list/search） | `mode` | 名词字符串 |
 | 结果状态类（success/failed/retry） | `status` | 与 node.status 枚举对齐 |
-| CRUD 类 | `action` | `"query"` / `"record"` / `"unlearn"` / `"reindex"` |
+| CRUD 类 | `action` | `"query"` / `"record"` / `"unlearn"` / `"reindex"` / `"promote"` / `"migrate"` / `"endorse"` / `"freeze"` / `"delete"` |
 
 **规则**：
 - 一个工具只有一个 discriminator 字段，禁止嵌套

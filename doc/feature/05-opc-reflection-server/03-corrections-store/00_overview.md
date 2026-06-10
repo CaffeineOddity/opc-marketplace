@@ -208,6 +208,8 @@ flowchart TD
     L3 -->|新项目冷启动| Seed[seed 注入新 workspace]
 ```
 
+`opc_corrections` 提供 9 个 action（query / record / unlearn / reindex / promote / migrate / endorse / freeze / delete），覆盖纠正条目的完整生命周期。详见 [07-tool-consolidation §2.1 corrections](../../07-tool-consolidation/00_overview.md#corrections4--1)。
+
 ---
 
 ## 九、子文档导航
