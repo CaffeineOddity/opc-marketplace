@@ -1,7 +1,12 @@
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
+
+import { atomicWrite, withFileLock } from "@opc/memory-store";
 
 import {
   buildIndex,
+  correctionsRoot,
   listAllCorrections,
   listCorrectionsByStep,
   loadCorrectionById,
@@ -23,6 +28,7 @@ export interface CorrectionsServerOptions {
   uuid?: () => string;
   perSectionCap?: number;
   hotnessCap?: number;
+  autoDecay?: boolean;
 }
 
 export class CorrectionsServerError extends Error {
@@ -94,6 +100,16 @@ export type CorrectionsActionResponse =
 
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
+const DECAY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DECAY_FACTOR = 0.9;
+const DECAY_FREEZE_THRESHOLD = 3;
+const DECAY_META_FILENAME = "decay-meta.json";
+
+interface DecayMeta {
+  last_decay_at: string;
+  decayed_count: number;
+  frozen_count: number;
+}
 
 export class CorrectionsServer {
   readonly root: string;
@@ -101,6 +117,7 @@ export class CorrectionsServer {
   private readonly uuid: () => string;
   private readonly perSectionCap: number;
   private readonly hotnessCap: number;
+  private readonly autoDecay: boolean;
 
   constructor(opts: CorrectionsServerOptions) {
     this.root = opts.root;
@@ -108,9 +125,19 @@ export class CorrectionsServer {
     this.uuid = opts.uuid ?? ((): string => randomUUID());
     this.perSectionCap = opts.perSectionCap ?? DEFAULT_PER_SECTION_CAP;
     this.hotnessCap = opts.hotnessCap ?? DEFAULT_HOTNESS_CAP;
+    this.autoDecay = opts.autoDecay ?? true;
   }
 
   async query(req: CorrectionsQueryRequest): Promise<CorrectionsQueryResponse> {
+    // Auto-trigger decay if due (non-blocking, errors swallowed)
+    if (this.autoDecay) {
+      try {
+        await this.runDecayIfDue();
+      } catch {
+        // Decay failure must not block query
+      }
+    }
+
     const projectCorrections = await listCorrectionsByStep(this.root, req.step);
 
     // If project has corrections for this step, use them (project-first per spec §五).
@@ -354,6 +381,78 @@ export class CorrectionsServer {
 
     const duration_ms = Math.round(performance.now() - start);
     return { indexed: filtered.length, duration_ms };
+  }
+
+  async runDecayIfDue(): Promise<DecayMeta | null> {
+    const meta = await this.loadDecayMeta();
+    const now = this.now();
+    const lastDecay = Date.parse(meta?.last_decay_at ?? "0");
+    if (!Number.isFinite(lastDecay)) return null;
+    if (now.getTime() - lastDecay < DECAY_INTERVAL_MS) return null;
+
+    return this.runDecay();
+  }
+
+  async runDecay(): Promise<DecayMeta> {
+    const all = await listAllCorrections(this.root);
+    let decayedCount = 0;
+    let frozenCount = 0;
+
+    for (const { correction: c } of all) {
+      if (c.frozen || c.deprecated_by) continue;
+
+      const newHotness = Math.round(c.hotness * DECAY_FACTOR * 10) / 10;
+      const shouldFreeze = newHotness < DECAY_FREEZE_THRESHOLD;
+
+      if (newHotness !== c.hotness || shouldFreeze) {
+        const updated: Correction = {
+          ...c,
+          hotness: newHotness,
+          frozen: c.frozen || shouldFreeze,
+          updated_at: this.now().toISOString(),
+        };
+        await saveCorrection(this.root, updated);
+        decayedCount += 1;
+        if (shouldFreeze) frozenCount += 1;
+      }
+    }
+
+    const meta: DecayMeta = {
+      last_decay_at: this.now().toISOString(),
+      decayed_count: decayedCount,
+      frozen_count: frozenCount,
+    };
+    await this.saveDecayMeta(meta);
+    return meta;
+  }
+
+  private decayMetaPath(): string {
+    return join(correctionsRoot(this.root), DECAY_META_FILENAME);
+  }
+
+  private async loadDecayMeta(): Promise<DecayMeta | null> {
+    try {
+      const raw = await readFile(this.decayMetaPath(), "utf8");
+      return JSON.parse(raw) as DecayMeta;
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code: string }).code === "ENOENT"
+      ) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  private async saveDecayMeta(meta: DecayMeta): Promise<void> {
+    const path = this.decayMetaPath();
+    await mkdir(dirname(path), { recursive: true });
+    await withFileLock(path, async () => {
+      await atomicWrite(path, `${JSON.stringify(meta, null, 2)}\n`);
+    });
   }
 
   async findSimilar(

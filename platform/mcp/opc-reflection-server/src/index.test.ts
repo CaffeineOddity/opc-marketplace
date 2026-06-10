@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -9,6 +9,7 @@ import {
   buildCorrection,
   checkFreshness,
   checkRoundsGuard,
+  correctionsRoot,
   CorrectionsServer,
   listAllCorrections,
   listCorrectionsByStep,
@@ -1273,6 +1274,7 @@ describe("CorrectionsServer", () => {
         let n = 0;
         return (): string => `uuid-${++n}`;
       })(),
+      autoDecay: false,
       ...(overrides?.perSectionCap !== undefined
         ? { perSectionCap: overrides.perSectionCap }
         : {}),
@@ -1682,6 +1684,92 @@ describe("CorrectionsServer", () => {
       expect(index).not.toBeNull();
       expect(index!.total).toBeGreaterThanOrEqual(2);
       expect(index!.entries.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("runDecay multiplies hotness by 0.9 and freezes below threshold", async () => {
+      const srv = new CorrectionsServer({
+        root,
+        now: (): Date => new Date("2026-06-17T12:00:00Z"), // 7 days later
+        autoDecay: true,
+      });
+
+      // Create corrections with varying hotness
+      await saveCorrection(root, {
+        id: "corr-hot",
+        step: "node_selection",
+        unit: "u",
+        section: "s",
+        subsection: "hot",
+        lesson: "high hotness",
+        applies_when: { keywords: ["a"] },
+        source: "distiller",
+        linked_reflection_artifacts: [],
+        linked_interventions: [],
+        hotness: 10,
+        frozen: false,
+        deprecated_by: null,
+        schema_version: 2,
+        created_at: "2026-06-10T00:00:00Z",
+        updated_at: "2026-06-10T00:00:00Z",
+        related: [],
+      });
+      await saveCorrection(root, {
+        id: "corr-cold",
+        step: "node_selection",
+        unit: "u",
+        section: "s",
+        subsection: "cold",
+        lesson: "low hotness",
+        applies_when: { keywords: ["b"] },
+        source: "distiller",
+        linked_reflection_artifacts: [],
+        linked_interventions: [],
+        hotness: 3, // 3 * 0.9 = 2.7 < 3 → frozen
+        frozen: false,
+        deprecated_by: null,
+        schema_version: 2,
+        created_at: "2026-06-10T00:00:00Z",
+        updated_at: "2026-06-10T00:00:00Z",
+        related: [],
+      });
+
+      const meta = await srv.runDecay();
+      expect(meta.decayed_count).toBe(2); // both had hotness changed
+      expect(meta.frozen_count).toBe(1); // only corr-cold fell below threshold
+
+      // Verify corr-hot: 10 * 0.9 = 9, not frozen
+      const { correction: hot } = await loadCorrectionById(root, "corr-hot");
+      expect(hot.hotness).toBe(9);
+      expect(hot.frozen).toBe(false);
+
+      // Verify corr-cold: 3 * 0.9 = 2.7 → frozen
+      const { correction: cold } = await loadCorrectionById(root, "corr-cold");
+      expect(cold.hotness).toBe(2.7);
+      expect(cold.frozen).toBe(true);
+    });
+
+    it("runDecayIfDue skips when within interval", async () => {
+      const srv = new CorrectionsServer({
+        root,
+        now: (): Date => new Date("2026-06-10T12:00:00Z"),
+        autoDecay: true,
+      });
+
+      // Write decay meta with a recent timestamp
+      const metaPath = join(correctionsRoot(root), "decay-meta.json");
+      await mkdir(dirname(metaPath), { recursive: true });
+      await writeFile(
+        metaPath,
+        JSON.stringify({
+          last_decay_at: "2026-06-10T00:00:00Z",
+          decayed_count: 0,
+          frozen_count: 0,
+        }),
+        "utf8",
+      );
+
+      const result = await srv.runDecayIfDue();
+      expect(result).toBeNull(); // 12 hours < 7 days
     });
 
     it("reindex with scope:step only indexes matching corrections", async () => {
