@@ -21,7 +21,9 @@ import {
   type QueryStatsResponse,
 } from "./query-stats.js";
 import {
+  loadUnlearnState,
   unlearnMethod,
+  type UnlearnEntry,
   type UnlearnMethodResponse,
   type UnlearnTrigger,
 } from "./unlearn.js";
@@ -57,6 +59,7 @@ export interface ReflectPlanResponse {
   next_step_hint: string;
   prior_corrections: string[];
   theory_docs: string[];
+  unlearned_methods: string[];
 }
 
 export interface ReflectCritiqueRequest {
@@ -257,13 +260,43 @@ export class ReflectionServer {
     if (typeof req.budget_disable_secondary === "boolean")
       planArgs.budget_disable_secondary = req.budget_disable_secondary;
     const plan: MethodPlan = pickMethods(planArgs);
+
+    // M19: consult unlearn state and filter out suppressed methods
+    const now = this.now();
+    const unlearnState = await loadUnlearnState(this.root);
+    const unlearnedMethods: string[] = [];
+    let primary = plan.primary;
+    let secondary = plan.secondary;
+
+    for (const entry of unlearnState.active) {
+      if (new Date(entry.expires_at) <= now) continue; // expired, skip
+      const matchesStep =
+        entry.step === null || entry.step === req.step_id;
+      if (!matchesStep) continue;
+
+      if (entry.method === primary) {
+        unlearnedMethods.push(
+          `primary:${primary} (${entry.reason}, expires ${entry.expires_at})`,
+        );
+        // Demote: promote secondary to primary if available and not also unlearned
+        primary = secondary ?? "validator";
+        secondary = null;
+      } else if (entry.method === secondary) {
+        unlearnedMethods.push(
+          `secondary:${secondary} (${entry.reason}, expires ${entry.expires_at})`,
+        );
+        secondary = null;
+      }
+    }
+
     return {
-      recommended_methods: { primary: plan.primary, secondary: plan.secondary },
+      recommended_methods: { primary, secondary },
       enhanced_prompts: plan.enhanced_prompts,
       max_rounds: plan.max_rounds,
       next_step_hint: plan.next_step_hint,
       prior_corrections: req.prior_corrections ? [req.prior_corrections] : [],
-      theory_docs: theoryDocsFor(plan.primary, plan.secondary),
+      theory_docs: theoryDocsFor(primary, secondary),
+      unlearned_methods: unlearnedMethods,
     };
   }
 

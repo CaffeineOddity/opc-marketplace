@@ -1023,6 +1023,151 @@ describe("M18.d unlearn_method circuit breaker", () => {
       }),
     ).rejects.toThrow(/duration_hours must be > 0/);
   });
+
+  describe("M19 plan() consults unlearn state before picking methods", () => {
+    let root: string;
+    let clock: { value: Date };
+    beforeEach(async () => {
+      root = await mkdtemp(join(tmpdir(), "rfsrv-m19-"));
+      clock = { value: new Date("2026-06-10T12:00:00Z") };
+    });
+    afterEach(async () => {
+      await rm(root, { recursive: true, force: true });
+    });
+
+    const newServer = (): ReflectionServer =>
+      new ReflectionServer({
+        root,
+        now: (): Date => clock.value,
+        uuid: ((): (() => string) => {
+          let n = 0;
+          return (): string => `uuid-${++n}`;
+        })(),
+      });
+
+    it("promotes secondary to primary when primary is unlearned", async () => {
+      const srv = newServer();
+      // P5: primary=critique, secondary=debate
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-1",
+        method: "critique",
+        step: "P5",
+        reason: "critique producing low-quality objections",
+      });
+
+      const resp = await srv.plan({
+        session_id: "s-m19-1",
+        step_id: "P5",
+      });
+
+      expect(resp.recommended_methods.primary).toBe("debate");
+      expect(resp.recommended_methods.secondary).toBeNull();
+      expect(resp.unlearned_methods).toHaveLength(1);
+      expect(resp.unlearned_methods[0]).toContain("critique");
+    });
+
+    it("falls back to validator when both primary and secondary are unlearned", async () => {
+      const srv = newServer();
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-2",
+        method: "critique",
+        step: "P5",
+        reason: "critique broken in this project",
+      });
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-2",
+        method: "debate",
+        step: "P5",
+        reason: "debate too slow",
+      });
+
+      const resp = await srv.plan({
+        session_id: "s-m19-2",
+        step_id: "P5",
+      });
+
+      expect(resp.recommended_methods.primary).toBe("validator");
+      expect(resp.recommended_methods.secondary).toBeNull();
+      expect(resp.unlearned_methods).toHaveLength(2);
+    });
+
+    it("global unlearn (step=null) suppresses method for any step", async () => {
+      const srv = newServer();
+      // Global unlearn on cove for all steps
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-3",
+        method: "cove",
+        reason: "cove unreliable across all steps",
+      });
+
+      // P1: primary=cove → should be suppressed
+      const resp = await srv.plan({
+        session_id: "s-m19-3",
+        step_id: "P1",
+      });
+
+      expect(resp.recommended_methods.primary).toBe("critique"); // secondary promoted
+      expect(resp.recommended_methods.secondary).toBeNull();
+      expect(resp.unlearned_methods).toHaveLength(1);
+      expect(resp.unlearned_methods[0]).toContain("cove");
+    });
+
+    it("expired unlearn entries do not affect method selection", async () => {
+      const srv = newServer();
+      // Unlearn with 1h TTL
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-4",
+        method: "critique",
+        step: "P5",
+        duration_hours: 1,
+        reason: "temporary suppression",
+      });
+
+      // Advance clock past expiry (1h + 1s)
+      clock.value = new Date("2026-06-10T13:00:01Z");
+
+      const resp = await srv.plan({
+        session_id: "s-m19-4",
+        step_id: "P5",
+      });
+
+      expect(resp.recommended_methods.primary).toBe("critique"); // restored
+      expect(resp.recommended_methods.secondary).toBe("debate");
+      expect(resp.unlearned_methods).toHaveLength(0);
+    });
+
+    it("step-specific unlearn only affects that step", async () => {
+      const srv = newServer();
+      await srv.admin({
+        action: "unlearn_method",
+        session_id: "s-m19-5",
+        method: "cove",
+        step: "P1",
+        reason: "cove bad for intent analysis",
+      });
+
+      // P1 should be affected
+      const respP1 = await srv.plan({
+        session_id: "s-m19-5",
+        step_id: "P1",
+      });
+      expect(respP1.recommended_methods.primary).toBe("critique");
+      expect(respP1.unlearned_methods).toHaveLength(1);
+
+      // P4 also uses cove primary but should NOT be affected
+      const respP4 = await srv.plan({
+        session_id: "s-m19-5",
+        step_id: "P4",
+      });
+      expect(respP4.recommended_methods.primary).toBe("cove");
+      expect(respP4.unlearned_methods).toHaveLength(0);
+    });
+  });
 });
 
 describe("M18.e on_demand reflection dispatcher", () => {
