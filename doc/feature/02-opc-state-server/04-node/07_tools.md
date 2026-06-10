@@ -2,7 +2,7 @@
 
 节点级 2 个工具完整规范。
 
-> **工具合并**：`opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish` 的 discriminator 分支（`status ∈ {completed, failed, retry}`）。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
+> **工具合并**：`opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish` 的 discriminator 分支（`status ∈ {success, failed, retry}`）。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 
@@ -11,7 +11,7 @@
 | # | 工具 | 说明 |
 |---|------|------|
 | 16 | `opc_node_start` | node 开始执行（含 Agent 可用性校验） |
-| 17 | `opc_node_finish` | node 完成/失败/重跑：`status ∈ {completed, failed, retry}` discriminator 路由 |
+| 17 | `opc_node_finish` | node 完成/失败/重跑：`status ∈ {success, failed, retry}` discriminator 路由 |
 
 ---
 
