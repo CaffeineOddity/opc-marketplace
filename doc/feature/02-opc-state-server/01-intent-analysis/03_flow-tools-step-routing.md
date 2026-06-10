@@ -7,27 +7,48 @@
 
 ## 步骤路由类工具
 
-本篇覆盖 **6 个步骤推进类工具**——它们按 reflection-server 的 evidence + V1-V5 validator 结果 / `intent` / `complexity` 把流程从一个步骤路由到下一个。完整工具速览见 [入口与生命周期篇 流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览)。
+本篇覆盖 **4 个步骤推进类工具**——它们按 reflection-server 的 evidence + V1-V5 validator 结果 / `intent` / `complexity` 把流程从一个步骤路由到下一个。完整工具速览见 [入口与生命周期篇 流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览m17g-后-7-工具)。
 
 > reflection-server 的 P1-P8 反思位点、evidence schema、V1-V5 + meta-validator、primary/secondary 方法表见 [05-opc-reflection-server 总览](../../05-opc-reflection-server/00_index.md)。
 
-| 工具 | 一句话职责 |
-|------|----------|
-| [`opc_intent_complete`](#opc_intent_complete) | 按 intent + P1 intent_evidence 路由：task → 分析；question/chat → 流程内部自动 complete |
-| [`opc_task_analysis_complete`](#opc_task_analysis_complete) | 按 P2 task_analysis_evidence + complexity + modify_unit_count 三路分流 |
-| [`opc_decomposition_complete`](#opc_decomposition_complete) | 按 P3 decomposition_evidence 路由：validator pass → 简报；fail → 反思 |
-| [`opc_brief_complete`](#opc_brief_complete) | 从 accumulated 推导 args，返回 next: opc_pipeline_create |
-| [`opc_flow_reflect`](#opc_flow_reflect) | 登记 reflection-server 已写盘的反思记录（按 `reflection_id` 索引），按 verdict 决定继续/跳出/ask_user |
-| [`opc_flow_user_reply`](#opc_flow_user_reply) | A3 闭环登记口：回灌用户对 ask_user 的答复，按 step_id 路由续上 |
-| [`opc_quick_dispatch`](#opc_quick_dispatch) | low 复杂度快速通道：返回 agent_hint + knowledge_context，流程自动 complete |
+| 工具 | discriminator | 一句话职责 |
+|------|------|----------|
+| [`opc_flow_step_complete`](#opc_flow_step_complete) | `step` ∈ {intent_analysis, task_analysis, task_decomposition, brief_generation} | 提交分析步骤产出 + evidence，按 V1-V5 + meta-validator + intent/complexity 路由到下一步 |
+| [`opc_flow_reflect`](#opc_flow_reflect) | — | 登记 reflection-server 已写盘的反思 artifact（按 `reflection_id`），按 verdict 决定继续/跳出/ask_user |
+| [`opc_flow_user_reply`](#opc_flow_user_reply) | — | A3 闭环登记口：回灌用户对 ask_user 的答复，按 step_id 路由续上 |
+| [`opc_quick_dispatch`](#opc_quick_dispatch) | — | low 复杂度快速通道：返回 agent_hint + knowledge_context，流程自动 complete |
+
+> Deprecated 别名映射：`opc_intent_complete` → `opc_flow_step_complete({step:"intent_analysis"})`；`opc_task_analysis_complete` → `({step:"task_analysis"})`；`opc_decomposition_complete` → `({step:"task_decomposition"})`；`opc_brief_complete` → `({step:"brief_generation"})`。完整映射见 [07-tool-consolidation §2.1 state-server flow](../../07-tool-consolidation/00_overview.md#state-server-flow14--7)。
 
 ---
 
-### opc_intent_complete
+### opc_flow_step_complete
 
-**职责**：按 intent + P1 intent_evidence 通过 reflection-server V1-V5 validator + meta-validator 路由到下一步；question/chat 时内部自动标记流程终结。
+**职责**：提交分析步骤产出，按 P1-P4 反思位点的 evidence + V1-V5 + meta-validator + intent/complexity 路由到下一步。`step` discriminator 决定 input schema 走哪个分支、走哪个反思位点。
 
-**输入**：`{intent, intent_evidence, reasoning}`，其中 `intent_evidence` schema 包含 `task_criteria_hits[]` / `chat_signals[]` / `user_quotes[]`（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+**Schema 速览**：
+
+```typescript
+{
+  name: "opc_flow_step_complete",
+  description: "提交流程步骤产出。step 字段决定走哪个分支：intent_analysis 收 intent + intent_evidence；task_analysis 收 analysis_result + task_analysis_evidence；task_decomposition 收 sub_pipelines + decomposition_evidence；brief_generation 收 brief_content。",
+  input_schema: {
+    type: "object",
+    required: ["step"],
+    properties: { step: { enum: ["intent_analysis", "task_analysis", "task_decomposition", "brief_generation"] } },
+    oneOf: [
+      { properties: { step: {const: "intent_analysis"}, intent: {...}, intent_evidence: {...}, reasoning: {type: "string"} } },
+      { properties: { step: {const: "task_analysis"}, analysis_result: {...}, task_analysis_evidence: {...} } },
+      { properties: { step: {const: "task_decomposition"}, sub_pipelines: {...}, execution_order: {...}, decomposition_evidence: {...} } },
+      { properties: { step: {const: "brief_generation"}, brief_content: {type: "string"}, brief_evidence: {...} } }
+    ]
+  }
+}
+```
+
+#### step=intent_analysis
+
+**输入**：`{step: "intent_analysis", intent, intent_evidence, reasoning}`，其中 `intent_evidence` schema 包含 `task_criteria_hits[]` / `chat_signals[]` / `user_quotes[]`（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
 > 本步骤走 reflection-server **P1 反思位点**，primary 方法 = M3 CoVe，secondary = M4 Critique。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
@@ -35,24 +56,20 @@
 
 | 入参 intent | V1-V5 + meta-validator 结果 | 返回的 next | 流程终结 |
 |------------|-----------|------------|---------|
-| `task` | pass + 无严重 objection | `{tool: "opc_task_analysis_complete"}` + prerequisites:[opc_knowledge_list] | 否 |
-| `task` | pass + 中等 objection | `{tool: "opc_task_analysis_complete"}` + step_instruction 提示向用户简短确认（附 reasoning_trace） | 否 |
+| `task` | pass + 无严重 objection | `{tool: "opc_flow_step_complete", args: {step: "task_analysis"}}` + prerequisites:[opc_knowledge_read({mode:"list"})] | 否 |
+| `task` | pass + 中等 objection | 同上 + step_instruction 提示向用户简短确认（附 reasoning_trace） | 否 |
 | `task` | fail 或 严重 objection | `{action: "reflect"}` + 进入 P1 反思（primary=M3 CoVe，secondary=M4 Critique）；rounds 耗尽 → ask_user | 否 |
-| `project_question` | pass | `{action: "respond_with_knowledge"}` + prerequisites:[opc_knowledge_search] | **是**（内部自动标记 flow-state.status=completed） |
+| `project_question` | pass | `{action: "respond_with_knowledge"}` + prerequisites:[opc_knowledge_read({mode:"search"})] | **是**（内部自动标记 flow-state.status=completed） |
 | `general_question` / `chat` | 任意 | `{done: true, action: "respond_normally"}` | **是**（同上） |
 
----
+#### step=task_analysis
 
-### opc_task_analysis_complete
-
-**职责**：按 P2 task_analysis_evidence 通过 reflection-server V1-V5 validator + meta-validator 结果 + complexity + modify_unit_count 三路分流到反思 / 拆分 / 简报 / 快速通道。
-
-**输入**：`{analysis_result, task_analysis_evidence}`，其中：
+**输入**：`{step: "task_analysis", analysis_result, task_analysis_evidence}`，其中：
 - `analysis_result.knowledge_plan: [{path, operation: "create"|"update"|"read"}]`
 - `analysis_result.phase_selection_rationale: string`（必填，写入 state.json.phase_plan.selection_rationale）
 - `task_analysis_evidence` schema 包含 `requirements[]` / `dependencies[]` / `risks[]` / `knowledge_plan` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
 
-> 本步骤走 reflection-server **P2 反思位点**，primary 方法 = M3 CoVe，secondary = M2 Reflexion。验证器与方法定义见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
+> 本步骤走 reflection-server **P2 反思位点**，primary 方法 = M3 CoVe，secondary = M2 Reflexion。
 
 **路由逻辑**：
 
@@ -71,17 +88,13 @@
 
 分支 2: 复杂度/拆分判定（仅 validator 通过或反思后到达）
   ├── complexity = low → 返回 opc_quick_dispatch 指令（处理后流程自动 complete）
-  ├── modify_unit_count ≥ 2 → 返回 task_decomposition 指令
-  └── modify_unit_count ≤ 1 → 返回 brief_generation 指令
+  ├── modify_unit_count ≥ 2 → 返回 opc_flow_step_complete({step:"task_decomposition"}) 指令
+  └── modify_unit_count ≤ 1 → 返回 opc_flow_step_complete({step:"brief_generation"}) 指令
 ```
 
----
+#### step=task_decomposition
 
-### opc_decomposition_complete
-
-**职责**：按 P3 decomposition_evidence 通过 reflection-server V1-V5 validator + meta-validator 路由：通过 → 简报；失败 → 反思。
-
-**输入**：`{sub_pipelines, execution_order, decomposition_evidence}`，其中 `decomposition_evidence` schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等（详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。
+**输入**：`{step: "task_decomposition", sub_pipelines, execution_order, decomposition_evidence}`，其中 `decomposition_evidence` schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等。
 
 > 本步骤走 reflection-server **P3 反思位点**，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 时启用）。
 
@@ -89,19 +102,15 @@
 
 | V1-V5 + meta-validator 结果 | 返回的 next | step_instruction |
 |------|--------|--------|
-| pass + 无严重 objection | brief_generation | "拆分方案 evidence 通过验证，开始生成 brief" |
-| pass + 中等 objection | brief_generation | "拆分方案 evidence 部分通过，展示方案 + reasoning_trace 后开始生成 brief" |
+| pass + 无严重 objection | `opc_flow_step_complete({step:"brief_generation"})` | "拆分方案 evidence 通过验证，开始生成 brief" |
+| pass + 中等 objection | 同上 | "拆分方案 evidence 部分通过，展示方案 + reasoning_trace 后开始生成 brief" |
 | fail 或 严重 objection | reflect | "拆分 evidence 未通过验证，进入 P3 反思（primary=M6 ToT，secondary=M5 Debate）；rounds 耗尽 → ask_user" |
 
----
+#### step=brief_generation
 
-### opc_brief_complete
+**输入**：`{step: "brief_generation", brief_content: string}`
 
-**职责**：从 `flow-state.json.accumulated` 推导 `opc_pipeline_create` 全部参数，返回预填的下一步指令。
-
-**输入**：`{brief_content: string}`
-
-**推导规则**：
+**推导规则**（从 `flow-state.json.accumulated` 推导 `opc_pipeline_create` 全部参数）：
 
 ```
 · description, tags, complexity, knowledge_unit, suggested_phases, scenario
@@ -300,7 +309,7 @@
   question_id: string,
   accumulated_updated: object,          // 实际写入的 patch（含 merge 后的全字段）
   flow_next: {
-    tool: 'opc_task_analysis_complete' | 'opc_phase_confirm' | ...,
+    tool: 'opc_flow_step_complete' | 'opc_phase_confirm' | ...,    // step_complete 含 step: "task_analysis" 等 discriminator
     args: object,                       // 含 _skip_reflection_once: true
     why: string
   }
@@ -357,8 +366,9 @@ opc_quick_dispatch({description, tags, knowledge_unit})
 
 ## 相关文档
 
-- [02_flow-tools-entry-lifecycle.md](02_flow-tools-entry-lifecycle.md) — 入口/启动/终结/恢复
-- [04_flow-tools-revise-restart.md](04_flow-tools-revise-restart.md) — 修订/重启 + 前置校验
-- [06_task-analysis.md](06_task-analysis.md) — task_analysis_complete 的方法论
-- [07_task-decomposition.md](07_task-decomposition.md) — decomposition_complete 的方法论
-- [08_brief-generation.md](08_brief-generation.md) — brief_complete 的方法论
+- [02_flow-tools-entry-lifecycle.md](02_flow-tools-entry-lifecycle.md) — 入口（`opc_flow_query`）+ 生命周期（`opc_flow_lifecycle`）
+- [04_flow-tools-revise-restart.md](04_flow-tools-revise-restart.md) — `opc_flow_correct`（revise / restart / phase_reset）+ 前置校验
+- [06_task-analysis.md](06_task-analysis.md) — `opc_flow_step_complete({step:"task_analysis"})` 的方法论
+- [07_task-decomposition.md](07_task-decomposition.md) — `opc_flow_step_complete({step:"task_decomposition"})` 的方法论
+- [08_brief-generation.md](08_brief-generation.md) — `opc_flow_step_complete({step:"brief_generation"})` 的方法论
+- [07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md#21-合并映射表54--28) — step discriminator 映射规范

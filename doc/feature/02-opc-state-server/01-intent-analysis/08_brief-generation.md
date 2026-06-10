@@ -7,19 +7,19 @@
 
 ## 八、工作单生成（方法论：prompts/brief-generation.md）
 
-仅 medium / high 时生成。`opc_task_analysis_complete`（无需拆分时）或 `opc_decomposition_complete`（拆分后）路由到 brief_generation 时返回模板指令：
+仅 medium / high 时生成。`opc_flow_step_complete({step:"task_analysis"})`（无需拆分时）或 `opc_flow_step_complete({step:"task_decomposition"})`（拆分后）路由到 brief_generation 时返回模板指令：
 
 ```json
 {
   "step": "brief_generation",
-  "step_instruction": "按 brief-generation.md 模板生成 brief markdown，可选收集 brief_evidence（覆盖度/约束完整性），提交给 opc_brief_complete。",
+  "step_instruction": "按 brief-generation.md 模板生成 brief markdown，可选收集 brief_evidence（覆盖度/约束完整性），提交给 opc_flow_step_complete({step:'brief_generation'})。",
   "methodology": {
     "docs": ["prompts/brief-generation.md"],
     "ref": "8.1 模板 + 8.2 生成规则 + 05-opc-reflection-server 二 brief_evidence schema",
     "summary": "8 个固定段落：描述/基本信息/范围/约束/阶段计划/关联知识/准入检查"
   },
   "schema": { "brief_content": "string (markdown)", "brief_evidence?": "..." },
-  "next": {"tool": "opc_brief_complete"}
+  "next": {"tool": "opc_flow_step_complete", "args": {"step": "brief_generation"}}
 }
 ```
 
@@ -65,7 +65,7 @@
 | payment/ | create | — | 全新 domain |
 
 ## 准入检查
-- [ ] 知识库 opc_knowledge_list 已执行
+- [ ] 知识库 opc_knowledge_read({mode:"list"}) 已执行
 - [ ] 知识库 opc_knowledge_open 已执行
 - [ ] 目标 unit 已创建
 - [ ] 用户约束已确认

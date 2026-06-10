@@ -7,28 +7,28 @@
 
 ## 六、任务分析（方法论：prompts/task-analysis.md）
 
-仅 intent = task 时触发。opc_intent_complete 返回的 step_instruction 提示先调 `opc_knowledge_list`，然后按方法论执行 7 步分析，最后调 `opc_task_analysis_complete` 提交结果。
+仅 intent = task 时触发。`opc_flow_step_complete({step:"intent_analysis"})` 返回的 step_instruction 提示先调 `opc_knowledge_read({mode:"list"})`，然后按方法论执行 7 步分析，最后调 `opc_flow_step_complete({step:"task_analysis"})` 提交结果。
 
 ### 6.1 触发流程
 
 ```
-opc_intent_complete({intent: "task", intent_evidence: {...}})
+opc_flow_step_complete({step: "intent_analysis", intent: "task", intent_evidence: {...}})
   ↓
 返回:
 {
   step: "task_analysis",
-  step_instruction: "先调 opc_knowledge_list() 获取已有 unit，然后按方法论做 7 步分析，并收集 task_analysis_evidence。",
+  step_instruction: "先调 opc_knowledge_read({mode:'list'}) 获取已有 unit，然后按方法论做 7 步分析，并收集 task_analysis_evidence。",
   methodology: {
     docs: ["prompts/task-analysis.md"],
     ref: "6.2 分析步骤①-⑦ + 05-opc-reflection-server 二 task_analysis_evidence schema",
     summary: "提炼描述→打标签→判复杂度→推荐阶段→提取知识→匹配 scenario→知识操作计划"
   },
   prerequisites: [
-    {tool: "opc_knowledge_list", why: "获取已有 unit 上下文"}
+    {tool: "opc_knowledge_read", args: {mode: "list"}, why: "获取已有 unit 上下文"}
   ],
   schema: { description, tags, complexity, suggested_phases, phase_selection_rationale,
             knowledge_unit, scenario, knowledge_plan, task_analysis_evidence },
-  next: {tool: "opc_task_analysis_complete"}
+  next: {tool: "opc_flow_step_complete", args: {step: "task_analysis"}}
 }
 ```
 
@@ -92,7 +92,7 @@ opc_intent_complete({intent: "task", intent_evidence: {...}})
 
 | 维度 | low | medium | high |
 |------|-----|--------|------|
-| 执行路径 | 快速通道：opc_task_analysis_complete 路由 `action: quick_dispatch`，无管线/无 phases/无 state | 完整管线 | 完整管线 |
+| 执行路径 | 快速通道：`opc_flow_step_complete({step:"task_analysis"})` 路由到 `opc_quick_dispatch`，无管线/无 phases/无 state | 完整管线 | 完整管线 |
 | 反思预算 | — | rounds-guard 中等（默认 2-3 轮） | rounds-guard 宽松（默认 3-5 轮） |
 | 阶段推进 | — | auto_advance 严格判定（含 V1-V5 通过条件） | 每阶段需用户确认 |
 | brief | 不生成 | 标准版 | 详细版 |
@@ -102,7 +102,7 @@ opc_intent_complete({intent: "task", intent_evidence: {...}})
 
 ### 6.4 Evidence 收集与反思
 
-任务分析完成后，Claude 收集 `task_analysis_evidence` 并随 `opc_task_analysis_complete` 提交给 reflection-server P2 验证。complexity 判断正确性尤其关键——它决定了后续管线的执行路径、反思预算和推进策略；P2 evidence 必须包含支撑 complexity 判定的具体信号（如 risks[] / dependencies[]），由 V1-V5 + meta-validator 检查。
+任务分析完成后，Claude 收集 `task_analysis_evidence` 并随 `opc_flow_step_complete({step:"task_analysis"})` 提交给 reflection-server P2 验证。complexity 判断正确性尤其关键——它决定了后续管线的执行路径、反思预算和推进策略；P2 evidence 必须包含支撑 complexity 判定的具体信号（如 risks[] / dependencies[]），由 V1-V5 + meta-validator 检查。
 
 > Evidence schema 完整字段、V1-V5 验证规则、primary/secondary 方法选择见 [05-opc-reflection-server/02-server-design/00_overview.md 二/三](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema) + [01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
@@ -117,7 +117,7 @@ opc_intent_complete({intent: "task", intent_evidence: {...}})
 | `phase_selection_rationale` | 阶段选择理由，对应 [phase_plan.selection_rationale](../02-pipeline/04_state-json.md#六phase_plan-校验规则deterministic) |
 | `complexity_signals` | 支撑 complexity 判定的具体信号（两问法答案 + 加权依据） |
 
-**路由（由 opc_task_analysis_complete 按 V1-V5 + meta-validator 结果分流，详见 [03_flow-tools-step-routing.md opc_task_analysis_complete](03_flow-tools-step-routing.md#opc_task_analysis_complete)）：**
+**路由（由 `opc_flow_step_complete({step:"task_analysis"})` 按 V1-V5 + meta-validator 结果分流，详见 [03_flow-tools-step-routing.md opc_flow_step_complete (step=task_analysis)](03_flow-tools-step-routing.md#opc_flow_step_complete)）：**
 
 | validator 结果 | 行为 |
 |----------------|------|
@@ -129,13 +129,13 @@ opc_intent_complete({intent: "task", intent_evidence: {...}})
 
 | | 任务分析反思 (P2) | 节点选择反思 (P5) |
 |---|---|---|
-| 触发位点 | opc_task_analysis_complete → opc_flow_reflect | opc_phase_start 之后、opc_phase_confirm 之前 |
+| 触发位点 | `opc_flow_step_complete({step:"task_analysis"})` → opc_flow_reflect | opc_phase_start 之后、opc_phase_confirm 之前 |
 | 持久化位置 | flow-state.json.reflection_log | state.json.phases[].reflection_log |
 | primary 方法 | M3 CoVe | M4 Critique |
 | secondary 方法 | M2 Reflexion | M5 Debate（≥ medium 启用） |
-| 调整方式 | 修正分析结论（如升级 complexity） | `opc_phase_adjust` 增删节点 |
+| 调整方式 | 修正分析结论（如升级 complexity） | 反思循环自我修正（运行时增删 node 走 `opc_pipeline_lifecycle({action:"replan"})`） |
 
-**自省报告格式（提交给 opc_task_analysis_complete，evidence_artifact 由 reflection-server 单独存储；analysis_evidence_ref 写入 flow-state.accumulated）：**
+**自省报告格式（提交给 `opc_flow_step_complete({step:"task_analysis"})`，evidence_artifact 由 reflection-server 单独存储；analysis_evidence_ref 写入 flow-state.accumulated）：**
 
 ```json
 {
@@ -180,10 +180,10 @@ opc_intent_complete({intent: "task", intent_evidence: {...}})
 
 | 指令 | 效果 |
 |------|------|
-| "复杂度应该是 high" | Claude 调 `opc_flow_revise(field: "complexity", value: "high")`（会清除 phase_selection_rationale + analysis_evidence_ref，回到 task_analysis 重做） |
+| "复杂度应该是 high" | Claude 调 `opc_flow_correct({action:"revise", field: "complexity", value: "high"})`（会清除 phase_selection_rationale + analysis_evidence_ref，回到 task_analysis 重做） |
 | "加上 03-design 阶段" | 同上，field: suggested_phases |
-| "重新分析" / "重新评估" | Claude 调 `opc_flow_restart(from_step: "task_analysis")` |
-| "就这样" / "继续" | Claude 推进到下一步（调用 opc_task_analysis_complete 返回中的 next.tool） |
+| "重新分析" / "重新评估" | Claude 调 `opc_flow_correct({action:"restart", from_step: "task_analysis"})` |
+| "就这样" / "继续" | Claude 推进到下一步（调用 `opc_flow_step_complete({step:"task_analysis"})` 返回中的 next.tool） |
 
 ---
 

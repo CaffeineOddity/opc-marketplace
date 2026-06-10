@@ -5,12 +5,12 @@
 
 ---
 
-## 九、管线创建（opc_decomposition_complete 路由触发 opc_pipeline_create）
+## 九、管线创建（`opc_flow_step_complete({step:"brief_generation"})` 路由触发 opc_pipeline_create）
 
-opc_decomposition_complete `opc_brief_complete` 收到 brief 内容后，**不是 Claude 自由决定下一步**——而是 opc_decomposition_complete 路由返回里直接预填 `opc_pipeline_create` 的全部参数（从 flow-state.json 中累积的分析结果取出）：
+`opc_flow_step_complete({step:"brief_generation"})` 收到 brief 内容后，**不是 Claude 自由决定下一步**——而是路由返回里直接预填 `opc_pipeline_create` 的全部参数（从 flow-state.json 中累积的分析结果取出）：
 
 ```json
-// opc_decomposition_complete 返回
+// opc_flow_step_complete({step:"brief_generation"}) 返回
 {
   "step": "brief_completed",
   "step_instruction": "下一步创建管线，参数已预填，直接调用 next.tool 即可。",
@@ -98,7 +98,7 @@ Claude 按 `pipeline_create` 返回的 flow_next 指引调用 `opc_knowledge_ope
 
 知识初始化完成后，Claude 进入阶段执行循环。详细规范见 [阶段](../03-phase/00_overview.md) 和 [节点](../04-node/00_overview.md)。阶段层工具也按相同模式返回 `flow_next` 指引下一步。
 
-节点选择反思循环也通过 `opc_flow_reflect` 持久化（与任务分析反思共用 opc_brief_complete 工具），完整日志写入 `flow-state.json`。
+节点选择反思循环也通过 `opc_flow_reflect` 持久化（与任务分析反思共用同一登记口），完整日志写入 `flow-state.json`。
 
 ---
 

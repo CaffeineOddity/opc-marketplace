@@ -26,21 +26,21 @@ sequenceDiagram
     C->>F: opc_flow_query()
     F-->>C: active=false<br/>+ suggested_actions<br/>+ methodology.docs
 
-    C->>F: opc_flow_start({user_message})
+    C->>F: opc_flow_lifecycle({action: "start", user_message})
     F-->>C: intent_analysis 指令
 
     C->>P: Read intent-analysis.md (按需)
     P-->>C: 4 种意图判定规则
     C->>C: 意图识别<br/>intent=task + intent_evidence
-    C->>F: opc_intent_complete({intent, intent_evidence, reasoning})
+    C->>F: opc_flow_step_complete({step: "intent_analysis", intent, intent_evidence, reasoning})
     F-->>C: 路由 task 分支<br/>→ task_analysis 指令
 
-    C->>K: opc_knowledge_list()
+    C->>K: opc_knowledge_read({mode: "list"})
     K-->>C: 已存在知识单元清单
     C->>C: 7 步任务分析<br/>+ 收集 task_analysis_evidence
 
     alt V1-V5 全 pass + 无严重 objection
-        C->>F: opc_task_analysis_complete
+        C->>F: opc_flow_step_complete({step: "task_analysis"})
     else V1-V5 fail 或 严重 objection
         C->>F: opc_flow_reflect()
         F-->>C: 反思指令（M3 CoVe / M2 Reflexion）
@@ -51,11 +51,11 @@ sequenceDiagram
 
     opt 需要拆分
         C->>C: 子管线拆分推导
-        C->>F: opc_decomposition_complete
+        C->>F: opc_flow_step_complete({step: "task_decomposition"})
     end
 
     C->>C: 按模板生成工作单
-    C->>F: opc_brief_complete({brief_content})
+    C->>F: opc_flow_step_complete({step: "brief_generation", brief_content})
     F-->>C: next: opc_pipeline_create<br/>(预填全部参数)
 
     C->>F: opc_pipeline_create({...})
@@ -79,7 +79,7 @@ flowchart TD
     Active -->|true| Resume[按 9 种<br/>suggested_actions<br/>选择路径]
     Resume --> EndR([继续已有流程])
 
-    Active -->|false| FlowStart[opc_flow_start]
+    Active -->|false| FlowStart["opc_flow_lifecycle({action: start})"]
     FlowStart --> Intent[意图识别<br/>+ 收集 intent_evidence]
     Intent --> IType{intent 类型}
 
@@ -122,19 +122,19 @@ flowchart TD
 | 子文档 | 内容 |
 |------|------|
 | [01_hook-architecture.md](01_hook-architecture.md) | Hook 触发机制、混合架构（MCP 状态机 + 方法论文档）、文档归属、Hook 脚本高级形态 |
-| [02_flow-tools-entry-lifecycle.md](02_flow-tools-entry-lifecycle.md) | **流程工具 · 入口与生命周期**（query / start / abort / recover，含总览表） |
-| [03_flow-tools-step-routing.md](03_flow-tools-step-routing.md) | **流程工具 · 步骤路由**（intent / task_analysis / decomposition / brief / reflect / quick_dispatch） |
-| [04_flow-tools-revise-restart.md](04_flow-tools-revise-restart.md) | **流程工具 · 修订与重启**（revise / restart + 调用前置校验） |
+| [02_flow-tools-entry-lifecycle.md](02_flow-tools-entry-lifecycle.md) | **流程工具 · 入口与生命周期**（`opc_flow_query` + `opc_flow_lifecycle`，含 7 工具总览表） |
+| [03_flow-tools-step-routing.md](03_flow-tools-step-routing.md) | **流程工具 · 步骤路由**（`opc_flow_step_complete` 4 个 step / `opc_flow_reflect` / `opc_flow_user_reply` / `opc_quick_dispatch`） |
+| [04_flow-tools-revise-restart.md](04_flow-tools-revise-restart.md) | **流程工具 · 纠错**（`opc_flow_correct` 3 个 action + 调用前置校验） |
 | [10_flow-state-schema.md](10_flow-state-schema.md) | `flow-state.json` 完整 schema + 字段读写分配 |
 
 ### 流程步骤（按执行顺序）
 
 | 子文档 | 内容 | 涉及工具 |
 |------|------|------|
-| [05_intent-recognition.md](05_intent-recognition.md) | 意图识别（4 种意图）+ 置信度阈值 + 纠错指令 | `opc_flow_query` / `opc_flow_start` / `opc_intent_complete` |
-| [06_task-analysis.md](06_task-analysis.md) | 7 步任务分析 + 5 维度自省评估 + 反思循环 | `opc_task_analysis_complete` / `opc_flow_reflect` |
-| [07_task-decomposition.md](07_task-decomposition.md) | 子管线拆分原则、依赖推导、4 维度自省 | `opc_decomposition_complete` |
-| [08_brief-generation.md](08_brief-generation.md) | 工作单模板与生成规则 | `opc_brief_complete` |
+| [05_intent-recognition.md](05_intent-recognition.md) | 意图识别（4 种意图）+ 置信度阈值 + 纠错指令 | `opc_flow_query` / `opc_flow_lifecycle({action:"start"})` / `opc_flow_step_complete({step:"intent_analysis"})` |
+| [06_task-analysis.md](06_task-analysis.md) | 7 步任务分析 + 5 维度自省评估 + 反思循环 | `opc_flow_step_complete({step:"task_analysis"})` / `opc_flow_reflect` |
+| [07_task-decomposition.md](07_task-decomposition.md) | 子管线拆分原则、依赖推导、4 维度自省 | `opc_flow_step_complete({step:"task_decomposition"})` |
+| [08_brief-generation.md](08_brief-generation.md) | 工作单模板与生成规则 | `opc_flow_step_complete({step:"brief_generation"})` |
 | [09_pipeline-creation.md](09_pipeline-creation.md) | 管线创建、知识初始化、阶段执行循环入口 | `opc_pipeline_create` → `opc_knowledge_open` → `opc_phase_start` |
 
 ### 参考与示例

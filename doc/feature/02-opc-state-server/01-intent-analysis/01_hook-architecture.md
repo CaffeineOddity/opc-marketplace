@@ -33,7 +33,7 @@ opc-orchestrator 插件通过 `UserPromptSubmit` hook 注入一行**事实查询
 - **Hook 极简化**：永远只输出一行提示，不读文件、不拼快照、不做判断
 - **事实查询统一入口**：`opc_flow_query` 是流程状态的唯一事实源，返回快照 + methodology + suggested_actions
 - **决策权归 Claude**：query 提供候选清单，最终走哪条路由由 LLM 判断
-- **工具内部强制校验**：`opc_flow_start` / `opc_flow_*` 都内置 pid + status 校验，即使 Claude 误判也能被工具拒绝
+- **工具内部强制校验**：`opc_flow_lifecycle({action:"start"})` / `opc_flow_*` 都内置 pid + status 校验，即使 Claude 误判也能被工具拒绝
 - **owner.pid 是真实状态判据**：与 `pipeline-plan.json` 的 owner 字段对齐，支持跨 session 孤儿检测
 
 ### 1.2 Session 启动
@@ -53,7 +53,7 @@ session_id = "sess-" + <claude_code_pid> + "-" + <started_at_unix_ts>
 
 **为什么带 ts**：pid 会被系统复用，单纯 pid 在旧 session 残留时可能撞车；附加 unix ts 后撞车概率近 0。
 
-**owner.pid 探活**：跨 session 恢复时（旧 Claude Code 崩溃 / 关 terminal 重开）用 `kill(owner.pid, 0)` 探活，dead → 列入 orphan 建议 `opc_flow_recover`；alive 但非当前 pid → 另一活跃实例，跳过。详见 [06-host-contract/00_overview.md 2.1–2.3](../../06-host-contract/00_overview.md#21-c1session_id-派生规则)。
+**owner.pid 探活**：跨 session 恢复时（旧 Claude Code 崩溃 / 关 terminal 重开）用 `kill(owner.pid, 0)` 探活，dead → 列入 orphan 建议 `opc_flow_lifecycle({action:"recover"})`；alive 但非当前 pid → 另一活跃实例，跳过。详见 [06-host-contract/00_overview.md 2.1–2.3](../../06-host-contract/00_overview.md#21-c1session_id-派生规则)。
 
 > **HTTP/SSE 模式 fallback**：MCP server 不在 Claude Code 的进程子树中时 `process.ppid` 失效，由 Claude 在首次调 `opc_flow_query()` 时显式传 `{claude_pid, claude_started_at}` 参数。详见 [06-host-contract/00_overview.md 2.3 C2](../../06-host-contract/00_overview.md#23-c2mcp-server-拿到-claude-code-pid)。
 

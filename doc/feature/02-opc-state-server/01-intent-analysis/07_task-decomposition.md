@@ -9,32 +9,32 @@
 
 ### 7.1 触发条件
 
-`opc_task_analysis_complete` 检测到 analysis_result 中需要**修改**的 unit 数量 ≥ 2 时，路由返回拆分指令：
+`opc_flow_step_complete({step:"task_analysis"})` 检测到 analysis_result 中需要**修改**的 unit 数量 ≥ 2 时，路由返回拆分指令：
 
 ```json
 {
   "step": "task_decomposition",
-  "step_instruction": "按方法论执行拆分分析，收集 decomposition_evidence，提交给 opc_decomposition_complete。",
+  "step_instruction": "按方法论执行拆分分析，收集 decomposition_evidence，提交给 opc_flow_step_complete({step:'task_decomposition'})。",
   "methodology": {
     "docs": ["prompts/task-decomposition.md"],
     "ref": "7.2 拆分原则 + 05-opc-reflection-server 二 decomposition_evidence schema",
     "summary": "按领域边界拆，独立的拆开，紧密耦合的合并，通过 _refs 推导依赖"
   },
   "schema": { sub_pipelines, execution_order, decomposition_evidence },
-  "next": {"tool": "opc_decomposition_complete"}
+  "next": {"tool": "opc_flow_step_complete", "args": {"step": "task_decomposition"}}
 }
 ```
 
 > 本步骤走 reflection-server **P3 反思位点**，提交 `decomposition_evidence`（schema 包含 `boundary_rationale[]` / `dependency_graph` / `unit_isolation_check[]` 等，详见 [05-opc-reflection-server/02-server-design/00_overview.md 二](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)）。路由由 V1-V5 验证器 + meta-validator 输出，primary 方法 = M6 ToT（探索多种切分方案），secondary = M5 Debate（complexity ≥ medium 启用），详见 [05-opc-reflection-server/01-method-theory/00_overview.md 五](../../05-opc-reflection-server/01-method-theory/00_overview.md#五step--方法-选择决策表primary--secondary)。
 
-修改数 = 1 时跳过：opc_task_analysis_complete 直接路由到 brief_generation。
+修改数 = 1 时跳过：`opc_flow_step_complete({step:"task_analysis"})` 直接路由到 brief_generation。
 
 ```
 修改数 = 1：跳过拆分
   → 例："给用户认证加个短信验证" → user-auth(update) + notification(read)
   → notification 只读 → 单管线
 
-修改数 ≥ 2：opc_task_analysis_complete 路由到 task_decomposition
+修改数 ≥ 2：opc_flow_step_complete({step:"task_analysis"}) 路由到 task_decomposition
   → 修改的 unit 之间互相 _refs → 合并为一条子管线
   → 修改的 unit 之间独立 → 拆分
 ```
@@ -66,7 +66,7 @@ order._refs → [cart, user-center]
   → order+payment 子管线 blocked_by: [cart 子管线, user-center 子管线]
 ```
 
-### 7.3 输出格式（提交给 opc_decomposition_complete）
+### 7.3 输出格式（提交给 `opc_flow_step_complete({step:"task_decomposition"})`）
 
 ```json
 {
@@ -98,9 +98,9 @@ order._refs → [cart, user-center]
 }
 ```
 
-### 7.4 路由（由 opc_decomposition_complete 按 V1-V5 + meta-validator 结果分流）
+### 7.4 路由（由 `opc_flow_step_complete({step:"task_decomposition"})` 按 V1-V5 + meta-validator 结果分流）
 
-详见 [03_flow-tools-step-routing.md opc_decomposition_complete](03_flow-tools-step-routing.md#opc_decomposition_complete)。
+详见 [03_flow-tools-step-routing.md opc_flow_step_complete (step=task_decomposition)](03_flow-tools-step-routing.md#opc_flow_step_complete)。
 
 | validator 结果 | 路由行为 | 典型场景 |
 |----------------|---------|---------|
@@ -124,9 +124,9 @@ order._refs → [cart, user-center]
 
 | 指令 | 效果 |
 |------|------|
-| "调整拆分" / "修改子管线" | Claude 调 `opc_flow_restart(from_step: "task_decomposition")` |
-| "合并 sub-1 和 sub-2" | Claude 调 `opc_flow_revise(field: "sub_pipelines", merge: ["sub-1", "sub-2"])` |
-| "不用拆分了" | Claude 调 `opc_flow_revise(field: "decomposition", value: null)` 降级单管线 |
+| "调整拆分" / "修改子管线" | Claude 调 `opc_flow_correct({action:"restart", from_step: "task_decomposition"})` |
+| "合并 sub-1 和 sub-2" | Claude 调 `opc_flow_correct({action:"revise", field: "sub_pipelines", merge: ["sub-1", "sub-2"]})` |
+| "不用拆分了" | Claude 调 `opc_flow_correct({action:"revise", field: "decomposition", value: null})` 降级单管线 |
 | "就这样" / "继续" | Claude 推进到 brief（next.tool） |
 
 ---

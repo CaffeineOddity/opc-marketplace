@@ -58,9 +58,9 @@
   "history": [
     {
       "step": "intent_analysis",
-      "tool": "opc_intent_complete",
-      "input": {"intent": "task", "intent_evidence": {"task_criteria_hits": [...]}},
-      "output": {"next": {"tool": "opc_task_analysis_complete"}},
+      "tool": "opc_flow_step_complete",
+      "input": {"step": "intent_analysis", "intent": "task", "intent_evidence": {"task_criteria_hits": [...]}},
+      "output": {"next": {"tool": "opc_flow_step_complete", "args": {"step": "task_analysis"}}},
       "at": "2026-06-08T10:01:00Z"
     }
   ],
@@ -161,24 +161,24 @@
 
 | 字段 | 写入工具 | 读取工具 |
 |------|---------|---------|
-| `status` | opc_flow_start/opc_flow_abort/opc_quick_dispatch/opc_intent_complete(终结分支) | opc_flow_query, 所有流程工具的前置校验 |
-| `owner` | opc_flow_start/opc_flow_recover | opc_flow_query, 所有流程工具的 pid 校验 |
+| `status` | `opc_flow_lifecycle({action:"start"/"abort"})` / `opc_quick_dispatch` / `opc_flow_step_complete({step:"intent_analysis"})` (终结分支) | opc_flow_query, 所有流程工具的前置校验 |
+| `owner` | `opc_flow_lifecycle({action:"start"/"recover"})` | opc_flow_query, 所有流程工具的 pid 校验 |
 | `current_step` | 所有非入口流程工具 + 阶段层工具 | opc_flow_query, 所有流程工具的 expected_steps 校验 |
-| `user_message_history` | opc_flow_start/opc_flow_restart (additional_input) | opc_flow_query, opc_task_analysis_complete |
-| `accumulated.intent` | opc_intent_complete | 推进类工具, opc_flow_revise |
-| `accumulated.analysis_result` | opc_task_analysis_complete | opc_decomposition_complete, opc_brief_complete, opc_flow_revise, opc_flow_restart |
-| `accumulated.*_evidence_ref` | 对应 `opc_*_complete` 工具，指向 reflection-server 日志行 | opc_flow_query, opc_reflect_explain |
-| `accumulated.decomposition_result` | opc_decomposition_complete | opc_brief_complete |
-| `accumulated.brief_content` | opc_brief_complete | opc_brief_complete (推导 pipeline_create args) |
+| `user_message_history` | `opc_flow_lifecycle({action:"start"})` / `opc_flow_correct({action:"restart", additional_input})` | opc_flow_query, `opc_flow_step_complete({step:"task_analysis"})` |
+| `accumulated.intent` | `opc_flow_step_complete({step:"intent_analysis"})` | 推进类工具, `opc_flow_correct({action:"revise"})` |
+| `accumulated.analysis_result` | `opc_flow_step_complete({step:"task_analysis"})` | `opc_flow_step_complete({step:"task_decomposition"/"brief_generation"})`, `opc_flow_correct({action:"revise"/"restart"})` |
+| `accumulated.*_evidence_ref` | 对应 `opc_flow_step_complete` 工具，指向 reflection-server 日志行 | opc_flow_query, `opc_reflect_admin({action:"explain"})` |
+| `accumulated.decomposition_result` | `opc_flow_step_complete({step:"task_decomposition"})` | `opc_flow_step_complete({step:"brief_generation"})` |
+| `accumulated.brief_content` | `opc_flow_step_complete({step:"brief_generation"})` | `opc_flow_step_complete({step:"brief_generation"})` (推导 pipeline_create args) |
 | `history` | 所有流程工具（追加） | opc_flow_query (摘要展示) |
-| `reflection_log` | opc_flow_reflect / opc_reflect_*_complete（写入 evidence_diff + validator_result） | opc_flow_query, opc_task_analysis_complete, opc_reflect_explain |
-| `pending_reflections` | opc_flow_reflect (登记/移除)；reflection-server 通过 `opc_reflect_*_complete` 返回值带入后由 state-server 写入 | 所有受 reflection-registry-guard 保护的写工具（[完整清单见 06_call-sequence-contract.md 七 防御 3](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#受-reflection-registry-guard-保护的工具清单唯一真相源)）；opc_flow_query（清理过期） |
+| `reflection_log` | opc_flow_reflect / `opc_reflect_complete`（写入 evidence_diff + validator_result） | opc_flow_query, `opc_flow_step_complete({step:"task_analysis"})`, `opc_reflect_admin({action:"explain"})` |
+| `pending_reflections` | opc_flow_reflect (登记/移除)；reflection-server 通过 `opc_reflect_complete` 返回值带入后由 state-server 写入 | 所有受 reflection-registry-guard 保护的写工具（[完整清单见 06_call-sequence-contract.md 七 防御 3](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md#受-reflection-registry-guard-保护的工具清单唯一真相源)）；opc_flow_query（清理过期） |
 | `pending_user_question` | opc_flow_reflect (rounds_exceeded 时写入)；opc_flow_user_reply (回灌后清空 null)；opc_flow_query (清理过期) | 所有受 pending-question-guard 保护的写工具（与 reflection-registry-guard 同清单，详见 06 八·补）|
-| `user_interventions` | opc_flow_user_reply（A3 闭环写入，trigger=ask_user_rounds_exceeded）；opc_flow_revise / opc_flow_restart / opc_phase_reset（用户主动纠错时写入对应 trigger） | opc_reflect_record_interventions（pipeline_complete 时 distiller 读取提炼到 L2 corrections） |
-| `pipeline_id` | opc_brief_complete (调 opc_pipeline_create 后)、阶段层工具 | opc_flow_query, opc_flow_abort/opc_flow_recover |
-| `current_pipeline_pointer` | `opc_phase_start` / `opc_phase_confirm` / `opc_node_start` / `opc_node_complete` / `opc_phase_complete` | opc_flow_query, opc_flow_recover |
+| `user_interventions` | opc_flow_user_reply（A3 闭环写入，trigger=ask_user_rounds_exceeded）；`opc_flow_correct({action:"revise"/"restart"/"phase_reset"})`（用户主动纠错时写入对应 trigger） | `opc_reflect_admin({action:"record_interventions"})`（pipeline_complete 时 distiller 读取提炼到 L2 corrections） |
+| `pipeline_id` | `opc_flow_step_complete({step:"brief_generation"})` (调 opc_pipeline_create 后)、阶段层工具 | opc_flow_query, `opc_flow_lifecycle({action:"abort"/"recover"})` |
+| `current_pipeline_pointer` | `opc_phase_start` / `opc_phase_confirm` / `opc_node_start` / `opc_node_finish({status:"success"})` / `opc_phase_complete` | opc_flow_query, `opc_flow_lifecycle({action:"recover"})` |
 
-阶段/节点层工具不属于流程层，但每次调用都会更新 `current_pipeline_pointer` + `last_heartbeat_at`，确保 crash 后 opc_flow_recover 能从精确位置恢复。
+阶段/节点层工具不属于流程层，但每次调用都会更新 `current_pipeline_pointer` + `last_heartbeat_at`，确保 crash 后 `opc_flow_lifecycle({action:"recover"})` 能从精确位置恢复。
 
 > **evidence_ref vs confidence**：本 schema 不存 `confidence: number` 字段。所有 step 的「质量判定」由 reflection-server 的 evidence artifact + V1-V5 validator 决定，flow-state.json 仅保留指向 `opc-logs/reflection/<pipeline_id>/<step>.jsonl` 的引用（`*_evidence_ref`）。reflection_log[].evidence_diff 记录每轮反思后 artifact 的字段变化，供 `opc_reflect_explain` 还原 reasoning_trace。详见 [05-opc-reflection-server/02-server-design/00_overview.md 二 Evidence Schema](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 

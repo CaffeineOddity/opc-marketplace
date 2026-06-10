@@ -13,24 +13,24 @@
   ▼ UserPromptSubmit hook → "先调 opc_flow_query"
 Claude → opc_flow_query()
   │
-  ▼ opc_flow_query 返回 active=false + suggested_actions (含 opc_flow_start) + methodology
+  ▼ opc_flow_query 返回 active=false + suggested_actions (含 opc_flow_lifecycle({action:"start"})) + methodology
 Claude 判断: 任务消息 → 按 suggested_actions[0] 调用
-Claude → opc_flow_start({user_message: "..."})
+Claude → opc_flow_lifecycle({action: "start", user_message: "..."})
   │
-  ▼ opc_flow_start 返回 intent_analysis 指令 + methodology
+  ▼ 返回 intent_analysis 指令 + methodology
 Claude → 按方法论判断 → intent: task, intent_evidence: {task_criteria_hits: [...], chat_signals: [], user_quotes: [...]}
-Claude → opc_intent_complete({intent: "task", intent_evidence, reasoning: "..."})
+Claude → opc_flow_step_complete({step: "intent_analysis", intent: "task", intent_evidence, reasoning: "..."})
   │
-  ▼ opc_intent_complete 经 P1 V1-V5 全 pass → 路由 task 分支，返回 task_analysis 指令 + prerequisites
-Claude → opc_knowledge_list() → []
+  ▼ 经 P1 V1-V5 全 pass → 路由 task 分支，返回 task_analysis 指令 + prerequisites
+Claude → opc_knowledge_read({mode: "list"}) → []
 Claude → 按方法论 7 步分析 + 收集 task_analysis_evidence
-Claude → opc_task_analysis_complete({analysis_result: {..., phase_selection_rationale: "..."}, task_analysis_evidence: {...}})
+Claude → opc_flow_step_complete({step: "task_analysis", analysis_result: {..., phase_selection_rationale: "..."}, task_analysis_evidence: {...}})
   │
-  ▼ opc_task_analysis_complete 经 P2 V1-V5 全 pass + complexity=medium + modify_unit_count=1 → 路由 brief_generation
+  ▼ 经 P2 V1-V5 全 pass + complexity=medium + modify_unit_count=1 → 路由 brief_generation
 Claude → 按模板生成 brief markdown
-Claude → opc_brief_complete({brief_content: "..."})
+Claude → opc_flow_step_complete({step: "brief_generation", brief_content: "..."})
   │
-  ▼ opc_brief_complete 路由，返回 next: opc_pipeline_create（预填全部参数）
+  ▼ 路由返回 next: opc_pipeline_create（预填全部参数）
 Claude → opc_pipeline_create({...预填...})
   │
   ▼ 返回 flow_next: opc_knowledge_open
@@ -54,10 +54,10 @@ Claude → opc_flow_query()
   │
   ▼ 返回 active=true + snapshot（含当前位置）+ 9 种 suggested_actions
 Claude 判断: 用户在补充任务范围 → 选 "补充任务范围" 分支
-Claude → opc_flow_restart({from_step: "task_analysis",
+Claude → opc_flow_correct({action: "restart", from_step: "task_analysis",
                             additional_input: "对了，还要加手机号登录"})
   │
-  ▼ opc_flow_restart 回退 flow-state.json 到 task_analysis 步骤，把追加输入并入 user_message_history
+  ▼ 回退 flow-state.json 到 task_analysis 步骤，把追加输入并入 user_message_history
 Claude → 重新做 7 步分析（user_message 已含两部分）
 ... 后续流程同上
 ```
@@ -71,7 +71,8 @@ Claude → 重新做 7 步分析（user_message 已含两部分）
   │
   ▼ Claude → opc_flow_query() → 9 种 suggested_actions
 Claude 判断: 管线内增节点 → 不影响当前 node 执行
-Claude → opc_pipeline_replan({
+Claude → opc_pipeline_lifecycle({
+  action: "replan",
   pipeline_id: "pipeline-xxx",
   changes: {add_phase_node: [{phase: "06-testing", node: "security-review"}]}
 })
@@ -89,10 +90,10 @@ Claude 继续按原 flow_next 推进当前 node（安全审计自然在 06 阶�
 | `/opc-status` | Claude 调 `opc_flow_query` + `opc_pipeline_status` 查看流程 + 管线状态 |
 | `/opc-phase` | 手动跳转/重试某个阶段 |
 | `/opc-nodes` | 查看当前阶段的节点选项 |
-| `/opc-resume` | Claude 调 `opc_flow_recover` 手动触发流程恢复 |
-| `/opc-abort` | Claude 调 `opc_flow_abort` 终止当前流程 |
-| `/opc-revise <field> <value>` | Claude 调 `opc_flow_revise` 修改累积参数 |
-| `/opc-restart <from_step>` | Claude 调 `opc_flow_restart` 从某步重做 |
+| `/opc-resume` | Claude 调 `opc_flow_lifecycle({action:"recover"})` 手动触发流程恢复 |
+| `/opc-abort` | Claude 调 `opc_flow_lifecycle({action:"abort"})` 终止当前流程 |
+| `/opc-revise <field> <value>` | Claude 调 `opc_flow_correct({action:"revise"})` 修改累积参数 |
+| `/opc-restart <from_step>` | Claude 调 `opc_flow_correct({action:"restart"})` 从某步重做 |
 
 ---
 
