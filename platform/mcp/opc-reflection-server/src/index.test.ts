@@ -7,6 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   availableMethodsForStep,
   buildCorrection,
+  checkCoverageGuard,
   checkFreshness,
   checkRoundsGuard,
   correctionsRoot,
@@ -178,6 +179,137 @@ describe("validators", () => {
     });
     const { pass } = await validateAll(art);
     expect(pass).toBe(true);
+  });
+
+  // —— edge cases ——
+
+  it("V1 rejects null artifact", () => {
+    const r = validateV1Schema(null as unknown as EvidenceArtifact);
+    expect(r.pass).toBe(false);
+    expect(r.reason).toContain("must be an object");
+  });
+
+  it("V1 rejects missing artifact_type", () => {
+    const art = baseArtifact() as unknown as Record<string, unknown>;
+    delete art.artifact_type;
+    const r = validateV1Schema(art as unknown as EvidenceArtifact);
+    expect(r.pass).toBe(false);
+    expect(r.reason).toContain("artifact_type");
+  });
+
+  it("V2 rejects unknown node_ref", () => {
+    const art = baseArtifact({
+      payload: { items: [{ node_ref: "ghost-node" }] },
+    });
+    const r = validateV2Referential(art, { known_nodes: new Set(["real-node"]) });
+    expect(r.pass).toBe(false);
+    expect(r.reason).toContain("unknown node_ref");
+  });
+
+  it("V2 passes without context", () => {
+    const art = baseArtifact({ payload: { items: [{ knowledge_ref: "x" }] } });
+    const r = validateV2Referential(art, {});
+    expect(r.pass).toBe(true);
+  });
+
+  it("V3 rejects null value for required field", async () => {
+    const art = baseArtifact({
+      step: "P5",
+      payload: { matched_tags: null, blocked_by_graph: {} },
+    });
+    const r = await validateV3Presence(art as unknown as EvidenceArtifact);
+    expect(r.pass).toBe(false);
+  });
+
+  it("V4 passes when coverage ratio meets threshold", () => {
+    const art = baseArtifact({
+      payload: {
+        matched_tags: [],
+        blocked_by_graph: {},
+        task_criteria_hits: ["a", "b", "c"],
+        task_criteria_required: ["a", "b", "c", "d"],
+      },
+    });
+    const r = validateV4Coverage(art, { coverage_threshold: 0.5 });
+    expect(r.pass).toBe(true);
+  });
+
+  it("V4 passes without coverage fields (no-op)", () => {
+    const art = baseArtifact({
+      payload: { matched_tags: ["x"], blocked_by_graph: {} },
+    });
+    const r = validateV4Coverage(art, {});
+    expect(r.pass).toBe(true);
+  });
+
+  it("V5 passes when discrimination ratio is OK", () => {
+    const art = baseArtifact({
+      payload: {
+        matched_tags: ["1", "2"],
+        blocked_by_graph: {},
+        candidate_pool_size: 10,
+      },
+    });
+    const r = validateV5Discrimination(art, { discrimination_threshold: 0.1 });
+    expect(r.pass).toBe(true);
+  });
+
+  it("V5 passes without discrimination fields (no-op)", () => {
+    const art = baseArtifact({
+      payload: { matched_tags: ["x"], blocked_by_graph: {} },
+    });
+    const r = validateV5Discrimination(art, {});
+    expect(r.pass).toBe(true);
+  });
+
+  it("coverage-guard fails when matched_tags/requirements ratio below threshold", () => {
+    const art = baseArtifact({
+      payload: {
+        matched_tags: ["a"],
+        blocked_by_graph: {},
+        requirements: ["r1", "r2", "r3", "r4", "r5"],
+      },
+    });
+    const r = checkCoverageGuard(art, { coverage_threshold: 0.5 });
+    expect(r.pass).toBe(false);
+  });
+
+  it("coverage-guard passes without coverage fields (no-op)", () => {
+    const art = baseArtifact({
+      payload: { matched_tags: ["x"], blocked_by_graph: {} },
+    });
+    const r = checkCoverageGuard(art, {});
+    expect(r.pass).toBe(true);
+  });
+
+  it("rounds-guard passes when round equals max (boundary)", () => {
+    const r = checkRoundsGuard({ current_round: 3, max_rounds: 3 });
+    expect(r.pass).toBe(true);
+  });
+
+  it("rounds-guard passes when context undefined (no-op)", () => {
+    const r = checkRoundsGuard({});
+    expect(r.pass).toBe(true);
+  });
+
+  it("freshness passes when all refs are current", () => {
+    const r = checkFreshness({
+      freshness_refs: [
+        { path: "unit/a", min_version: 2, current_version: 3 },
+        { path: "unit/b", min_version: 1, current_version: 1 },
+      ],
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it("freshness passes with empty refs (no-op)", () => {
+    const r = checkFreshness({ freshness_refs: [] });
+    expect(r.pass).toBe(true);
+  });
+
+  it("freshness passes without refs (no-op)", () => {
+    const r = checkFreshness({});
+    expect(r.pass).toBe(true);
   });
 });
 
