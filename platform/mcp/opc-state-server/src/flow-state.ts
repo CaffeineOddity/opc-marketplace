@@ -88,7 +88,8 @@ export interface ReflectionLogEntry {
     | "objections_remain"
     | "rounds_exceeded"
     | "skipped_by_user_after_expiry"
-    | "discarded_by_user_after_expiry";
+    | "discarded_by_user_after_expiry"
+    | "validator_only_fallback";
   evidence_diff?: { added?: string[]; modified?: string[]; removed?: string[] };
   validator_result?: Record<string, "ok" | "fail" | "skip">;
   objections_kept_by_meta?: number;
@@ -135,9 +136,11 @@ export interface UserIntervention {
   trigger:
     | "ask_user_rounds_exceeded"
     | "ask_user_expired_reflection"
+    | "ask_user_reflection_server_unavailable"
     | "expired_reflection_resumed"
     | "expired_reflection_discarded"
     | "expired_reflection_skipped"
+    | "reflection_server_unavailable_acknowledged"
     | "user_initiated_revise"
     | "user_initiated_restart"
     | "user_initiated_phase_reset"

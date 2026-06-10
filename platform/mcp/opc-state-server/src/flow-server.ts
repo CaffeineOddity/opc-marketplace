@@ -184,6 +184,41 @@ export interface UserReplyResponse {
   intervention_id: string;
 }
 
+/**
+ * Spec §07-three-server-seam-matrix §3.4 (Failure-degradation chain):
+ *   Primary fail → Secondary → Validator-only (skip sub-agent)
+ *     → ask_user → opc_flow_user_reply / opc_flow_correct
+ *
+ * Invoked by the host (or by any caller wiring) when the reflection-server
+ * MCP transport is unreachable. State-server records a degradation entry
+ * in reflection_log and — unless the calling step is in the documented
+ * "warning-only" allow-list (P4 brief, P6 critique, P7 CoVe) — synthesizes
+ * a pending_user_question (question_id prefix `uq-rs-unavailable-`) so the
+ * next tool call is forced through opc_flow_user_reply. The warning-only
+ * branch returns without blocking, matching the seam-matrix exceptions.
+ */
+export interface ReflectionUnavailableRequest {
+  session_id: string;
+  step_id: string;
+  reason: string;
+  validator_summary?: Record<string, "ok" | "fail" | "skip">;
+  context_artifacts?: string[];
+  pipeline_pointer_ref?: PipelinePointer | null;
+  /**
+   * "ask_user" (default) blocks the next write via pending_user_question.
+   * "warning_only" logs the degradation but allows the caller to proceed —
+   * matches the P4/P6/P7 exceptions in seam-matrix §3.4.
+   */
+  severity?: "ask_user" | "warning_only";
+}
+
+export interface ReflectionUnavailableResponse {
+  state: FlowState;
+  next: FlowNext;
+  question_id: string | null;
+  degraded: true;
+}
+
 export interface QuickDispatchRequest {
   session_id: string;
   intent: Intent;
@@ -433,6 +468,7 @@ export class FlowServer {
       throw new Error(`no pending user question with id ${req.question_id}`);
     }
     const isExpiredFlow = q.question_id.startsWith("uq-expired-");
+    const isUnavailableFlow = q.question_id.startsWith("uq-rs-unavailable-");
     const disposition = req.resolution?.disposition;
     if (isExpiredFlow) {
       return this.handleExpiredReflectionReply(state, q, req, disposition);
@@ -440,7 +476,9 @@ export class FlowServer {
     const intervention_id = `intv-${this.uuid()}`;
     const intervention: UserIntervention = {
       intervention_id,
-      trigger: "ask_user_rounds_exceeded",
+      trigger: isUnavailableFlow
+        ? "reflection_server_unavailable_acknowledged"
+        : "ask_user_rounds_exceeded",
       step_id: q.step_id,
       question_id: q.question_id,
       user_reply: req.user_reply,
@@ -457,6 +495,83 @@ export class FlowServer {
     state.history.push(this.entry("user_reply", "opc_flow_user_reply", req, { intervention_id }));
     await saveFlowState(this.root, state, this.now());
     return { state, next: this.computeNext(state), intervention_id };
+  }
+
+  /**
+   * Spec §07-three-server-seam-matrix §3.4: degrade the reflection cycle
+   * when the reflection-server MCP transport is unreachable. Writes a
+   * reflection_log entry tagged `verdict: "validator_only_fallback"`. For
+   * the default `severity: "ask_user"` path, synthesizes a pending
+   * user-question (question_id prefix `uq-rs-unavailable-`) so the next
+   * write tool is forced through `opc_flow_user_reply`. For the
+   * `severity: "warning_only"` path (P4 brief / P6 critique / P7 CoVe per
+   * seam-matrix exceptions), records the degradation but does NOT block
+   * subsequent unblocked_nodes advancement or opc_phase_complete.
+   */
+  async reflectionUnavailable(
+    req: ReflectionUnavailableRequest,
+  ): Promise<ReflectionUnavailableResponse> {
+    const state = await loadFlowState(this.root, req.session_id);
+    this.assertOpen(state);
+
+    const severity = req.severity ?? "ask_user";
+    const now = this.now();
+    const logEntry: ReflectionLogEntry = {
+      step_id: req.step_id,
+      method: "validator_only_fallback",
+      verdict: "validator_only_fallback",
+      notes: `reflection-server unavailable: ${req.reason}`,
+      at: now.toISOString(),
+      ...(req.validator_summary ? { validator_result: req.validator_summary } : {}),
+      ...(req.pipeline_pointer_ref ? { pipeline_pointer_ref: req.pipeline_pointer_ref } : {}),
+    };
+    state.reflection_log.push(logEntry);
+
+    let question_id: string | null = null;
+    if (severity === "ask_user") {
+      if (state.pending_user_question) {
+        // Already paused on another question — preserve it; the degradation
+        // log entry is enough to surface this event to the distiller.
+        question_id = state.pending_user_question.question_id;
+      } else {
+        const askedAt = now;
+        const expires = new Date(askedAt.getTime() + 30 * 60_000);
+        const newQid = `uq-rs-unavailable-${this.uuid()}`;
+        const validatorLine = req.validator_summary
+          ? `validator summary: ${Object.entries(req.validator_summary)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(", ")}`
+          : "validator summary not provided";
+        state.pending_user_question = {
+          question_id: newQid,
+          step_id: req.step_id,
+          round: 0,
+          asked_at: askedAt.toISOString(),
+          expires_at: expires.toISOString(),
+          must_be_resolved_by: "opc_flow_user_reply",
+          reasoning_trace: [
+            `reflection-server unavailable for step ${req.step_id}: ${req.reason}`,
+            validatorLine,
+            "fell back to validator-only path (V1-V5 + L1/L2 ran in state-server); please acknowledge or correct via opc_flow_user_reply / opc_flow_correct",
+          ],
+          kept_objections: [],
+          context_artifacts: req.context_artifacts ?? [],
+          ...(req.pipeline_pointer_ref ? { pipeline_pointer_ref: req.pipeline_pointer_ref } : {}),
+        };
+        question_id = newQid;
+      }
+    }
+
+    state.history.push(
+      this.entry(
+        "reflection_unavailable",
+        "opc_flow_reflection_unavailable",
+        req,
+        { severity, question_id },
+      ),
+    );
+    await saveFlowState(this.root, state, now);
+    return { state, next: this.computeNext(state), question_id, degraded: true };
   }
 
   private async handleExpiredReflectionReply(

@@ -243,6 +243,15 @@ state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent 
 
 **永不阻塞主流程**：反思失败的 worst case 是「validator-only + ask_user」，不会卡住 pipeline。
 
+### 六·补·1 反思 server 不可达的实现细节（M18.g）
+
+state-server 的 `FlowServer.reflectionUnavailable({session_id, step_id, reason, severity?, validator_summary?, context_artifacts?, pipeline_pointer_ref?})` 是 host 在检测到 reflection-server MCP transport 异常时的入口：
+
+- **默认 `severity: "ask_user"`**：合成一个 `pending_user_question`（`question_id` 前缀 `uq-rs-unavailable-`，30min 过期）→ 下一个写类工具被 `pending-question-guard` 拦截 → 用户必须走 `opc_flow_user_reply` 或 `opc_flow_correct` 才能继续；`reflection_log` 记录 `verdict: "validator_only_fallback"`，`user_interventions[].trigger = "reflection_server_unavailable_acknowledged"`；如果当时已有别的 pending question，则保留旧 question（避免 clobber），仅落 reflection_log 即可。
+- **`severity: "warning_only"`**：仅写一条 `verdict: "validator_only_fallback"` 的 reflection_log，不阻塞——对应 [07_three-server-seam-matrix.md §3.4](../04-reflection-flow/07_three-server-seam-matrix.md#34-failure-degradation-chain) 列举的 P4 brief / P6 critique / P7 CoVe 三类豁免（不应阻断 `unblocked_nodes` 推进或 `opc_phase_complete`）。
+
+调用方在 transport 失败后应同时确保 state-server 的 V1-V5 + L1/L2 已经在内部执行并由 [validator-only artifact (M18.f)](../../../platform/mcp/opc-state-server/src/validator-log.ts) 落盘到 `opc-logs/validator/<session>/<step>-<n>.json`；这些路径可直接作为 `context_artifacts` 一并带入，方便用户审计。
+
 ---
 
 ## 六·补 reflection-registry-guard 工程锁（与 state-server 的契约执行点）

@@ -998,3 +998,107 @@ describe("FlowServer kit-health A4 (spec §06-host-contract §2.7.5)", () => {
   });
 });
 
+describe("M18.g reflectionUnavailable degradation", () => {
+  it("ask_user severity synthesizes pending_user_question with uq-rs-unavailable- prefix", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const r = await fs.reflectionUnavailable({
+      session_id: s,
+      step_id: "intent_analysis",
+      reason: "MCP transport ECONNRESET",
+      validator_summary: { v1: "ok", v2: "ok", v3: "skip" },
+      context_artifacts: ["opc-logs/validator/.../node_execution-1.json"],
+    });
+    expect(r.degraded).toBe(true);
+    expect(r.question_id).toMatch(/^uq-rs-unavailable-/);
+    expect(r.state.pending_user_question?.question_id).toBe(r.question_id);
+    expect(r.state.pending_user_question?.must_be_resolved_by).toBe("opc_flow_user_reply");
+    expect(r.state.reflection_log.at(-1)?.verdict).toBe("validator_only_fallback");
+    expect(r.state.reflection_log.at(-1)?.method).toBe("validator_only_fallback");
+    expect(r.state.reflection_log.at(-1)?.validator_result).toEqual({ v1: "ok", v2: "ok", v3: "skip" });
+    expect(r.next).toEqual({ tool: "opc_flow_user_reply" });
+  });
+
+  it("warning_only severity logs but does NOT block (no pending question)", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const r = await fs.reflectionUnavailable({
+      session_id: s,
+      step_id: "brief_generation",
+      reason: "P4 brief critique server down",
+      severity: "warning_only",
+    });
+    expect(r.degraded).toBe(true);
+    expect(r.question_id).toBeNull();
+    expect(r.state.pending_user_question).toBeNull();
+    expect(r.state.reflection_log.at(-1)?.verdict).toBe("validator_only_fallback");
+    expect(r.next).toEqual({ tool: "opc_flow_step_complete", step: "intent_analysis" });
+  });
+
+  it("preserves pre-existing pending_user_question instead of clobbering", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const rx = await fs.reflect({
+      session_id: s,
+      reflection_id: "rfl-keep",
+      verdict: "rounds_exceeded",
+      rounds_exceeded_payload: {
+        reasoning_trace: ["keep-me"],
+        kept_objections: [],
+        context_artifacts: [],
+      },
+    });
+    const originalQid = rx.state.pending_user_question!.question_id;
+    const r = await fs.reflectionUnavailable({
+      session_id: s,
+      step_id: "intent_analysis",
+      reason: "server flapping",
+    });
+    expect(r.question_id).toBe(originalQid);
+    expect(r.state.pending_user_question?.question_id).toBe(originalQid);
+    expect(r.state.pending_user_question?.reasoning_trace).toContain("keep-me");
+    expect(r.state.reflection_log.at(-1)?.verdict).toBe("validator_only_fallback");
+  });
+
+  it("userReply consumes the unavailable question with reflection_server_unavailable_acknowledged trigger", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    const r = await fs.reflectionUnavailable({
+      session_id: s,
+      step_id: "task_analysis",
+      reason: "transport timeout",
+    });
+    const qid = r.question_id!;
+    const reply = await fs.userReply({
+      session_id: s,
+      question_id: qid,
+      user_reply: "acknowledged, proceed validator-only",
+      resolution: { notes: "user accepted degraded path" },
+    });
+    expect(reply.state.pending_user_question).toBeNull();
+    expect(reply.state.user_interventions.at(-1)?.trigger).toBe(
+      "reflection_server_unavailable_acknowledged",
+    );
+    expect(reply.state.user_interventions.at(-1)?.question_id).toBe(qid);
+    expect(reply.state.skip_reflection_once_for_step).toBe("task_analysis");
+  });
+
+  it("blocks subsequent stepComplete until user replies (ask_user pathway)", async () => {
+    const fs = fresh();
+    const a = await fs.lifecycle({ action: "start" });
+    const s = a.state.session_id;
+    await fs.reflectionUnavailable({
+      session_id: s,
+      step_id: "intent_analysis",
+      reason: "RS down",
+    });
+    await expect(
+      fs.stepComplete({ step: "intent_analysis", session_id: s, intent: "task" }),
+    ).rejects.toThrow(/pending-question-guard/);
+  });
+});
+

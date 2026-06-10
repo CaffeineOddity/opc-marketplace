@@ -18,6 +18,8 @@ export type {
   QuickDispatchResponse,
   CorrectRequest,
   CorrectResponse,
+  ReflectionUnavailableRequest,
+  ReflectionUnavailableResponse,
 } from "./flow-server.js";
 export {
   loadFlowState,
