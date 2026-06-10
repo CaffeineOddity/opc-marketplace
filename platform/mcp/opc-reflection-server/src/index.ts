@@ -119,6 +119,7 @@ export type {
   CorrectionsUpsertResponse,
   CorrectionsActionRequest,
   CorrectionsActionResponse,
+  UnlearnResponse,
 } from "./corrections-server.js";
 
 export {

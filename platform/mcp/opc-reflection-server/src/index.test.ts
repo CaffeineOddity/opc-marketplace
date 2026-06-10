@@ -12,6 +12,7 @@ import {
   CorrectionsServer,
   listAllCorrections,
   listCorrectionsByStep,
+  loadCorrectionById,
   pickMethods,
   readTelemetry,
   ReflectionServer,
@@ -1581,23 +1582,63 @@ describe("CorrectionsServer", () => {
       }
     });
 
-    it.each([["unlearn"], ["reindex"]] as const)(
-      "action=%s returns not_implemented:true (deferred to M18)",
-      async (action) => {
-        const srv = newServer();
-        const req =
-          action === "unlearn"
-            ? { action, correction_id: "corr-1" }
-            : { action };
-        const resp = await srv.crud(req);
-        expect(resp.action).toBe(action);
-        if (resp.action !== "query" && resp.action !== "record") {
-          expect(resp.not_implemented).toBe(true);
-          expect(resp.reason).toContain(action);
-          expect(resp.reason).toContain("M18");
-        }
-      },
-    );
+    it("action=unlearn tombstones a correction", async () => {
+      const srv = newServer();
+      const r = await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "P5",
+              unit: "u",
+              section: "s",
+              subsection: "unlearn-test",
+              lesson: "before unlearn",
+              applies_when: { keywords: ["unlearn"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+      const id = r.action === "record" ? r.written_ids[0] : "";
+      expect(id).toBeTruthy();
+
+      const resp = await srv.crud({
+        action: "unlearn",
+        correction_id: id,
+        reason: "test tombstone",
+      });
+      expect(resp.action).toBe("unlearn");
+      if (resp.action === "unlearn") {
+        expect(resp.tombstoned_id).toBe(id);
+        expect(resp.frozen).toBe(true);
+        expect(resp.reason).toBe("test tombstone");
+      }
+
+      // Verify the correction is now frozen + deprecated
+      const { correction } = await loadCorrectionById(root, id);
+      expect(correction.frozen).toBe(true);
+      expect(correction.deprecated_by).toContain("unlearned");
+      expect(correction.deprecated_by).toContain("test tombstone");
+    });
+
+    it("returns CorrectionNotFoundError for unlearn with unknown id", async () => {
+      const srv = newServer();
+      await expect(
+        srv.crud({ action: "unlearn", correction_id: "corr-nonexistent" }),
+      ).rejects.toThrow(/corr-nonexistent/);
+    });
+
+    it("action=reindex returns not_implemented:true (deferred to M18)", async () => {
+      const srv = newServer();
+      const resp = await srv.crud({ action: "reindex" });
+      expect(resp.action).toBe("reindex");
+      if (resp.action === "reindex") {
+        expect(resp.not_implemented).toBe(true);
+        expect(resp.reason).toContain("reindex");
+      }
+    });
 
     it("rejects unknown action with CorrectionsServerError", async () => {
       const srv = newServer();

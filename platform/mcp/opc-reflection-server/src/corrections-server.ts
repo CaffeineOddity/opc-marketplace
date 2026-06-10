@@ -73,10 +73,17 @@ export type CorrectionsActionRequest =
   | { action: "unlearn"; correction_id: string; reason?: string }
   | { action: "reindex"; scope?: "all" | { step: StepId } };
 
+export interface UnlearnResponse {
+  tombstoned_id: string;
+  frozen: boolean;
+  reason: string;
+}
+
 export type CorrectionsActionResponse =
   | ({ action: "query" } & CorrectionsQueryResponse)
   | ({ action: "record" } & CorrectionsUpsertResponse)
-  | { action: "unlearn" | "reindex"; not_implemented: true; reason: string };
+  | ({ action: "unlearn" } & UnlearnResponse)
+  | { action: "reindex"; not_implemented: true; reason: string };
 
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
@@ -261,8 +268,6 @@ export class CorrectionsServer {
 
   /**
    * Tool (M17.f): opc_corrections — unified facade for query/record/unlearn/reindex.
-   * `record` delegates to upsert(); `query` to query(); `unlearn`/`reindex`
-   * return not_implemented (M18: tombstone + reindex worker).
    */
   async crud(req: CorrectionsActionRequest): Promise<CorrectionsActionResponse> {
     switch (req.action) {
@@ -278,12 +283,17 @@ export class CorrectionsServer {
         const resp = await this.upsert(inner);
         return { action: "record", ...resp };
       }
-      case "unlearn":
+      case "unlearn": {
+        const { action, ...params } = req;
+        void action;
+        const resp = await this.unlearn(params);
+        return { action: "unlearn", ...resp };
+      }
       case "reindex":
         return {
-          action: req.action,
+          action: "reindex",
           not_implemented: true,
-          reason: `opc_corrections.${req.action} deferred to M18 (tombstone + reindex worker)`,
+          reason: `opc_corrections.reindex deferred to M18 (reindex worker)`,
         };
       default: {
         const _exhaustive: never = req;
@@ -292,6 +302,32 @@ export class CorrectionsServer {
         );
       }
     }
+  }
+
+  private async unlearn(params: {
+    correction_id: string;
+    reason?: string;
+  }): Promise<{ tombstoned_id: string; frozen: boolean; reason: string }> {
+    const { correction, path: _path } = await loadCorrectionById(
+      this.root,
+      params.correction_id,
+    );
+    void _path;
+
+    const now = this.now().toISOString();
+    const tombstoned: Correction = {
+      ...correction,
+      frozen: true,
+      deprecated_by: `unlearned: ${params.reason ?? "manual unlearn"}`,
+      updated_at: now,
+    };
+    await saveCorrection(this.root, tombstoned);
+
+    return {
+      tombstoned_id: tombstoned.id,
+      frozen: true,
+      reason: params.reason ?? "manual unlearn",
+    };
   }
 
   async findSimilar(
