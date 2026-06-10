@@ -31,7 +31,7 @@
 |  |  | `unlearn` | 删除过期/错误纠正 |
 |  |  | `reindex` | 全文索引重建 |
 
-> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
+> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 

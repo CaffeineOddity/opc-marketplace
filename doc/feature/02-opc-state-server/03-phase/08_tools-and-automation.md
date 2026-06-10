@@ -70,4 +70,4 @@ auto_advance = (
 - [04_phase-start.md](04_phase-start.md) — `opc_phase_start` 完整规范
 - [06_phase-complete-reset.md](06_phase-complete-reset.md) — auto_advance 规则
 - [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — `opc_flow_reflect` 流程工具
-- [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案

@@ -135,7 +135,7 @@ flowchart TD
 - **启动节点**：[`opc_node_start`](07_tools.md#opc_node_start) — 由 `opc_phase_confirm` 路由触发
 - **完成/失败/重跑节点**：[`opc_node_finish`](07_tools.md#opc_node_finish) — Agent 回报 evidence 后调用，`status ∈ {completed, failed, retry}` discriminator 路由
 
-> 历史名 `opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish({status})` 的 discriminator 分支。详见 [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md)。
+> 历史名 `opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish({status})` 的 discriminator 分支。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 

@@ -3,7 +3,7 @@
 管线层 3 个工具（`opc_pipeline_create` / `opc_pipeline_status` / `opc_pipeline_lifecycle`）。
 流程层 7 个 `opc_flow_*` 工具见 [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md)。
 
-> 历史名 `opc_pipeline_complete` / `opc_pipeline_abort` / `opc_pipeline_replan` / `opc_pipeline_resume` 已折叠为 `opc_pipeline_lifecycle({action})` 的 discriminator 分支；`opc_pipeline_recover` 已折叠为 `opc_flow_lifecycle({action:"recover"})`。详见 [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md)。
+> 历史名 `opc_pipeline_complete` / `opc_pipeline_abort` / `opc_pipeline_replan` / `opc_pipeline_resume` 已折叠为 `opc_pipeline_lifecycle({action})` 的 discriminator 分支；`opc_pipeline_recover` 已折叠为 `opc_flow_lifecycle({action:"recover"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 
@@ -297,4 +297,4 @@ discriminator 分支:
 - [06_lifecycle.md](06_lifecycle.md) — 工具在生命周期中的调用顺序
 - [10_complete-example.md](10_complete-example.md) — 完整调用链路
 - [11_insert-resume.md](11_insert-resume.md) — 插队/挂起/恢复完整契约
-- [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案

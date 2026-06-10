@@ -5,7 +5,7 @@
 
 opc-knowledge-server 对外暴露 **4 个 MCP 工具**。`opc_knowledge_read` 通过 `mode` discriminator 路由到 5 种读操作（`single` / `batch` / `list` / `search` / `diff`）；`opc_knowledge_admin` 通过 `action` discriminator 路由到 2 种管理操作（`delete` / `reindex`）。
 
-> **工具合并**：历史名 `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_list` / `opc_knowledge_search` 已折叠为 `opc_knowledge_read({mode})`；`opc_knowledge_delete` / `opc_knowledge_reindex` 已折叠为 `opc_knowledge_admin({action})`。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
+> **工具合并**：历史名 `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_list` / `opc_knowledge_search` 已折叠为 `opc_knowledge_read({mode})`；`opc_knowledge_delete` / `opc_knowledge_reindex` 已折叠为 `opc_knowledge_admin({action})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 
@@ -400,4 +400,4 @@ opc_knowledge_read({
 - [00_overview.md](00_overview.md#4-个工具速览) — 工具速览
 - [03_initialization-flow.md](03_initialization-flow.md) — 流程启动中的工具时序
 - [00_overview.md](00_overview.md#与-state-server-协作矩阵) — 与 state-server 的协作分工
-- [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案

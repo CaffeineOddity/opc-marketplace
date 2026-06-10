@@ -2,7 +2,7 @@
 
 opc-knowledge-server 提供 **4 个工具**（`open` / `read` / `write` / `admin`）覆盖知识的 CRUD、版本管理和全文搜索。`read` 与 `admin` 通过 discriminator 字段（`mode` / `action`）路由到不同子操作。知识概念模型（三层结构、存储格式、版本管理）详见 [知识模型总览](../01-knowledge-model/00_overview.md)。
 
-> **工具合并**：历史名 `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_list` / `opc_knowledge_search` 已折叠为 `opc_knowledge_read({mode})` 的 discriminator 分支（`mode ∈ {single, batch, list, search, diff}`）；`opc_knowledge_delete` / `opc_knowledge_reindex` 已折叠为 `opc_knowledge_admin({action})`（`action ∈ {delete, reindex}`）。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
+> **工具合并**：历史名 `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_list` / `opc_knowledge_search` 已折叠为 `opc_knowledge_read({mode})` 的 discriminator 分支（`mode ∈ {single, batch, list, search, diff}`）；`opc_knowledge_delete` / `opc_knowledge_reindex` 已折叠为 `opc_knowledge_admin({action})`（`action ∈ {delete, reindex}`）。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 本文档已按主题拆分为多个子文档，本文是**聚合索引**，附端到端时序图与决策流程图。
 
@@ -164,4 +164,4 @@ flowchart TD
 - [意图分析](../../02-opc-state-server/01-intent-analysis/00_overview.md) — 流程状态机 + 方法论文档协作
 - [节点](../../02-opc-state-server/04-node/00_overview.md) — 节点定义中的 knowledge input/output 声明
 - [管线](../../02-opc-state-server/02-pipeline/00_overview.md) — 管线创建与状态管理
-- [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案
+- [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md) — 54→28 工具合并方案

@@ -37,7 +37,7 @@
 ⑦ 进入阶段执行循环
 ```
 
-> 历史名 `opc_flow_lifecycle({action:"start"})` / `opc_flow_step_complete({step:"intent_analysis"})` / `opc_flow_step_complete({step:"task_analysis"})` / `opc_flow_step_complete({step:"task_decomposition"})` / `opc_flow_step_complete({step:"brief_generation"})` 已折叠为 `opc_flow_lifecycle({action:"start"})` 与 `opc_flow_step_complete({step})` 的 discriminator 分支；`opc_knowledge_read({mode:"list"})` 已折叠为 `opc_knowledge_read({mode:"list"})`。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
+> 历史名 `opc_flow_lifecycle({action:"start"})` / `opc_flow_step_complete({step:"intent_analysis"})` / `opc_flow_step_complete({step:"task_analysis"})` / `opc_flow_step_complete({step:"task_decomposition"})` / `opc_flow_step_complete({step:"brief_generation"})` 已折叠为 `opc_flow_lifecycle({action:"start"})` 与 `opc_flow_step_complete({step})` 的 discriminator 分支；`opc_knowledge_read({mode:"list"})` 已折叠为 `opc_knowledge_read({mode:"list"})`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 

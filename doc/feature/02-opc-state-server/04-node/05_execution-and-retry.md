@@ -2,7 +2,7 @@
 
 完整执行流程：从 `opc_node_start` 到 `opc_node_finish({status})`，覆盖三种重试场景。
 
-> **工具合并**：`opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish` 的 discriminator 分支，`status ∈ {completed, failed, retry}`。详见 [../../../01-overview/07-tool-consolidation.md](../../../01-overview/07-tool-consolidation.md)。
+> **工具合并**：`opc_node_complete` / `opc_node_fail` / `opc_node_retry` 已折叠为 `opc_node_finish` 的 discriminator 分支，`status ∈ {completed, failed, retry}`。详见 [../../07-tool-consolidation/00_overview.md](../../07-tool-consolidation/00_overview.md)。
 
 ---
 
