@@ -20,6 +20,11 @@ import {
   aggregateTelemetry,
   type QueryStatsResponse,
 } from "./query-stats.js";
+import {
+  unlearnMethod,
+  type UnlearnMethodResponse,
+  type UnlearnTrigger,
+} from "./unlearn.js";
 import { appendTelemetry, type TelemetryEntry } from "./telemetry.js";
 import { validateAll, type ValidatorContext, type ValidatorResult } from "./validators.js";
 
@@ -181,14 +186,23 @@ export type ReflectAdminRequest =
   | { action: "on_demand"; session_id: string; reason?: string }
   | { action: "explain"; session_id: string; reflection_id: string }
   | { action: "query_stats"; session_id: string; window?: string; flow_state_path?: string }
-  | { action: "unlearn_method"; session_id: string; method: ReflectionMethod; reason?: string };
+  | {
+      action: "unlearn_method";
+      session_id: string;
+      method: ReflectionMethod;
+      step?: StepId;
+      duration_hours?: number;
+      reason?: string;
+      triggered_by?: UnlearnTrigger;
+    };
 
 export type ReflectAdminResponse =
   | ({ action: "record_interventions" } & ReflectRecordInterventionsResponse)
   | ({ action: "query_stats" } & QueryStatsResponse)
   | ({ action: "explain" } & ExplainResponse)
   | { action: "explain"; not_found: true; reflection_id: string; reason: string }
-  | { action: "on_demand" | "unlearn_method"; not_implemented: true; reason: string };
+  | ({ action: "unlearn_method" } & UnlearnMethodResponse)
+  | { action: "on_demand"; not_implemented: true; reason: string };
 
 const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "Read",
@@ -496,12 +510,26 @@ export class ReflectionServer {
         }
       }
       case "on_demand":
-      case "unlearn_method":
         return {
           action: req.action,
           not_implemented: true,
           reason: `opc_reflect_admin.${req.action} deferred to M18 (observability/admin tooling)`,
         };
+      case "unlearn_method": {
+        const resp = await unlearnMethod(
+          this.root,
+          {
+            session_id: req.session_id,
+            method: req.method,
+            ...(req.step !== undefined ? { step: req.step } : {}),
+            ...(req.duration_hours !== undefined ? { duration_hours: req.duration_hours } : {}),
+            ...(req.reason !== undefined ? { reason: req.reason } : {}),
+            ...(req.triggered_by !== undefined ? { triggered_by: req.triggered_by } : {}),
+          },
+          this.now,
+        );
+        return { action: "unlearn_method", ...resp };
+      }
       default: {
         const _exhaustive: never = req;
         throw new ReflectionServerError(

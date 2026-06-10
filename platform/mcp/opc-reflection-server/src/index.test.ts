@@ -814,6 +814,157 @@ describe("M18.c explain artifact reader", () => {
   });
 });
 
+describe("M18.d unlearn_method circuit breaker", () => {
+  let root: string;
+  let clock: { value: Date };
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m18d-"));
+    clock = { value: new Date("2026-06-10T12:00:00Z") };
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => clock.value,
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  const readState = async (): Promise<{
+    active: Array<{
+      method: string;
+      step: string | null;
+      reason: string;
+      triggered_by: string;
+      session_id: string;
+    }>;
+    history: Array<{
+      method: string;
+      step: string | null;
+      deactivated_at: string;
+      deactivation_reason: string;
+    }>;
+  }> => {
+    const raw = await readFile(join(root, ".opc/state/unlearn-state.json"), "utf8");
+    return JSON.parse(raw);
+  };
+
+  it("activates a manual unlearn with default 24h TTL and persists state", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-a",
+      method: "debate",
+      step: "P5",
+      reason: "fake debate suspected in CI",
+    });
+    if (resp.action !== "unlearn_method") throw new Error("unexpected branch");
+    expect(resp.unlearned.method).toBe("debate");
+    expect(resp.unlearned.step).toBe("P5");
+    expect(resp.unlearned.triggered_by).toBe("manual");
+    expect(resp.unlearned.session_id).toBe("s-a");
+    expect(resp.active_count).toBe(1);
+    expect(resp.previously_active).toBeNull();
+    expect(new Date(resp.expires_at).getTime()).toBe(
+      new Date("2026-06-11T12:00:00Z").getTime(),
+    );
+
+    const state = await readState();
+    expect(state.active).toHaveLength(1);
+    expect(state.active[0]?.reason).toBe("fake debate suspected in CI");
+    expect(state.history).toHaveLength(0);
+  });
+
+  it("accepts custom duration_hours and auto trigger", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-auto",
+      method: "tot",
+      duration_hours: 6,
+      triggered_by: "auto",
+    });
+    if (resp.action !== "unlearn_method") throw new Error("unexpected branch");
+    expect(resp.unlearned.triggered_by).toBe("auto");
+    expect(resp.unlearned.step).toBeNull();
+    expect(new Date(resp.expires_at).getTime()).toBe(
+      new Date("2026-06-10T18:00:00Z").getTime(),
+    );
+  });
+
+  it("supersedes a prior entry for the same (method, step) and records history", async () => {
+    const srv = newServer();
+    await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-sup",
+      method: "critique",
+      step: "P3",
+      reason: "v1",
+    });
+    clock.value = new Date("2026-06-10T13:00:00Z");
+    const resp = await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-sup",
+      method: "critique",
+      step: "P3",
+      reason: "v2",
+    });
+    if (resp.action !== "unlearn_method") throw new Error("unexpected branch");
+    expect(resp.previously_active?.reason).toBe("v1");
+    expect(resp.active_count).toBe(1);
+
+    const state = await readState();
+    expect(state.active).toHaveLength(1);
+    expect(state.active[0]?.reason).toBe("v2");
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0]?.deactivation_reason).toBe("superseded");
+  });
+
+  it("prunes expired entries into history on the next call", async () => {
+    const srv = newServer();
+    await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-exp",
+      method: "reflexion",
+      step: "P5",
+      duration_hours: 1,
+    });
+
+    clock.value = new Date("2026-06-10T14:00:00Z");
+    const resp = await srv.admin({
+      action: "unlearn_method",
+      session_id: "s-exp",
+      method: "cove",
+      step: "P5",
+    });
+    if (resp.action !== "unlearn_method") throw new Error("unexpected branch");
+    expect(resp.active_count).toBe(1);
+
+    const state = await readState();
+    expect(state.active.map((e) => e.method)).toEqual(["cove"]);
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0]?.method).toBe("reflexion");
+    expect(state.history[0]?.deactivation_reason).toBe("expired");
+  });
+
+  it("rejects non-positive duration_hours", async () => {
+    const srv = newServer();
+    await expect(
+      srv.admin({
+        action: "unlearn_method",
+        session_id: "s-bad",
+        method: "critique",
+        duration_hours: 0,
+      }),
+    ).rejects.toThrow(/duration_hours must be > 0/);
+  });
+});
+
 describe("ReflectionServer M17.e discriminator facades", () => {
   let root: string;
   beforeEach(async () => {
@@ -913,23 +1064,18 @@ describe("ReflectionServer M17.e discriminator facades", () => {
       }
     });
 
-    it.each([
-      ["on_demand"],
-      ["unlearn_method"],
-    ] as const)(
+    it.each([["on_demand"]] as const)(
       "action=%s returns not_implemented:true (deferred to M18)",
       async (action) => {
         const srv = newServer();
-        const req =
-          action === "unlearn_method"
-            ? { action, session_id: "s1", method: "critique" as const }
-            : { action, session_id: "s1" };
+        const req = { action, session_id: "s1" };
         const resp = await srv.admin(req);
         expect(resp.action).toBe(action);
         if (
           resp.action !== "record_interventions" &&
           resp.action !== "query_stats" &&
-          resp.action !== "explain"
+          resp.action !== "explain" &&
+          resp.action !== "unlearn_method"
         ) {
           expect(resp.not_implemented).toBe(true);
           expect(resp.reason).toContain(action);

@@ -64,6 +64,25 @@ export { explainReflection, ExplainNotFoundError } from "./explain.js";
 export type { ExplainRequest, ExplainResponse } from "./explain.js";
 
 export {
+  unlearnMethod,
+  loadUnlearnState,
+  saveUnlearnState,
+  unlearnStatePath,
+  UNLEARN_STATE_DIR,
+  UNLEARN_STATE_FILENAME,
+  DEFAULT_UNLEARN_TTL_HOURS,
+  UNLEARN_HISTORY_RETENTION_DAYS,
+} from "./unlearn.js";
+export type {
+  UnlearnEntry,
+  UnlearnHistoryEntry,
+  UnlearnState,
+  UnlearnTrigger,
+  UnlearnMethodRequest,
+  UnlearnMethodResponse,
+} from "./unlearn.js";
+
+export {
   validateAll,
   validateV1Schema,
   validateV2Referential,
