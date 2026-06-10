@@ -317,6 +317,60 @@ describe("PhaseServer.reset", () => {
     expect(e.name).toBe("PhaseValidationError");
     expect(e.required_action).toBe("retry");
   });
+
+  it("V0.9: phase_start succeeds when all available phases exist on disk", async () => {
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(`${root}/phases/01-discovery`, { recursive: true });
+    mkdirSync(`${root}/phases/05-implement`, { recursive: true });
+    mkdirSync(`${root}/phases/08-validate`, { recursive: true });
+
+    const { session_id } = await seedSinglePipeline();
+    const flow = await loadFlowState(root, session_id);
+    flow.pending_reflections = [];
+    const { saveFlowState } = await import("./flow-state.js");
+    await saveFlowState(root, flow, fixedNow());
+
+    const r = await phase().start({
+      session_id,
+      pipeline_id: "pl-id-1",
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    expect(r.status).toBe("in_progress");
+  });
+
+  it("V0.9: rejects when a phase in available is not on disk", async () => {
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(`${root}/phases/01-discovery`, { recursive: true });
+    // 05-implement and 08-validate are NOT on disk.
+
+    const { session_id } = await seedSinglePipeline();
+    const flow = await loadFlowState(root, session_id);
+    flow.pending_reflections = [];
+    const { saveFlowState } = await import("./flow-state.js");
+    await saveFlowState(root, flow, fixedNow());
+
+    await expect(
+      phase().start({
+        session_id,
+        pipeline_id: "pl-id-1",
+        sub_pipeline_id: "sub-1",
+        phase: "01-discovery",
+      }),
+    ).rejects.toThrow(/V0.9/);
+  });
+
+  it("V0.9: scanPhaseDirectories returns sorted union of phases/ and opc-nodes/", async () => {
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(`${root}/phases/03-design`, { recursive: true });
+    mkdirSync(`${root}/phases/05-implement`, { recursive: true });
+    mkdirSync(`${root}/opc-nodes/05-implement`, { recursive: true });
+    mkdirSync(`${root}/opc-nodes/99-custom`, { recursive: true });
+
+    const { scanPhaseDirectories } = await import("./phase-server.js");
+    const dirs = scanPhaseDirectories(root);
+    expect(dirs).toEqual(["03-design", "05-implement", "99-custom"]);
+  });
 });
 
 describe("PhaseServer.confirm", () => {

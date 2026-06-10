@@ -1,3 +1,4 @@
+import { readdirSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
 import { loadFlowState, saveFlowState } from "./flow-state.js";
@@ -550,6 +551,19 @@ export class PhaseServer {
     if (phase_plan.order_validated !== true) {
       throw new PhaseValidationError("V0.8: phase_plan.order_validated must be true", { required_action: "set phase_plan.order_validated to true after verifying phase ordering satisfies all dependencies" });
     }
+    // V0.9: validate available phases exist as directories on disk.
+    // Only runs when phases/ or opc-nodes/ directories exist (skipped in
+    // ephemeral test environments where these dirs are absent).
+    if (existsSync(`${this.root}/phases`) || existsSync(`${this.root}/opc-nodes`)) {
+      const onDisk = scanPhaseDirectories(this.root);
+      const missing = phase_plan.available.filter((p) => !onDisk.includes(p));
+      if (missing.length > 0) {
+        throw new PhaseValidationError(
+          `V0.9: phase(s) [${missing.join(",")}] not found in phases/ or opc-nodes/ directories`,
+          { required_action: `remove unavailable phases [${missing.join(",")}] from phase_plan.available and phase_plan.selected. Available on disk: [${onDisk.join(", ") || "(none)"}]` },
+        );
+      }
+    }
     const idx = phase_plan.selected.indexOf(phase);
     if (idx > 0) {
       const prev = phase_plan.selected[idx - 1];
@@ -597,4 +611,27 @@ function toNodeDefinition(
   if (typeof n.timeout_minutes === "number") def.timeout_minutes = n.timeout_minutes;
   if (typeof n.max_retries === "number") def.max_retries = n.max_retries;
   return def;
+}
+
+/**
+ * Scan `phases/` and `opc-nodes/` directories under root for available
+ * phase ids. Returns the union of subdirectory names found in either
+ * location (project-level `opc-nodes/` can supplement built-in `phases/`).
+ */
+export function scanPhaseDirectories(root: string): string[] {
+  const ids = new Set<string>();
+  for (const dir of ["phases", "opc-nodes"]) {
+    const base = `${root}/${dir}`;
+    if (!existsSync(base)) continue;
+    try {
+      for (const entry of readdirSync(base, { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          ids.add(entry.name);
+        }
+      }
+    } catch {
+      // Permission errors etc. — skip this directory.
+    }
+  }
+  return [...ids].sort();
 }
