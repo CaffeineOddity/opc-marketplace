@@ -316,3 +316,196 @@ describe("PhaseServer.reset", () => {
     expect(new PhaseValidationError("x").name).toBe("PhaseValidationError");
   });
 });
+
+describe("PhaseServer.confirm", () => {
+  async function seedAndStart(): Promise<{ session_id: string; pipeline_id: string }> {
+    const seed = await seedSinglePipeline();
+    await phase().start({
+      session_id: seed.session_id,
+      pipeline_id: seed.pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    return seed;
+  }
+
+  async function seedNodes(
+    session_id: string,
+    pipeline_id: string,
+    nodes: Array<{
+      name: string;
+      blocked_by?: string[];
+      mode?: "parallel" | "sequential";
+      output?: Array<{ knowledge: string; artifacts: string[] }>;
+      input?: Array<{ knowledge: string }>;
+    }>,
+  ): Promise<void> {
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const ph = state.phases.find((p) => p.phase === "01-discovery");
+    if (!ph) throw new Error("phase missing");
+    ph.nodes = nodes.map((n) => ({
+      name: n.name,
+      status: "pending",
+      agent: "test-agent",
+      blocked_by: n.blocked_by ?? [],
+      input: [],
+      output: [],
+      error: null,
+      timeout_minutes: 5,
+      retry_count: 0,
+      max_retries: 1,
+      mode: n.mode ?? "parallel",
+      node_input: n.input ?? [],
+      node_output: n.output ?? [],
+    }));
+    await saveStateJson(root, session_id, pipeline_id, state, fixedNow());
+  }
+
+  it("locks execution plan and routes to opc_node_start (first group, first node)", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    await seedNodes(session_id, pipeline_id, [
+      { name: "n1", output: [{ knowledge: "k1", artifacts: ["a1.md"] }] },
+      { name: "n2", input: [{ knowledge: "k1" }], output: [{ knowledge: "k2", artifacts: ["a2.md"] }] },
+    ]);
+
+    const r = await phase().confirm({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    expect(r.status).toBe("confirmed");
+    expect(r.groups.length).toBe(2);
+    expect(r.groups[0]?.nodes).toEqual(["n1"]);
+    expect(r.groups[1]?.nodes).toEqual(["n2"]);
+    expect(r.flow_next.tool).toBe("opc_node_start");
+    expect(r.flow_next.args?.node_name).toBe("n1");
+
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const n2 = state.phases.find((p) => p.phase === "01-discovery")?.nodes.find((n) => n.name === "n2");
+    expect(n2?.blocked_by).toEqual(["n1"]);
+
+    const flowState = await loadFlowState(root, session_id);
+    expect(flowState.current_step).toBe("phase_confirmed");
+    const last = flowState.history[flowState.history.length - 1];
+    expect(last?.tool).toBe("opc_phase_confirm");
+  });
+
+  it("rejects when phase is not in_progress", async () => {
+    const { session_id, pipeline_id } = await seedSinglePipeline();
+    await expect(
+      phase().confirm({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "01-discovery",
+      }),
+    ).rejects.toThrow(/cannot confirm from status=pending/);
+  });
+
+  it("rejects when pending_reflections is non-empty (registry-guard)", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    const f = await loadFlowState(root, session_id);
+    f.pending_reflections.push({
+      reflection_id: "rf-9",
+      method: "method:peer-review",
+      step_id: "step-1",
+      target_artifact: "x.md",
+      context_artifacts: [],
+    });
+    await saveFlowState(root, f, fixedNow());
+
+    await expect(
+      phase().confirm({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "01-discovery",
+      }),
+    ).rejects.toThrow(/reflection-registry-guard/);
+  });
+
+  it("rejects when pending_user_question is set (pending-question-guard)", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    const f = await loadFlowState(root, session_id);
+    f.pending_user_question = {
+      question_id: "q-1",
+      asked_at: fixedNow().toISOString(),
+      tool: "opc_phase_confirm",
+      blocking: true,
+      question: "?",
+      options: [],
+    };
+    await saveFlowState(root, f, fixedNow());
+
+    await expect(
+      phase().confirm({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "01-discovery",
+      }),
+    ).rejects.toThrow(/pending-question-guard/);
+  });
+
+  it("records confirm_commit_ref when provided", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    await seedNodes(session_id, pipeline_id, [{ name: "only" }]);
+    const r = await phase().confirm({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+      confirm_commit_ref: "deadbeef",
+    });
+    expect(r.confirm_commit_ref).toBe("deadbeef");
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    expect(state.phases.find((p) => p.phase === "01-discovery")?.confirm_commit_ref).toBe("deadbeef");
+  });
+
+  it("applies node overrides (blocked_by) before resolver runs", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    await seedNodes(session_id, pipeline_id, [{ name: "a" }, { name: "b" }]);
+    const r = await phase().confirm({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+      nodes: [
+        { name: "a" },
+        { name: "b", blocked_by: ["a"] },
+      ],
+    });
+    expect(r.groups.length).toBeGreaterThanOrEqual(1);
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const ph = state.phases.find((p) => p.phase === "01-discovery");
+    const b = ph?.nodes.find((n) => n.name === "b");
+    expect(b?.blocked_by).toContain("a");
+  });
+
+  it("rejects override with unknown node name", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    await seedNodes(session_id, pipeline_id, [{ name: "a" }]);
+    await expect(
+      phase().confirm({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "01-discovery",
+        nodes: [{ name: "ghost", blocked_by: [] }],
+      }),
+    ).rejects.toThrow(/node ghost not found/);
+  });
+
+  it("routes to opc_phase_complete when phase has no nodes", async () => {
+    const { session_id, pipeline_id } = await seedAndStart();
+    const r = await phase().confirm({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    expect(r.groups).toEqual([]);
+    expect(r.flow_next.tool).toBe("opc_phase_complete");
+  });
+});

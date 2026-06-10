@@ -9,6 +9,7 @@ export type FlowStep =
   | "brief_generation"
   | "pipeline_execution"
   | "phase_execution"
+  | "phase_confirmed"
   | "completed"
   | "aborted";
 

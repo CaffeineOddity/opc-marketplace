@@ -11,11 +11,17 @@ import {
   loadStateJson,
   saveStateJson,
   type IoArtifact,
+  type NodeState,
   type PhaseState,
   type StateJson,
 } from "./state-json.js";
 import { aggregatePipelineStatus } from "./pipeline-server.js";
 import { computeNextSubPipeline } from "./topology.js";
+import {
+  resolve as resolveNodes,
+  type ResolvedGroup,
+  type ResolvedPlan,
+} from "./node-resolver.js";
 
 export interface PhaseServerOptions {
   root: string;
@@ -67,6 +73,29 @@ export interface PhaseCompleteResponse {
       | null;
     pending_sub_pipelines: Array<{ id: string; status: SubPipeline["status"] }>;
   };
+  flow_next: { tool: string; args?: Record<string, unknown>; why?: string };
+}
+
+export interface PhaseConfirmNodeOverride {
+  name: string;
+  blocked_by?: string[];
+}
+
+export interface PhaseConfirmRequest {
+  session_id: string;
+  pipeline_id: string;
+  sub_pipeline_id: string;
+  phase: string;
+  nodes?: PhaseConfirmNodeOverride[];
+  confirm_commit_ref?: string;
+}
+
+export interface PhaseConfirmResponse {
+  phase: string;
+  status: "confirmed";
+  sub_pipeline_id: string;
+  groups: ResolvedGroup[];
+  confirm_commit_ref: string | null;
   flow_next: { tool: string; args?: Record<string, unknown>; why?: string };
 }
 
@@ -139,6 +168,119 @@ export class PhaseServer {
         tool: "opc_phase_confirm",
         args: { pipeline_id: req.pipeline_id, sub_pipeline_id: req.sub_pipeline_id, phase: req.phase },
       },
+    };
+  }
+
+  async confirm(req: PhaseConfirmRequest): Promise<PhaseConfirmResponse> {
+    const { plan } = await this.loadAndValidatePipeline(
+      req.session_id,
+      req.pipeline_id,
+      req.sub_pipeline_id,
+    );
+    const state = await loadStateJson(
+      this.root,
+      req.session_id,
+      req.pipeline_id,
+      req.sub_pipeline_id,
+    );
+
+    const phase = state.phases.find((p) => p.phase === req.phase);
+    if (!phase) {
+      throw new PhaseValidationError(`phase ${req.phase} not found in state.json`);
+    }
+    if (phase.status !== "in_progress") {
+      throw new PhaseValidationError(
+        `phase ${req.phase} cannot confirm from status=${phase.status}`,
+      );
+    }
+
+    const flow = await loadFlowState(this.root, req.session_id);
+    if (flow.pending_reflections.length > 0) {
+      const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
+      throw new PhaseValidationError(
+        `reflection-registry-guard: opc_phase_confirm blocked; pending_reflections=[${ids}]`,
+      );
+    }
+    if (flow.pending_user_question) {
+      throw new PhaseValidationError(
+        `pending-question-guard: opc_phase_confirm blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+      );
+    }
+
+    if (req.nodes && req.nodes.length > 0) {
+      this.applyNodeOverrides(phase, req.nodes);
+    }
+
+    const resolved = this.resolvePhase(phase);
+    const overrideMap = new Map<string, string[]>();
+    for (const ov of req.nodes ?? []) {
+      if (ov.blocked_by) overrideMap.set(ov.name, ov.blocked_by);
+    }
+    for (const rn of resolved.nodes) {
+      const ns = phase.nodes.find((n) => n.name === rn.name);
+      if (ns) {
+        const extra = overrideMap.get(rn.name) ?? [];
+        const merged = new Set<string>([...rn.blocked_by, ...extra]);
+        rn.blocked_by = [...merged];
+        ns.blocked_by = [...merged];
+        if (rn.mode) ns.mode = rn.mode;
+      }
+    }
+    if (req.confirm_commit_ref) phase.confirm_commit_ref = req.confirm_commit_ref;
+
+    const now = this.now();
+    await saveStateJson(this.root, req.session_id, req.pipeline_id, state, now);
+    plan.status = aggregatePipelineStatus(plan.sub_pipelines);
+    await savePipelinePlan(this.root, req.session_id, plan, now);
+
+    flow.current_step = "phase_confirmed";
+    flow.current_pipeline_pointer = {
+      pipeline_id: req.pipeline_id,
+      sub_pipeline_id: req.sub_pipeline_id,
+      phase: req.phase,
+    };
+    const firstReadyNode = resolved.groups[0]?.nodes[0] ?? null;
+    flow.history.push({
+      step: "phase_confirm",
+      tool: "opc_phase_confirm",
+      input: req,
+      output: {
+        phase: req.phase,
+        groups_count: resolved.groups.length,
+        first_node: firstReadyNode,
+      },
+      at: now.toISOString(),
+    });
+    await saveFlowState(this.root, flow, now);
+
+    const flow_next: PhaseConfirmResponse["flow_next"] = firstReadyNode
+      ? {
+          tool: "opc_node_start",
+          args: {
+            pipeline_id: req.pipeline_id,
+            sub_pipeline_id: req.sub_pipeline_id,
+            phase: req.phase,
+            node_name: firstReadyNode,
+          },
+          why: "first node of group 0",
+        }
+      : {
+          tool: "opc_phase_complete",
+          args: {
+            pipeline_id: req.pipeline_id,
+            sub_pipeline_id: req.sub_pipeline_id,
+            phase: req.phase,
+          },
+          why: "phase has no nodes to execute",
+        };
+
+    return {
+      phase: req.phase,
+      status: "confirmed",
+      sub_pipeline_id: req.sub_pipeline_id,
+      groups: resolved.groups,
+      confirm_commit_ref: phase.confirm_commit_ref ?? null,
+      flow_next,
     };
   }
 
@@ -338,6 +480,26 @@ export class PhaseServer {
     return { plan, sub };
   }
 
+  private applyNodeOverrides(
+    phase: PhaseState,
+    overrides: PhaseConfirmNodeOverride[],
+  ): void {
+    for (const ov of overrides) {
+      const ns = phase.nodes.find((n) => n.name === ov.name);
+      if (!ns) {
+        throw new PhaseValidationError(
+          `opc_phase_confirm: node ${ov.name} not found in phase ${phase.phase}`,
+        );
+      }
+      if (ov.blocked_by) ns.blocked_by = [...ov.blocked_by];
+    }
+  }
+
+  private resolvePhase(phase: PhaseState): ResolvedPlan {
+    const defs = phase.nodes.map((n) => toNodeDefinition(phase.phase, n));
+    return resolveNodes(defs);
+  }
+
   private validatePhaseStart(state: StateJson, phase: string): void {
     const { phase_plan } = state;
     if (!phase_plan.selected.includes(phase)) {
@@ -382,4 +544,24 @@ function collectKnowledgeOutputs(nodes: PhaseState["nodes"]): string[] {
 
 function isKnowledgeArtifact(a: IoArtifact): boolean {
   return a.type === "knowledge" || a.path.startsWith("opc-knowledge/");
+}
+
+function toNodeDefinition(
+  phase: string,
+  n: NodeState,
+): import("./state-json.js").NodeDefinition {
+  const def: import("./state-json.js").NodeDefinition = {
+    name: n.name,
+    phase,
+    description: "",
+    tags: [],
+    mode: n.mode ?? "sequential",
+    agents: { primary: n.agent ? [n.agent] : [] },
+    input: n.node_input ?? [],
+    output: n.node_output ?? [],
+  };
+  if (n.quality_gates) def.quality_gates = n.quality_gates;
+  if (typeof n.timeout_minutes === "number") def.timeout_minutes = n.timeout_minutes;
+  if (typeof n.max_retries === "number") def.max_retries = n.max_retries;
+  return def;
 }
