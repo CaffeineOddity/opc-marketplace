@@ -167,8 +167,8 @@
 
 **新工具列表（5 个）**：
 1. `opc_reflect_plan`
-2. `opc_reflect_execute`（M3/M4/M5/M6 + 可选 inline 模式，见 2.4）
-3. `opc_reflect_complete`（4 method 共用）
+2. `opc_reflect_execute`（6 methods: cove / critique / debate / tot / reflexion / validator + 可选 inline 模式，见 2.4）
+3. `opc_reflect_complete`（6 method 共用）
 4. `opc_reflect_admin`（record_interventions/on_demand/explain/query_stats/unlearn_method）
 5. —（5 个对外足够）
 
@@ -216,7 +216,7 @@
 |---|---|---|
 | 生命周期类（start/abort/recover/complete/replan） | `action` | 动词字符串 |
 | 流程步骤类（intent/task_analysis/...） | `step` | 与 `flow-state.json.current_step` 对齐的枚举 |
-| 反思方法类（M3/M4/M5/M6） | `method` | `"cove"` / `"critique"` / `"debate"` / `"tot"` |
+| 反思方法类 | `method` | `"cove"` / `"critique"` / `"debate"` / `"tot"` / `"reflexion"` / `"validator"` |
 | 读取模式类（single/batch/list/search） | `mode` | 名词字符串 |
 | 结果状态类（success/failed/retry） | `status` | 与 node.status 枚举对齐 |
 | CRUD 类 | `action` | `"query"` / `"record"` / `"unlearn"` / `"reindex"` / `"promote"` / `"migrate"` / `"endorse"` / `"freeze"` / `"delete"` |
