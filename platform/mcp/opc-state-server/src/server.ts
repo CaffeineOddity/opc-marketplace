@@ -124,10 +124,10 @@ const TOOL_DEFS = [
       type: "object",
       properties: {
         session_id: { type: "string" },
-        dispatch_instruction: { type: "string" },
-        completed_message: { type: "string" },
+        intent: { type: "string" },
+        note: { type: "string" },
       },
-      required: ["session_id"],
+      required: ["session_id", "intent"],
     } as const,
   },
   {
@@ -497,9 +497,9 @@ async function dispatchTool(
     case "opc_quick_dispatch":
       return flow.quickDispatch({
         session_id: s("session_id"),
-        ...(s("dispatch_instruction") ? { dispatch_instruction: s("dispatch_instruction") } : {}),
-        ...(s("completed_message") ? { completed_message: s("completed_message") } : {}),
-      } as QuickDispatchRequest);
+        intent: s("intent") as Intent,
+        ...(s("note") ? { note: s("note") } : {}),
+      });
 
     case "opc_flow_correct": {
       if (action === "revise") {
