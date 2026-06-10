@@ -1,6 +1,6 @@
 ---
 name: opc-distiller
-description: L1→L2 corrections distiller — spawn by reflection-server at pipeline complete; reads interventions + reflection log, writes corrections to project store
+description: L1→L2 corrections distiller — spawn by reflection-server at pipeline end; reads interventions + reflection log, writes corrections to project store
 model: sonnet
 tools:
   - Read

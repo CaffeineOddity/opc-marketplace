@@ -21,17 +21,24 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const MARKETPLACE_ROOT = join(__dirname, "..");
 
-const HELP = `opc-kit v0.2.0 — OPC kit manager
+const HELP = `opc-kit v0.3.0 — OPC kit manager
 
 Usage:
-  opc-kit install <kit-name>    Install a kit from the OPC marketplace
-  opc-kit remove  <kit-name>    Uninstall a kit from the current project
-  opc-kit update  <kit-name>    Reinstall a kit (pull latest agents)
+  opc-kit install  <kit-name>   Install a kit from the OPC marketplace
+  opc-kit remove   <kit-name>   Uninstall a kit from the current project
+  opc-kit update   <kit-name>   Reinstall a kit (pull latest agents)
   opc-kit list                  List installed kits
+  opc-kit validate <kit-path>   Validate agent.md files in a kit directory
   opc-kit --help                Show this help
 
 Install/update/remove require a Claude Code project directory as CWD
 (.claude/ directory must exist).`;
+
+const VALID_MODELS = new Set(["sonnet", "opus", "haiku"]);
+const REFLECTION_FORBIDDEN_TOOLS = new Set([
+  "Write", "Edit", "Bash", "NotebookEdit",
+  "opc_knowledge_write", "opc_knowledge_admin",
+]);
 
 /** @returns {Promise<object>} */
 async function loadMarketplace() {
@@ -84,6 +91,163 @@ async function listAgentFilesRecursive(dir) {
 async function listAgentFiles(kitDir) {
   const agentsDir = join(kitDir, "agents");
   return listAgentFilesRecursive(agentsDir);
+}
+
+/**
+ * Parse YAML frontmatter between --- delimiters.
+ * Handles scalar key:value and indented list items.
+ * @param {string} content
+ * @returns {object|null}
+ */
+function parseFrontmatter(content) {
+  const parts = content.split("---");
+  if (parts.length < 3) return null;
+
+  const fm = parts[1];
+  const result = {};
+  const lines = fm.split("\n");
+
+  let currentKey = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("- ") && currentKey) {
+      const value = trimmed.slice(2).trim();
+      if (!Array.isArray(result[currentKey])) result[currentKey] = [];
+      result[currentKey].push(value);
+      continue;
+    }
+
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx > 0) {
+      currentKey = trimmed.slice(0, colonIdx).trim();
+      const value = trimmed.slice(colonIdx + 1).trim();
+      result[currentKey] = value || [];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Validate agent.md files in a kit directory per kit-agent conventions.
+ * @param {string} kitPath - path to kit root (contains agents/ directory)
+ */
+async function validateKit(kitPath) {
+  const agentsDir = join(kitPath, "agents");
+
+  try {
+    const s = await stat(agentsDir);
+    if (!s.isDirectory()) {
+      console.error(`Error: ${agentsDir} is not a directory`);
+      process.exit(1);
+    }
+  } catch {
+    console.error(`Error: agents/ directory not found in ${kitPath}`);
+    process.exit(1);
+  }
+
+  const agentFiles = await listAgentFilesRecursive(agentsDir);
+
+  if (agentFiles.length === 0) {
+    console.log("✓ 0 agents validated (empty agents/ directory)");
+    return;
+  }
+
+  let errors = 0;
+  let warnings = 0;
+  const categories = new Map();
+
+  for (const filePath of agentFiles) {
+    const relPath = filePath.slice(agentsDir.length + 1);
+    const fileName = filePath.split("/").pop();
+    const baseName = fileName.replace(/\.md$/, "");
+    const category = relPath.includes("/") ? relPath.split("/")[0] : "(root)";
+
+    categories.set(category, (categories.get(category) || 0) + 1);
+
+    const content = await readFile(filePath, "utf8");
+    const fm = parseFrontmatter(content);
+
+    if (!fm) {
+      console.error(`  ERROR: ${relPath} — no frontmatter found`);
+      errors++;
+      continue;
+    }
+
+    // ① name == filename
+    const nameVal = typeof fm.name === "string" ? fm.name : "";
+    if (nameVal !== baseName) {
+      console.error(
+        `  ERROR: ${relPath} — name "${nameVal}" doesn't match filename "${baseName}"`,
+      );
+      errors++;
+    }
+
+    // ② description non-empty and ≤ 150 chars
+    const descRaw = fm.description;
+    const descStr = Array.isArray(descRaw) ? descRaw.join(", ") : (descRaw || "");
+    if (!descStr) {
+      console.error(`  ERROR: ${relPath} — description is empty`);
+      errors++;
+    } else if (descStr.length > 150) {
+      console.error(
+        `  ERROR: ${relPath} — description too long (${descStr.length} chars, max 150)`,
+      );
+      errors++;
+    }
+
+    // ③ model in valid enum
+    const modelVal = typeof fm.model === "string" ? fm.model : "";
+    if (!modelVal || !VALID_MODELS.has(modelVal)) {
+      console.error(
+        `  ERROR: ${relPath} — invalid model "${modelVal}", must be one of: sonnet, opus, haiku`,
+      );
+      errors++;
+    }
+
+    // ④ tools at least 1
+    const tools = Array.isArray(fm.tools) ? fm.tools : [];
+    if (tools.length === 0) {
+      console.error(`  ERROR: ${relPath} — tools list is empty`);
+      errors++;
+    }
+
+    // ⑤ Reflection agents: no Write/Edit/Bash/opc_knowledge_write/opc_knowledge_admin
+    if (category === "reflection") {
+      for (const tool of tools) {
+        if (REFLECTION_FORBIDDEN_TOOLS.has(tool)) {
+          console.error(
+            `  ERROR: ${relPath} — reflection agent has forbidden tool: ${tool}`,
+          );
+          errors++;
+        }
+      }
+    }
+
+    // ⑥ Task agents in dev/: must include opc_knowledge_write
+    if (category === "dev") {
+      if (!tools.includes("opc_knowledge_write")) {
+        console.error(
+          `  ERROR: ${relPath} — dev agent missing required tool: opc_knowledge_write`,
+        );
+        errors++;
+      }
+    }
+  }
+
+  const categoryList = [...categories.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([cat, count]) => `${cat}(${count})`)
+    .join(", ");
+
+  console.log(`✓ ${agentFiles.length} agents validated`);
+  console.log(`  ${categories.size} categories: ${categoryList}`);
+  console.log(`  ${errors} errors, ${warnings} warnings`);
+
+  if (errors > 0) process.exit(1);
 }
 
 /**
@@ -209,14 +373,32 @@ async function main(argv) {
     process.exit(0);
   }
 
-  if (cmd !== "install" && cmd !== "remove" && cmd !== "update" && cmd !== "list") {
+  if (
+    cmd !== "install" &&
+    cmd !== "remove" &&
+    cmd !== "update" &&
+    cmd !== "list" &&
+    cmd !== "validate"
+  ) {
     console.error(`Unknown command: ${cmd}`);
-    console.error("Usage: opc-kit [install|remove|update|list] [kit-name]");
+    console.error(
+      "Usage: opc-kit [install|remove|update|list|validate] [kit-name|kit-path]",
+    );
     process.exit(2);
   }
 
   if (cmd === "list") {
     await listKits(process.cwd());
+    return;
+  }
+
+  if (cmd === "validate") {
+    const kitPath = argv[1];
+    if (!kitPath) {
+      console.error("opc-kit validate: missing kit path");
+      process.exit(2);
+    }
+    await validateKit(join(process.cwd(), kitPath));
     return;
   }
 

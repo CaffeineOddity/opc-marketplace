@@ -41,7 +41,7 @@ describe("opc-kit CLI", () => {
   describe("help", () => {
     it("prints help with --help", () => {
       const out = kit("--help");
-      expect(out).toContain("opc-kit v0.2.0");
+      expect(out).toContain("opc-kit v0.3.0");
       expect(out).toContain("install");
       expect(out).toContain("remove");
       expect(out).toContain("update");
@@ -50,7 +50,7 @@ describe("opc-kit CLI", () => {
 
     it("prints help with -h", () => {
       const out = kit("-h");
-      expect(out).toContain("opc-kit v0.2.0");
+      expect(out).toContain("opc-kit v0.3.0");
     });
   });
 
