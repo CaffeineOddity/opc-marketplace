@@ -64,6 +64,19 @@ export interface CorrectionsUpsertResponse {
   frozen_ids: string[];
 }
 
+// ---- M17.f: unified `opc_corrections` facade (query/record/unlearn/reindex) ----
+
+export type CorrectionsActionRequest =
+  | ({ action: "query" } & CorrectionsQueryRequest)
+  | ({ action: "record" } & CorrectionsUpsertRequest)
+  | { action: "unlearn"; correction_id: string; reason?: string }
+  | { action: "reindex"; scope?: "all" | { step: StepId } };
+
+export type CorrectionsActionResponse =
+  | ({ action: "query" } & CorrectionsQueryResponse)
+  | ({ action: "record" } & CorrectionsUpsertResponse)
+  | { action: "unlearn" | "reindex"; not_implemented: true; reason: string };
+
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
 
@@ -234,6 +247,41 @@ export class CorrectionsServer {
       };
       await saveCorrection(this.root, frozen);
       resp.frozen_ids.push(frozen.id);
+    }
+  }
+
+  /**
+   * Tool (M17.f): opc_corrections — unified facade for query/record/unlearn/reindex.
+   * `record` delegates to upsert(); `query` to query(); `unlearn`/`reindex`
+   * return not_implemented (M18: tombstone + reindex worker).
+   */
+  async crud(req: CorrectionsActionRequest): Promise<CorrectionsActionResponse> {
+    switch (req.action) {
+      case "query": {
+        const { action: _a, ...inner } = req;
+        void _a;
+        const resp = await this.query(inner);
+        return { action: "query", ...resp };
+      }
+      case "record": {
+        const { action: _a, ...inner } = req;
+        void _a;
+        const resp = await this.upsert(inner);
+        return { action: "record", ...resp };
+      }
+      case "unlearn":
+      case "reindex":
+        return {
+          action: req.action,
+          not_implemented: true,
+          reason: `opc_corrections.${req.action} deferred to M18 (tombstone + reindex worker)`,
+        };
+      default: {
+        const _exhaustive: never = req;
+        throw new CorrectionsServerError(
+          `opc_corrections: unknown action=${String((_exhaustive as { action?: string }).action)}`,
+        );
+      }
     }
   }
 

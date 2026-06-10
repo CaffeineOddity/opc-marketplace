@@ -834,4 +834,90 @@ describe("CorrectionsServer", () => {
     expect(all).toHaveLength(1);
     expect(all[0]?.correction.id).toBe("corr-disk");
   });
+
+  describe("M17.f opc_corrections unified facade", () => {
+    it("action=query delegates to query() and tags response", async () => {
+      const srv = newServer();
+      await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "P3",
+              unit: "u",
+              section: "s",
+              subsection: "ss",
+              lesson: "x",
+              applies_when: { keywords: ["coupling"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+      const resp = await srv.crud({
+        action: "query",
+        step: "P3",
+        keywords: ["coupling"],
+        limit: 5,
+      });
+      expect(resp.action).toBe("query");
+      if (resp.action === "query") {
+        expect(resp.items).toHaveLength(1);
+        expect(resp.total).toBe(1);
+      }
+    });
+
+    it("action=record delegates to upsert() and tags response", async () => {
+      const srv = newServer();
+      const resp = await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "P5",
+              unit: "u",
+              section: "s",
+              subsection: "ss",
+              lesson: "y",
+              applies_when: { keywords: ["k"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+      expect(resp.action).toBe("record");
+      if (resp.action === "record") {
+        expect(resp.new_count).toBe(1);
+        expect(resp.written_ids).toHaveLength(1);
+      }
+    });
+
+    it.each([["unlearn"], ["reindex"]] as const)(
+      "action=%s returns not_implemented:true (deferred to M18)",
+      async (action) => {
+        const srv = newServer();
+        const req =
+          action === "unlearn"
+            ? { action, correction_id: "corr-1" }
+            : { action };
+        const resp = await srv.crud(req);
+        expect(resp.action).toBe(action);
+        if (resp.action !== "query" && resp.action !== "record") {
+          expect(resp.not_implemented).toBe(true);
+          expect(resp.reason).toContain(action);
+          expect(resp.reason).toContain("M18");
+        }
+      },
+    );
+
+    it("rejects unknown action with CorrectionsServerError", async () => {
+      const srv = newServer();
+      await expect(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        srv.crud({ action: "ghost" } as any),
+      ).rejects.toThrow(/unknown action=ghost/);
+    });
+  });
 });

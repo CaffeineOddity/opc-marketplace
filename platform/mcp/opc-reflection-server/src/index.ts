@@ -71,6 +71,8 @@ export type {
   CorrectionUpsertItem,
   CorrectionsUpsertRequest,
   CorrectionsUpsertResponse,
+  CorrectionsActionRequest,
+  CorrectionsActionResponse,
 } from "./corrections-server.js";
 
 export {
