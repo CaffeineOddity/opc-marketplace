@@ -101,6 +101,24 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
 
   const knowledge = new KnowledgeServer({ root });
 
+  // K1: heal broken/stale index before accepting requests
+  const healResult = await knowledge.startupSelfCheck();
+  if (healResult.reindexed) {
+    process.stderr.write(
+      `opc-knowledge-server: startup reindex (${healResult.reason})\n`,
+    );
+  }
+
+  // K3: graceful shutdown — flush reindex queue before exit
+  const gracefulShutdown = async (signal: string) => {
+    process.stderr.write(`opc-knowledge-server: ${signal} received, flushing...\n`);
+    await knowledge.shutdown();
+    process.stderr.write("opc-knowledge-server: shutdown complete\n");
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
+
   mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOL_DEFS.map((t) => ({
       name: t.name,

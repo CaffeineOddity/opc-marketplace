@@ -2,13 +2,13 @@ import { mkdir, readdir, rmdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { Address, IndexEntry } from "@opc/memory-store";
-import { MemoryStore, NotFoundError, VersionConflictError } from "@opc/memory-store";
+import { indexPath, MemoryStore, NotFoundError, VersionConflictError } from "@opc/memory-store";
 
 import { MemoryBaseVersionResolver, type BaseVersionResolver } from "./base-version.js";
 import type { Diff3Result, Hunk, MergeStatus } from "./diff3.js";
 import { diff3 } from "./diff3.js";
 import { addRefs, loadRefs, relatedUnits, saveRefs } from "./refs.js";
-import { ReindexWorker } from "./reindex-worker.js";
+import { brokenMarkerExists, brokenMarkerPath, ReindexWorker } from "./reindex-worker.js";
 
 export interface KnowledgeServerOptions {
   root: string;
@@ -146,12 +146,65 @@ export class KnowledgeServer {
     });
     this.worker = new ReindexWorker({
       store: this.store,
+      root: this.root,
       ...(opts.reindexDebounceMs !== undefined ? { debounceMs: opts.reindexDebounceMs } : {}),
       ...(opts.hardFlushTimeoutMs !== undefined
         ? { hardFlushTimeoutMs: opts.hardFlushTimeoutMs }
         : {}),
     });
     this.resolver = opts.baseVersionResolver ?? new MemoryBaseVersionResolver();
+    // K2: watch for cross-process .md file changes
+    this.worker.startFileWatcher();
+  }
+
+  /**
+   * K1: Startup self-check — heal broken index and reindex stale entries.
+   * Called once after server construction, before accepting requests.
+   */
+  async startupSelfCheck(): Promise<{ healed: boolean; reindexed: boolean; reason: string }> {
+    const idxPath = indexPath(this.root);
+    let idxStat: Awaited<ReturnType<typeof stat>> | null = null;
+    try {
+      idxStat = await stat(idxPath);
+    } catch {
+      // index doesn't exist yet — not an error, just first run
+    }
+
+    // If broken marker exists, force full reindex to heal
+    if (await brokenMarkerExists(this.root)) {
+      await this.worker.fullReindex();
+      return { healed: true, reindexed: true, reason: "broken_index_healed" };
+    }
+
+    // If no index yet, build one
+    if (!idxStat) {
+      await this.worker.fullReindex();
+      return { healed: false, reindexed: true, reason: "first_run" };
+    }
+
+    // Compare newest .md mtime vs index mtime
+    const addresses = await this.store.list();
+    let newestMdMs = 0;
+    for (const addr of addresses) {
+      try {
+        const r = await this.store.read(addr);
+        const st = await stat(r.path);
+        if (st.mtimeMs > newestMdMs) newestMdMs = st.mtimeMs;
+      } catch {
+        // skip unreadable
+      }
+    }
+
+    if (newestMdMs > idxStat.mtimeMs) {
+      await this.worker.fullReindex();
+      return { healed: false, reindexed: true, reason: "stale_index" };
+    }
+
+    return { healed: false, reindexed: false, reason: "index_fresh" };
+  }
+
+  async shutdown(): Promise<void> {
+    await this.worker.shutdown();
   }
 
   async open(req: OpenRequest): Promise<OpenResponse> {
