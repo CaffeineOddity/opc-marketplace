@@ -86,6 +86,8 @@ export interface NodeState {
   completed_at?: string;
   evidence?: NodeEvidence;
   unblocked_at?: string;
+  /** PID of the sub-agent process spawned for this node. Set by opc_node_start. Used by pipeline abort with kill_agents=true. */
+  agent_pid?: number;
 }
 
 export interface NodeEvidence {

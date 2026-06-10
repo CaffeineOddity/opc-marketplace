@@ -151,6 +151,10 @@ export interface PipelineAbortResponse {
   status: "aborted";
   aborted_at: string;
   reason: string | null;
+  /** PIDs of sub-agent processes killed (only when kill_agents=true). */
+  killed_agent_pids: number[];
+  /** PIDs that could not be killed (process already exited / permission denied). */
+  failed_kill_pids: number[];
 }
 
 export interface PipelineResumeResponse {
@@ -646,10 +650,45 @@ export class PipelineServer {
   async abort(req: {
     session_id: string;
     pipeline_id: string;
+    kill_agents?: boolean;
     reason?: string;
   }): Promise<PipelineAbortResponse> {
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
     const now = this.now();
+    const killAgents = req.kill_agents !== false; // default true per spec
+
+    const killed_agent_pids: number[] = [];
+    const failed_kill_pids: number[] = [];
+
+    if (killAgents) {
+      for (const sub of plan.sub_pipelines) {
+        if (sub.status === "completed" || sub.status === "aborted") continue;
+        try {
+          const stateJson = await loadStateJson(
+            this.root,
+            req.session_id,
+            req.pipeline_id,
+            sub.id,
+          );
+          for (const phase of stateJson.phases) {
+            for (const node of phase.nodes) {
+              if (node.status === "in_progress" && node.agent_pid) {
+                try {
+                  process.kill(node.agent_pid, "SIGTERM");
+                  killed_agent_pids.push(node.agent_pid);
+                } catch {
+                  // ESRCH (already exited) or EPERM (no permission)
+                  failed_kill_pids.push(node.agent_pid);
+                }
+              }
+            }
+          }
+        } catch {
+          // state.json may not exist yet for pending subs — skip
+        }
+      }
+    }
+
     for (const sub of plan.sub_pipelines) {
       if (sub.status !== "completed" && sub.status !== "aborted") {
         sub.status = "aborted";
@@ -662,8 +701,13 @@ export class PipelineServer {
     flow.history.push({
       step: "pipeline_abort",
       tool: "opc_pipeline_lifecycle",
-      input: { action: "abort", ...req },
-      output: { pipeline_id: plan.id, reason: req.reason ?? null },
+      input: { action: "abort", kill_agents: killAgents, reason: req.reason },
+      output: {
+        pipeline_id: plan.id,
+        reason: req.reason ?? null,
+        killed_agent_pids,
+        ...(failed_kill_pids.length > 0 ? { failed_kill_pids } : {}),
+      },
       at: now.toISOString(),
     });
     await saveFlowState(this.root, flow, now);
@@ -672,6 +716,8 @@ export class PipelineServer {
       status: "aborted",
       aborted_at: now.toISOString(),
       reason: req.reason ?? null,
+      killed_agent_pids,
+      failed_kill_pids,
     };
   }
 

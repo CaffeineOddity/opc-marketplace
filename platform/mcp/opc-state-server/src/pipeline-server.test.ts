@@ -846,6 +846,42 @@ describe("PipelineServer.lifecycle (M17.b discriminator facade)", () => {
     const reloaded = await loadPipelinePlan(root, session_id, pipeline_id);
     expect(reloaded.status).toBe("aborted");
     expect(reloaded.sub_pipelines.every((s) => s.status === "aborted")).toBe(true);
+    expect(r.killed_agent_pids).toEqual([]);
+    expect(r.failed_kill_pids).toEqual([]);
+  });
+
+  it("abort with kill_agents=true (default) returns killed_agent_pids and failed_kill_pids fields", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const r = await p.abort({
+      session_id,
+      pipeline_id,
+      kill_agents: true,
+      reason: "cancelled",
+    });
+    expect(r.status).toBe("aborted");
+    expect(r.killed_agent_pids).toBeDefined();
+    expect(r.failed_kill_pids).toBeDefined();
+    expect(Array.isArray(r.killed_agent_pids)).toBe(true);
+    expect(Array.isArray(r.failed_kill_pids)).toBe(true);
+  });
+
+  it("abort with kill_agents=false skips agent termination", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const r = await p.abort({
+      session_id,
+      pipeline_id,
+      kill_agents: false,
+    });
+    expect(r.status).toBe("aborted");
+    expect(r.killed_agent_pids).toEqual([]);
+    expect(r.failed_kill_pids).toEqual([]);
+  });
+
+  it("abort kill_agents defaults to true", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const r = await p.abort({ session_id, pipeline_id });
+    expect(r.status).toBe("aborted");
+    expect(Array.isArray(r.killed_agent_pids)).toBe(true);
   });
 
   it("lifecycle(replan) forwards to replan() add_sub_pipeline", async () => {
