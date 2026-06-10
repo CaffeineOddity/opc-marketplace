@@ -29,6 +29,7 @@ Usage:
   opc-kit update   <kit-name>   Reinstall a kit (pull latest agents)
   opc-kit list                  List installed kits
   opc-kit validate <kit-path>   Validate agent.md files in a kit directory
+  opc-kit doctor               Health check all installed kits
   opc-kit --help                Show this help
 
 Install/update/remove require a Claude Code project directory as CWD
@@ -251,6 +252,83 @@ async function validateKit(kitPath) {
 }
 
 /**
+ * Doctor — health check all installed kits.
+ * Verifies agent files and MCP server configuration per the installed-kits registry.
+ * @param {string} projectRoot - project directory with .claude/ and .opc/
+ */
+async function doctorKit(projectRoot) {
+  const installed = await loadInstalled(projectRoot);
+
+  if (installed.kits.length === 0) {
+    console.log("No kits installed.");
+    return;
+  }
+
+  // Load .mcp.json for MCP server config check
+  let mcpJson = null;
+  try {
+    const raw = await readFile(join(projectRoot, ".mcp.json"), "utf8");
+    mcpJson = JSON.parse(raw);
+  } catch {
+    // no .mcp.json — all MCP server checks will report missing
+  }
+
+  const configuredServers = new Set(
+    mcpJson?.mcpServers ? Object.keys(mcpJson.mcpServers) : [],
+  );
+
+  const claudeAgentsDir = join(projectRoot, ".claude", "agents");
+  let allHealthy = true;
+
+  for (const kit of installed.kits) {
+    const issues = [];
+
+    // Check agent files exist on disk
+    const missingAgents = [];
+    for (const agent of kit.agents) {
+      try {
+        await stat(join(claudeAgentsDir, agent));
+      } catch {
+        missingAgents.push(agent);
+      }
+    }
+    if (missingAgents.length > 0) {
+      issues.push(`${missingAgents.length} agents missing`);
+    }
+
+    // Check MCP servers configured
+    const missingServers = [];
+    for (const srv of kit.mcp_servers || []) {
+      if (!configuredServers.has(srv)) {
+        missingServers.push(srv);
+      }
+    }
+    if (missingServers.length > 0) {
+      issues.push(`${missingServers.length} MCP servers missing`);
+    }
+
+    const agentCount = kit.agents.length;
+    const serverCount = (kit.mcp_servers || []).length;
+
+    if (issues.length === 0) {
+      console.log(
+        `✓ ${kit.name} (v${kit.version}) — all ${agentCount} agents present${serverCount > 0 ? `, ${serverCount} MCP servers configured` : ""}`,
+      );
+    } else {
+      allHealthy = false;
+      console.log(
+        `⚠ ${kit.name} (v${kit.version}) — ${issues.join(", ")}, run 'opc-kit repair ${kit.name}'`,
+      );
+    }
+  }
+
+  if (allHealthy) {
+    console.log("");
+    console.log("All kits healthy.");
+  }
+}
+
+/**
  * @param {string} projectRoot
  * @param {string} kitName
  * @param {object} kitPlugin manifest from marketplace.json
@@ -378,17 +456,23 @@ async function main(argv) {
     cmd !== "remove" &&
     cmd !== "update" &&
     cmd !== "list" &&
-    cmd !== "validate"
+    cmd !== "validate" &&
+    cmd !== "doctor"
   ) {
     console.error(`Unknown command: ${cmd}`);
     console.error(
-      "Usage: opc-kit [install|remove|update|list|validate] [kit-name|kit-path]",
+      "Usage: opc-kit [install|remove|update|list|validate|doctor] [kit-name|kit-path]",
     );
     process.exit(2);
   }
 
   if (cmd === "list") {
     await listKits(process.cwd());
+    return;
+  }
+
+  if (cmd === "doctor") {
+    await doctorKit(process.cwd());
     return;
   }
 
