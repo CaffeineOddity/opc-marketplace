@@ -686,6 +686,64 @@ describe("M18.b query_stats aggregation", () => {
     });
     expect(resp.expiry_metrics_source).toBe("unavailable_zeroed");
   });
+
+  it("returns real expiry_metrics when flow_state_path points at a valid flow-state.json (M18.i)", async () => {
+    const srv = newServer();
+    const flowPath = join(root, "flow.json");
+
+    // Flow-state with recently-expired pending + 24h windowed interventions + purge log
+    const flow: {
+      pending_reflections: Array<{ status: string; expires_at: string }>;
+      user_interventions: Array<{ at: string; trigger: string }>;
+      reflection_log: Array<{ at: string; verdict: string }>;
+    } = {
+      pending_reflections: [
+        {
+          status: "expired_pending_decision",
+          expires_at: "2026-06-10T11:30:00Z", // 30min ago, < 24h
+        },
+        {
+          status: "expired_pending_decision",
+          expires_at: "2026-06-08T00:00:00Z", // > 48h ago, outside 24h window
+        },
+      ],
+      user_interventions: [
+        { at: "2026-06-10T11:00:00Z", trigger: "expired_reflection_resumed" },
+        { at: "2026-06-10T10:00:00Z", trigger: "expired_reflection_discarded" },
+        { at: "2026-06-09T00:00:00Z", trigger: "expired_reflection_skipped" }, // > 24h
+      ],
+      reflection_log: [
+        { at: "2026-06-10T10:00:00Z", verdict: "discarded_by_user_after_expiry" },
+        { at: "2026-06-01T00:00:00Z", verdict: "discarded_by_user_after_expiry" }, // > 7d
+      ],
+    };
+    await writeFile(flowPath, JSON.stringify(flow), "utf8");
+
+    const resp = await srv.admin({
+      action: "query_stats",
+      session_id: "se-flow",
+      flow_state_path: flowPath,
+    });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.expiry_metrics_source).toBe("flow_state");
+    expect(resp.expiry_metrics.expired_pending_count_24h).toBe(1); // only the recent one
+    expect(resp.expiry_metrics.expired_resumed_count_24h).toBe(1);
+    expect(resp.expiry_metrics.expired_discarded_count_24h).toBe(1);
+    expect(resp.expiry_metrics.expired_skipped_count_24h).toBe(0); // outside 24h window
+    expect(resp.expiry_metrics.artifact_purged_7d_count).toBe(1); // only the recent one
+  });
+
+  it("falls back to unavailable_zeroed when flow_state_path file is missing", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({
+      action: "query_stats",
+      session_id: "se-missing",
+      flow_state_path: join(root, "nonexistent.json"),
+    });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.expiry_metrics_source).toBe("unavailable_zeroed");
+    expect(resp.expiry_metrics.expired_pending_count_24h).toBe(0);
+  });
 });
 
 describe("M18.c explain artifact reader", () => {

@@ -323,21 +323,25 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 
 ## 七、可观测性
 
-每次反思自动写入 `opc-logs/reflection/<pipeline-id>/<step>.jsonl`：
+每次反思自动通过 `ReflectionServer.critiqueComplete()` 追加到 `opc-logs/reflection/<session_id>/telemetry.jsonl`（单文件按 session_id 聚合，`withFileLock` 原子写）：
 
 ```json
 {
-  "ts": "...",
+  "ts": "2026-06-10T12:00:00Z",
+  "session_id": "sess-abc",
   "step": "P5",
-  "method": "M4-critique",
-  "agent_id": "...",
-  "tokens_in": 1200,
-  "tokens_out": 350,
-  "latency_ms": 4200,
+  "method": "critique",
+  "reflection_id": "rfl-P5-r2-01HXY8",
+  "round": 2,
+  "verdict": "objections_remain",
   "objections_raised": 2,
-  "objections_kept_by_meta": 1,
-  "evidence_diff_after": true,
-  "fallback_triggered": false
+  "objections_kept": 1,
+  "evidence_diff": true,
+  "fallback_triggered": false,
+  "validator_pass": true,
+  "latency_ms": 4200,
+  "tokens_in": 1200,
+  "tokens_out": 350
 }
 ```
 

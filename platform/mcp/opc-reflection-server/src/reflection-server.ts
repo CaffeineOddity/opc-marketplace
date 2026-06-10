@@ -478,9 +478,8 @@ export class ReflectionServer {
 
   /**
    * Tool 7 (M17.e): opc_reflect_admin — dispatcher for non-method admin ops.
-   * Implemented: record_interventions. Other actions (on_demand / explain /
-   * query_stats / unlearn_method) return not_implemented: true for now;
-   * full impl tracked in M18.
+   * All 5 actions (record_interventions / query_stats / explain / unlearn_method
+   * / on_demand) fully implemented (M18.a–M18.i).
    */
   async admin(req: ReflectAdminRequest): Promise<ReflectAdminResponse> {
     switch (req.action) {

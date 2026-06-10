@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { readTelemetry, type TelemetryEntry } from "./telemetry.js";
 import type { ReflectionMethod, StepId } from "./store.js";
 
@@ -151,6 +153,9 @@ export async function aggregateTelemetry(
     return a.method < b.method ? -1 : 1;
   });
 
+  const { metrics: expiry_metrics, source: expiry_metrics_source } =
+    await loadExpiryMetrics(req.flow_state_path, now);
+
   return {
     session_id: req.session_id,
     window: req.window ?? null,
@@ -158,9 +163,67 @@ export async function aggregateTelemetry(
     runs_total: totals.runs,
     per_method_step,
     totals,
-    expiry_metrics: { ...ZERO_EXPIRY },
-    expiry_metrics_source: "unavailable_zeroed",
+    expiry_metrics,
+    expiry_metrics_source,
   };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+
+interface FlowStateLite {
+  pending_reflections?: Array<{ status?: string; expires_at?: string }>;
+  user_interventions?: Array<{ at?: string; trigger?: string }>;
+  reflection_log?: Array<{ at?: string; verdict?: string }>;
+}
+
+async function loadExpiryMetrics(
+  flowStatePath: string | undefined,
+  now: Date,
+): Promise<{ metrics: ExpiryMetrics; source: "flow_state" | "unavailable_zeroed" }> {
+  if (!flowStatePath) {
+    return { metrics: { ...ZERO_EXPIRY }, source: "unavailable_zeroed" };
+  }
+  let raw: string;
+  try {
+    raw = await readFile(flowStatePath, "utf8");
+  } catch {
+    return { metrics: { ...ZERO_EXPIRY }, source: "unavailable_zeroed" };
+  }
+  let flow: FlowStateLite;
+  try {
+    flow = JSON.parse(raw) as FlowStateLite;
+  } catch {
+    return { metrics: { ...ZERO_EXPIRY }, source: "unavailable_zeroed" };
+  }
+
+  const dayCutoff = now.getTime() - DAY_MS;
+  const weekCutoff = now.getTime() - WEEK_MS;
+  const m: ExpiryMetrics = { ...ZERO_EXPIRY };
+
+  for (const p of flow.pending_reflections ?? []) {
+    if (p.status === "expired_pending_decision") {
+      const expiredAt = p.expires_at ? Date.parse(p.expires_at) : NaN;
+      if (Number.isFinite(expiredAt) && expiredAt >= dayCutoff) {
+        m.expired_pending_count_24h += 1;
+      }
+    }
+  }
+  for (const iv of flow.user_interventions ?? []) {
+    const at = iv.at ? Date.parse(iv.at) : NaN;
+    if (!Number.isFinite(at) || at < dayCutoff) continue;
+    if (iv.trigger === "expired_reflection_resumed") m.expired_resumed_count_24h += 1;
+    if (iv.trigger === "expired_reflection_discarded") m.expired_discarded_count_24h += 1;
+    if (iv.trigger === "expired_reflection_skipped") m.expired_skipped_count_24h += 1;
+  }
+  for (const e of flow.reflection_log ?? []) {
+    const at = e.at ? Date.parse(e.at) : NaN;
+    if (!Number.isFinite(at)) continue;
+    if (e.verdict === "discarded_by_user_after_expiry" && at >= weekCutoff) {
+      m.artifact_purged_7d_count += 1;
+    }
+  }
+  return { metrics: m, source: "flow_state" };
 }
 
 function accumulate(bucket: PerMethodStepStats, e: TelemetryEntry): void {
