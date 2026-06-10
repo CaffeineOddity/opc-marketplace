@@ -446,3 +446,314 @@ describe("NodeServer.complete", () => {
     expect(e.required_action).toBe("opc_flow_reflect");
   });
 });
+
+describe("NodeServer.finish (M17.c discriminator facade)", () => {
+  async function startNode(): Promise<{ session_id: string; pipeline_id: string }> {
+    const { session_id, pipeline_id } = await seed();
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      node_definition: def({ name: "x" }),
+    });
+    return { session_id, pipeline_id };
+  }
+
+  it("finish(success) delegates to complete() and tags node_status=completed", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    const r = await node().finish({
+      status: "success",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+    });
+    expect(r.status).toBe("success");
+    if (r.status === "success") {
+      expect(r.node_status).toBe("completed");
+      expect(r.flow_next.tool).toMatch(/opc_(node_start|phase_complete|flow_query)/);
+    }
+  });
+
+  it("finish(failed) records error, increments retry_count, retry_available=true under budget", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    const r = await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "RuntimeError" },
+    });
+    expect(r.status).toBe("failed");
+    if (r.status === "failed") {
+      expect(r.retry_count).toBe(1);
+      expect(r.max_retries).toBe(3);
+      expect(r.retry_available).toBe(true);
+      expect(r.flow_next.tool).toBe("opc_node_finish");
+      expect(r.flow_next.args?.status).toBe("retry");
+    }
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const nd = state.phases
+      .find((p) => p.phase === "05-implement")!
+      .nodes.find((n) => n.name === "x");
+    expect(nd?.status).toBe("failed");
+    expect(nd?.error?.message).toBe("boom");
+  });
+
+  it("finish(failed) escalates to opc_flow_query when retry budget exhausted", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const nd = state.phases
+      .find((p) => p.phase === "05-implement")!
+      .nodes.find((n) => n.name === "x")!;
+    nd.retry_count = 2;
+    nd.max_retries = 3;
+    await saveStateJson(root, session_id, pipeline_id, state, fixedNow());
+
+    const r = await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "RuntimeError" },
+    });
+    if (r.status === "failed") {
+      expect(r.retry_available).toBe(false);
+      expect(r.flow_next.tool).toBe("opc_flow_query");
+    }
+  });
+
+  it("finish(retry) resets a failed node to ready, default reset_retry_count=true clears budget", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "RuntimeError" },
+    });
+    const r = await node().finish({
+      status: "retry",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+    });
+    if (r.status === "retry") {
+      expect(r.node_status).toBe("ready");
+      expect(r.retry_count).toBe(0);
+      expect(r.flow_next.tool).toBe("opc_node_start");
+    }
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const nd = state.phases
+      .find((p) => p.phase === "05-implement")!
+      .nodes.find((n) => n.name === "x");
+    expect(nd?.status).toBe("ready");
+    expect(nd?.error).toBeNull();
+  });
+
+  it("finish(retry) with reset_retry_count=false preserves the count", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "RuntimeError" },
+    });
+    const r = await node().finish({
+      status: "retry",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      reset_retry_count: false,
+    });
+    if (r.status === "retry") {
+      expect(r.retry_count).toBe(1);
+    }
+  });
+
+  it("finish(retry) cascades downstream completed nodes back to pending", async () => {
+    const { session_id, pipeline_id } = await seed();
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const ph = state.phases.find((p) => p.phase === "05-implement")!;
+    ph.nodes.push(
+      {
+        name: "a",
+        status: "completed",
+        agent: "coder",
+        blocked_by: [],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      },
+      {
+        name: "b",
+        status: "completed",
+        agent: "coder",
+        blocked_by: ["a"],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      },
+      {
+        name: "c",
+        status: "completed",
+        agent: "coder",
+        blocked_by: ["b"],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      },
+    );
+    ph.nodes.find((n) => n.name === "a")!.status = "failed";
+    await saveStateJson(root, session_id, pipeline_id, state, fixedNow());
+
+    const r = await node().finish({
+      status: "retry",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "a",
+    });
+    if (r.status === "retry") {
+      expect(r.reset_downstream.sort()).toEqual(["b", "c"]);
+    }
+    const reloaded = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const phReloaded = reloaded.phases.find((p) => p.phase === "05-implement")!;
+    expect(phReloaded.nodes.find((n) => n.name === "b")?.status).toBe("pending");
+    expect(phReloaded.nodes.find((n) => n.name === "c")?.status).toBe("pending");
+  });
+
+  it("finish(retry) rejects when node is not failed", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    await expect(
+      node().finish({
+        status: "retry",
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "05-implement",
+        node_name: "x",
+      }),
+    ).rejects.toThrow(/expected failed/);
+  });
+
+  it("finish(failed) rejects when node is not in_progress", async () => {
+    const { session_id, pipeline_id } = await seed();
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    state.phases
+      .find((p) => p.phase === "05-implement")!
+      .nodes.push({
+        name: "y",
+        status: "pending",
+        agent: "coder",
+        blocked_by: [],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      });
+    await saveStateJson(root, session_id, pipeline_id, state, fixedNow());
+    await expect(
+      node().finish({
+        status: "failed",
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "05-implement",
+        node_name: "y",
+        error: { message: "x", type: "X" },
+      }),
+    ).rejects.toThrow(/cannot fail from status=pending/);
+  });
+
+  it("finish() rejects unknown status via exhaustiveness check", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    await expect(
+      node().finish({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        status: "bogus" as any,
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "05-implement",
+        node_name: "x",
+      }),
+    ).rejects.toThrow(/unknown status/);
+  });
+
+  it("finish() is registry-guard exempt per §4.4 (pending_reflections do NOT block)", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    const f = await loadFlowState(root, session_id);
+    f.pending_reflections.push({
+      reflection_id: "rf-1",
+      method: "m",
+      step_id: "s",
+      target_artifact: "x.md",
+      context_artifacts: [],
+    });
+    await saveFlowState(root, f, fixedNow());
+
+    const r = await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "E" },
+    });
+    expect(r.status).toBe("failed");
+  });
+
+  it("history rows tagged tool=opc_node_finish for all branches", async () => {
+    const { session_id, pipeline_id } = await startNode();
+    await node().finish({
+      status: "failed",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      error: { message: "boom", type: "E" },
+    });
+    await node().finish({
+      status: "retry",
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+    });
+    const f = await loadFlowState(root, session_id);
+    const tools = f.history.map((h) => h.tool);
+    expect(tools.filter((t) => t === "opc_node_finish").length).toBe(2);
+  });
+});

@@ -144,6 +144,12 @@ export type {
   NodeStartResponse,
   NodeCompleteRequest,
   NodeCompleteResponse,
+  NodeFailRequest,
+  NodeFailResponse,
+  NodeRetryRequest,
+  NodeRetryResponse,
+  NodeFinishRequest,
+  NodeFinishResponse,
 } from "./node-server.js";
 export {
   resolve as resolveNodes,
