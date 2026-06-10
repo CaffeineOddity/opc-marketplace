@@ -1,28 +1,5 @@
 {
   "name": "opc-marketplace",
-  "version": "0.0.0",
   "private": true,
-  "description": "OPC Marketplace monorepo: state / knowledge / reflection MCP servers + orchestrator hook + kits.",
-  "license": "MIT",
-  "engines": {
-    "node": ">=20",
-    "pnpm": ">=10"
-  },
-  "packageManager": "pnpm@10.26.1",
-  "scripts": {
-    "lint": "eslint \"{shared,platform}/**/*.ts\"",
-    "format": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md}\"",
-    "format:fix": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^9.9.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
-  }
+  "packageManager": "pnpm@10.26.1"
 }
