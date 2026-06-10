@@ -109,6 +109,9 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
     );
   }
 
+  // K2: watch for cross-process .md file changes
+  knowledge.worker.startFileWatcher();
+
   // K3: graceful shutdown — flush reindex queue before exit
   const gracefulShutdown = async (signal: string) => {
     process.stderr.write(`opc-knowledge-server: ${signal} received, flushing...\n`);

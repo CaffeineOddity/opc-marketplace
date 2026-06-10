@@ -153,8 +153,6 @@ export class KnowledgeServer {
         : {}),
     });
     this.resolver = opts.baseVersionResolver ?? new MemoryBaseVersionResolver();
-    // K2: watch for cross-process .md file changes
-    this.worker.startFileWatcher();
   }
 
   /**
