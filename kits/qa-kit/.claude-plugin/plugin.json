@@ -1,0 +1,11 @@
+{
+  "name": "opc/qa-kit",
+  "version": "0.1.0",
+  "description": "Testing, QA, penetration testing, and reflection critics for OPC pipelines",
+  "author": "OPC",
+  "license": "MIT",
+  "homepage": "https://github.com/CaffeineOddity/opc-marketplace",
+  "agents": "./agents",
+  "skills": "./skills",
+  "mcp": "./mcp/.mcp.json"
+}

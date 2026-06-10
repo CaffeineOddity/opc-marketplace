@@ -1,0 +1,11 @@
+{
+  "name": "opc/dev-kit",
+  "version": "0.1.0",
+  "description": "Frontend / backend / DB / security / architecture engineers for OPC pipelines",
+  "author": "OPC",
+  "license": "MIT",
+  "homepage": "https://github.com/CaffeineOddity/opc-marketplace",
+  "agents": "./agents",
+  "skills": "./skills",
+  "mcp": "./mcp/.mcp.json"
+}
