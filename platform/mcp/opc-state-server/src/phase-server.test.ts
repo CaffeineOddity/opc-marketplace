@@ -194,7 +194,7 @@ describe("PhaseServer.complete", () => {
       phase: "01-discovery",
     });
     expect(r.next_phase).toBeNull();
-    expect(r.flow_next.tool).toBe("opc_pipeline_complete");
+    expect(r.flow_next.tool).toBe("opc_pipeline_lifecycle");
     const plan = await loadPipelinePlan(root, session_id, pipeline_id);
     expect(plan.sub_pipelines[0]?.status).toBe("completed");
   });

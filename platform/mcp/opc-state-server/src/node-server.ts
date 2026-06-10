@@ -251,8 +251,10 @@ export class NodeServer {
         },
       },
       flow_next: {
-        tool: "opc_node_complete",
+        tool: "opc_node_finish",
         args: {
+          status: "success",
+          session_id: req.session_id,
           pipeline_id: req.pipeline_id,
           sub_pipeline_id: req.sub_pipeline_id,
           phase: req.phase,
@@ -309,7 +311,7 @@ export class NodeServer {
     const flow = await loadFlowState(this.root, req.session_id);
     flow.history.push({
       step: "node_complete",
-      tool: "opc_node_complete",
+      tool: "opc_node_finish",
       input: req,
       output: { node: req.node_name, unblocked },
       at: now.toISOString(),

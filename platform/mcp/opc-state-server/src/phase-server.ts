@@ -410,7 +410,7 @@ export class PhaseServer {
         sub_pipeline_id: next.id,
       };
     } else {
-      flow_next = { tool: "opc_pipeline_complete", args: { pipeline_id: req.pipeline_id } };
+      flow_next = { tool: "opc_pipeline_lifecycle", args: { action: "complete", pipeline_id: req.pipeline_id } };
     }
 
     flow.history.push({

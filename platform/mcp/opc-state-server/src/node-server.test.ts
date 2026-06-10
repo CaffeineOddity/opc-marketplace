@@ -201,7 +201,7 @@ describe("NodeServer.start", () => {
     expect(r.agent).toBe("backend-coder");
     expect(r.dispatch_instruction.subagent_type).toBe("backend-coder");
     expect(r.dispatch_instruction.node_body).toBe("do the thing");
-    expect(r.flow_next.tool).toBe("opc_node_complete");
+    expect(r.flow_next.tool).toBe("opc_node_finish");
 
     const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
     const p = state.phases.find((x) => x.phase === "05-implement");

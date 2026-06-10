@@ -537,7 +537,7 @@ export class PipelineServer {
   /**
    * Spec §07 §2.1 facade. Transitions an `in_progress` pipeline to
    * `completed` once every sub-pipeline has settled into `completed`.
-   * registry-guard / pending-question-guard apply (`opc_pipeline_complete`
+   * registry-guard / pending-question-guard apply (`opc_pipeline_lifecycle`
    * is a protected anchor per §4.1).
    */
   async complete(req: {
@@ -549,14 +549,14 @@ export class PipelineServer {
     if (flow.pending_reflections.length > 0) {
       const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
       throw new PipelineConflictError(
-        `reflection-registry-guard: opc_pipeline_complete blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
-        { required_action: "call opc_flow_reflect to register pending reflections, then retry opc_pipeline_complete" },
+        `reflection-registry-guard: opc_pipeline_lifecycle blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+        { required_action: "call opc_flow_reflect to register pending reflections, then retry opc_pipeline_lifecycle" },
       );
     }
     if (flow.pending_user_question) {
       throw new PipelineConflictError(
-        `pending-question-guard: opc_pipeline_complete blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
-        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_pipeline_complete` },
+        `pending-question-guard: opc_pipeline_lifecycle blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+        { required_action: `resolve the pending user question via opc_flow_user_reply with question_id=${flow.pending_user_question.question_id}, then retry opc_pipeline_lifecycle` },
       );
     }
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
