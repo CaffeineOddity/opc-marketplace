@@ -1,7 +1,7 @@
 {
   "name": "opc-orchestrator",
   "version": "0.1.0",
-  "description": "OPC orchestrator: minimal UserPromptSubmit hook that nudges Claude to call opc_flow_query before reasoning about a request.",
+  "description": "OPC orchestrator: UserPromptSubmit hook that nudges Claude to call opc_flow_query, plus the /opc-status slash command and opc-status CLI (read-only terminal health snapshot, M18.h).",
   "depends": ["mcp"],
   "hooks": {
     "UserPromptSubmit": [

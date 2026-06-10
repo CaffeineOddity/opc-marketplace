@@ -3,8 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "OPC UserPromptSubmit hook plugin (quiet default) + e2e walkthrough harness.",
+  "description": "OPC UserPromptSubmit hook plugin (quiet default) + e2e walkthrough harness + opc-status CLI.",
+  "bin": {
+    "opc-status": "./bin/opc-status.mjs"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
     "test": "echo \"orchestrator tests run via root vitest\""
   },
   "dependencies": {
