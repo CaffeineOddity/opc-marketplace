@@ -559,7 +559,7 @@
 ```typescript
 {
   name: "opc_reflect_execute",
-  description: "执行反思方法。method=cove 拆断言逐条验证；critique 派 critic 列 objection；debate 多 agent 辩论；tot 多分支搜索。inline=true 一次性跑完 plan+Task+complete，返回 pending_reflection。",
+  description: "执行反思方法。method=cove 拆断言逐条验证；critique 派 critic 列 objection；debate 多 agent 辩论；tot 多分支搜索；reflexion 教训注入反思；validator 确定性校验。inline=true 一次性跑完 plan+Task+complete，返回 pending_reflection。",
   input_schema: {
     type: "object",
     required: ["step", "method", "artifact"],
@@ -736,14 +736,14 @@
       {
         properties: {
           action: { const: "query_stats" },
-          method: { enum: ["reflexion", "cove", "critique", "debate", "tot", "reflexion", "validator"] },
+          method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
           window: { type: "string", default: "24h" }
         }
       },
       {
         properties: {
           action: { const: "unlearn_method" },
-          method: { enum: ["reflexion", "cove", "critique", "debate", "tot", "reflexion", "validator"] },
+          method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
           undo: { type: "boolean", default: false }
         },
         required: ["method"]

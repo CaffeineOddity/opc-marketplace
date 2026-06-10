@@ -67,7 +67,7 @@ type MetaEvent = {
   session_id: string
   reflection_id: string
   step: 'intent_analysis' | ... | 'phase_advance'
-  method: 'cove' | 'critique' | 'debate' | 'tot'
+  method: 'cove' | 'critique' | 'debate' | 'tot' | 'reflexion' | 'validator'
   rule_id: 'A1' | 'A2' | ... | 'D4'
   outcome: 'dropped' | 'warned' | 'rejected'
   detail?: object   // 规则专属上下文（如 dropped objection 的 id、similarity score）

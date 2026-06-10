@@ -89,8 +89,8 @@ type ReflectionResponse = {
 ```typescript
 {
   // —— method 选择 ——
-  method: "cove" | "critique" | "debate" | "tot",
-  secondary_method: "reflexion" | "cove" | "critique" | "debate" | null,
+  method: "cove" | "critique" | "debate" | "tot" | "reflexion" | "validator",
+  secondary_method: "cove" | "critique" | "debate" | "tot" | "reflexion" | "validator" | null,
   method_choice_reason: "step=P5, complexity=medium → primary=critique",
 
   // —— agent spec ——
@@ -157,7 +157,7 @@ type ReflectionResponse = {
     required: ["step", "method", "artifact"],
     properties: {
       step: { enum: ["P1","P2","P3","P4","P5","P6","P7","P8"] },
-      method: { enum: ["cove", "critique", "debate", "tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
       artifact: { type: "object" },
       inline: { type: "boolean", default: true },
       enhanced_prompt: { type: "string" },
@@ -277,7 +277,7 @@ type ReflectionResponse = {
     type: "object",
     required: ["method", "reflection_id", "result"],
     properties: {
-      method: { enum: ["cove", "critique", "debate", "tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
       reflection_id: { type: "string" },
       result: { type: "object" },
       session_id: { type: "string" }
@@ -493,7 +493,7 @@ type ReflectionResponse = {
 // input
 {
   action: "unlearn_method",
-  method: "cove" | "critique" | "debate" | "tot",
+  method: "cove" | "critique" | "debate" | "tot" | "reflexion" | "validator",
   undo: false,
   ttl_hours: 24
 }

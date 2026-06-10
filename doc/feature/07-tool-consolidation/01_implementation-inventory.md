@@ -31,7 +31,7 @@
 | **opc_knowledge_admin** | `KnowledgeServer.admin` | ✅ 已对齐（delete/reindex） | — |
 | **opc_reflect_plan** | `ReflectionServer.plan` | ✅ 已对齐 | — |
 | **opc_reflect_execute** | `ReflectionServer.execute` | ✅ 已对齐（M3/M4/M5/M6 + inline） | — |
-| **opc_reflect_complete** | `ReflectionServer.complete` | ✅ 已对齐（4 method 分派） | — |
+| **opc_reflect_complete** | `ReflectionServer.complete` | ✅ 已对齐（6 method 分派） | — |
 | **opc_reflect_admin** | `ReflectionServer.admin` | ✅ 已对齐（record_interventions/explain/query_stats/unlearn/on_demand 五路分派） | — |
 | **opc_corrections** | `CorrectionsServer.crud` | ✅ 已对齐（query/record/unlearn/reindex/promote 五路分派） | — |
 
@@ -53,7 +53,7 @@
 | PipelineServer | create/status/lifecycle(complete/abort/resume/replan) + remove/modify/reorder + kill_agents + dirty_paths | ✅ 完备 |
 | NodeServer | start/finish(completed/failed/retry) + 拒未知 status | ✅ 完备 |
 | PhaseServer | start/confirm/complete/reset + V0.9 目录扫描 | ✅ 完备 |
-| ReflectionServer | plan/execute(M3/M4/M5/M6)/complete(4 method)/admin(5 action) | ✅ 完备 |
+| ReflectionServer | plan/execute(6 methods: cove/critique/debate/tot/reflexion/validator)/complete(6 method)/admin(5 action) | ✅ 完备 |
 | CorrectionsServer | crud(query/record/unlearn/reindex/promote) | ✅ 完备 |
 
 ## 与 06 章 host-contract 的接口

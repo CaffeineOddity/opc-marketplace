@@ -8,7 +8,7 @@
 
 **反思 = 工程化的方法学标准库，不是 LLM 的自我评分**。
 
-opc-reflection-server 把 5 种学术上验证过的反思方法封装成标准工具，opc-state-server 按 step 类型调用，配合 deterministic validator 兜底，配合用户纠正库形成闭环进化。
+opc-reflection-server 把 5 种学术反思方法 + validator 兜底封装成标准工具，opc-state-server 按 step 类型调用，配合 deterministic validator 兜底，配合用户纠正库形成闭环进化。
 
 ### 核心原则
 
@@ -140,7 +140,7 @@ sequenceDiagram
 |---|---|---|
 | 1 | 不让 LLM 自评，强制 evidence artifact | 02-server-design evidence-schema |
 | 2 | Deterministic validator 兜底（V1-V5 / coverage / discrimination / budget） | 02-server-design validators |
-| 3 | 5 种反思方法（CoVe / Critique / Debate / Reflexion / ToT） | 01-method-theory |
+| 3 | 6 种方法（cove / critique / debate / tot / reflexion / validator） | 01-method-theory |
 | 4 | 按 step 自动选方法（primary + secondary 组合） | 01-method-theory 决策表 |
 | 5 | 反思 sub-agent 权限白名单（只读） | 02-server-design agent-权限 |
 | 6 | 反思器自身失败处理（meta-validator + 健康度监控 + fallback） | 02-server-design 可靠性 |
@@ -160,7 +160,7 @@ state-server 调用 reflection-server 的所有入口（4 个工具按 discrimin
 | 阶段 | state-server 触发 | reflection-server 响应 |
 |---|---|---|
 | evidence 通过 validator 后 | flow_next: opc_reflect_plan | 返回方法 + 历史纠正 + max_rounds |
-| 执行反思方法 | opc_reflect_execute({method:"cove"\|"critique"\|"debate"\|"tot"}) | 返回 sub-agent spec |
+| 执行反思方法 | opc_reflect_execute({method:"cove"\|"critique"\|"debate"\|"tot"\|"reflexion"\|"validator"}) | 返回 sub-agent spec |
 | 反思完成 | opc_reflect_complete({method:"<同上>"}) | 返回路由 + meta-validator 结果 |
 | 用户跳过 | opc_flow_skip_reflection | 记录 skip，可能触发降级建议 |
 | 用户主动反思 | opc_reflect_admin({action:"on_demand"}) | 返回 on_demand_reflection_log |
@@ -168,10 +168,10 @@ state-server 调用 reflection-server 的所有入口（4 个工具按 discrimin
 | 健康度查询 | opc_reflect_admin({action:"query_stats"}) | 返回方法健康度 + 反思开销统计 |
 | 可解释性 | opc_reflect_admin({action:"explain"}) | 返回 reasoning_trace |
 | 方法禁用 | opc_reflect_admin({action:"unlearn_method"}) | 临时禁用某反思方法 |
-| 纠正管理 | opc_corrections({action:"query"\|"record"\|"unlearn"}) | corrections 库 CRUD |
+| 纠正管理 | opc_corrections({action:"query"\|"record"\|"unlearn"\|...}) | corrections 库 9 个 action 全覆盖 |
 | 索引重建 | opc_corrections({action:"reindex"}) | 全文索引重建 |
 
-> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../07-tool-consolidation/00_overview.md](../07-tool-consolidation/00_overview.md)。
+> 历史名 → 新调用对照：`opc_reflect_execute({method:"cove"})/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_admin({action:"record_interventions"})/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections({action:"query"})/record/unlearn/reindex/...（9 个 action）` → `opc_corrections({action:"<name>"})`。详见 [../07-tool-consolidation/00_overview.md](../07-tool-consolidation/00_overview.md)。
 
 ---
 
