@@ -428,6 +428,205 @@ describe("PipelineServer.replan add_sub_pipeline", () => {
   });
 });
 
+describe("PipelineServer.replan remove_sub_pipeline", () => {
+  it("removes a pending sub_pipeline and cleans up references", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+      sub_pipelines: [
+        { id: "keep", title: "keep", knowledge_unit: ["auth"] },
+        { id: "rm", title: "remove", knowledge_unit: ["logging"], blocked_by: [] },
+      ],
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: { remove_sub_pipeline: [{ id: "rm" }] },
+    });
+    expect(r.rejected_changes).toEqual([]);
+    expect(r.applied_changes.remove_sub_pipeline).toHaveLength(1);
+    const plan = await loadPipelinePlan(root, session_id, c.pipeline_id);
+    expect(plan.sub_pipelines.map((s) => s.id)).toEqual(["keep"]);
+    expect(plan.execution_order.flatMap((g) => g.sub_pipeline_ids)).toEqual(["keep"]);
+  });
+
+  it("rejects removal of in_progress sub_pipeline", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+      sub_pipelines: [{ id: "active", title: "active", knowledge_unit: ["auth"] }],
+    });
+    const plan = await loadPipelinePlan(root, session_id, c.pipeline_id);
+    plan.sub_pipelines[0]!.status = "in_progress";
+    const { savePipelinePlan } = await import("./pipeline-plan.js");
+    await savePipelinePlan(root, session_id, plan, fixedNow());
+
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: { remove_sub_pipeline: [{ id: "active" }] },
+    });
+    expect(r.rejected_changes).toHaveLength(1);
+    expect(r.rejected_changes[0]!.change_type).toBe("remove_sub_pipeline");
+    expect(r.rejected_changes[0]!.reason).toMatch(/in_progress/);
+  });
+
+  it("rejects removal of unknown sub_pipeline", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: { remove_sub_pipeline: [{ id: "nonexistent" }] },
+    });
+    expect(r.rejected_changes).toHaveLength(1);
+    expect(r.rejected_changes[0]!.change_type).toBe("remove_sub_pipeline");
+  });
+});
+
+describe("PipelineServer.replan modify_sub_pipeline", () => {
+  it("modifies title and knowledge_unit of a sub_pipeline", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+      sub_pipelines: [{ id: "sub1", title: "old", knowledge_unit: ["auth"] }],
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: {
+        modify_sub_pipeline: [
+          { id: "sub1", title: "new-title", knowledge_unit: ["auth", "billing"] },
+        ],
+      },
+    });
+    expect(r.rejected_changes).toEqual([]);
+    expect(r.applied_changes.modify_sub_pipeline).toHaveLength(1);
+    const plan = await loadPipelinePlan(root, session_id, c.pipeline_id);
+    expect(plan.sub_pipelines[0]?.title).toBe("new-title");
+    expect(plan.sub_pipelines[0]?.knowledge_unit).toEqual(["auth", "billing"]);
+  });
+
+  it("rejects modification of unknown sub_pipeline", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: { modify_sub_pipeline: [{ id: "ghost", title: "x" }] },
+    });
+    expect(r.rejected_changes).toHaveLength(1);
+    expect(r.rejected_changes[0]!.change_type).toBe("modify_sub_pipeline");
+  });
+});
+
+describe("PipelineServer.replan reorder", () => {
+  it("reorders execution_order", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+      sub_pipelines: [
+        { id: "a", title: "a", knowledge_unit: ["auth"] },
+        { id: "b", title: "b", knowledge_unit: ["logging"] },
+      ],
+      execution_order: [
+        { group: 0, sub_pipeline_ids: ["a"] },
+        { group: 1, sub_pipeline_ids: ["b"] },
+      ],
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: {
+        reorder: {
+          execution_order: [
+            { group: 0, sub_pipeline_ids: ["b"] },
+            { group: 1, sub_pipeline_ids: ["a"] },
+          ],
+        },
+      },
+    });
+    expect(r.rejected_changes).toEqual([]);
+    expect(r.applied_changes.reorder).toBeTruthy();
+    const plan = await loadPipelinePlan(root, session_id, c.pipeline_id);
+    expect(plan.execution_order[0]?.sub_pipeline_ids).toEqual(["b"]);
+  });
+
+  it("rejects reorder missing a sub_pipeline", async () => {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+      sub_pipelines: [
+        { id: "a", title: "a", knowledge_unit: ["auth"] },
+        { id: "b", title: "b", knowledge_unit: ["logging"] },
+      ],
+    });
+    const r = await p.replan({
+      session_id,
+      pipeline_id: c.pipeline_id,
+      changes: {
+        reorder: { execution_order: [{ group: 0, sub_pipeline_ids: ["a"] }] },
+      },
+    });
+    expect(r.rejected_changes).toHaveLength(1);
+    expect(r.rejected_changes[0]!.change_type).toBe("reorder");
+    expect(r.rejected_changes[0]!.reason).toMatch(/missing/);
+  });
+});
+
 describe("PipelineServer.create A4 kit-loaded pre-flight gate", () => {
   const baseReq = (session_id: string) => ({
     session_id,

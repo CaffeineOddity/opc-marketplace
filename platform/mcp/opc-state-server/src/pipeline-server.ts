@@ -104,6 +104,9 @@ export type PipelineReplanRequest = {
   reason?: string;
   changes: {
     add_sub_pipeline?: AddSubPipelineSpec[];
+    remove_sub_pipeline?: RemoveSubPipelineSpec[];
+    modify_sub_pipeline?: ModifySubPipelineSpec[];
+    reorder?: ReorderSpec;
   };
 };
 
@@ -177,10 +180,44 @@ export interface AddSubPipelineSpec {
   scenario_hints?: string[];
 }
 
+export interface RemoveSubPipelineSpec {
+  id: string;
+  reason?: string;
+}
+
+export interface ModifySubPipelineSpec {
+  id: string;
+  title?: string;
+  description?: string;
+  knowledge_unit?: string[];
+  blocked_by?: string[];
+  suggested_phases?: string[];
+  execution_priority?: ExecutionPriority;
+}
+
+export interface ReorderSpec {
+  execution_order: ExecutionGroup[];
+}
+
+export type ReplanChangeType = "add_sub_pipeline" | "remove_sub_pipeline" | "modify_sub_pipeline" | "reorder";
+
+export interface ReplanRejection {
+  change_type: ReplanChangeType;
+  spec: unknown;
+  reason: string;
+}
+
+export type ReplanAppliedChanges = {
+  add_sub_pipeline?: AddSubPipelineSpec[];
+  remove_sub_pipeline?: RemoveSubPipelineSpec[];
+  modify_sub_pipeline?: ModifySubPipelineSpec[];
+  reorder?: ReorderSpec;
+};
+
 export interface PipelineReplanResponse {
   pipeline_id: string;
-  applied_changes: unknown;
-  rejected_changes: unknown[];
+  applied_changes: ReplanAppliedChanges;
+  rejected_changes: ReplanRejection[];
   replan_history_id: string;
   plan: PipelinePlan;
 }
@@ -400,16 +437,60 @@ export class PipelineServer {
     }
     const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
     const now = this.now();
-    const applied: AddSubPipelineSpec[] = [];
-    const rejected: Array<{ spec: AddSubPipelineSpec; reason: string }> = [];
+    const applied: ReplanAppliedChanges = {};
+    const rejected: ReplanRejection[] = [];
+
+    // Process in order: remove → modify → add → reorder.
+    // Removing first frees ids; modifying handles remaining subs; adding
+    // validates against the current set; reordering applies the final layout.
+
+    for (const spec of req.changes.remove_sub_pipeline ?? []) {
+      try {
+        this.applyRemoveSubPipeline(plan, spec);
+        (applied.remove_sub_pipeline ??= []).push(spec);
+      } catch (err) {
+        rejected.push({
+          change_type: "remove_sub_pipeline",
+          spec,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    for (const spec of req.changes.modify_sub_pipeline ?? []) {
+      try {
+        this.applyModifySubPipeline(plan, spec);
+        (applied.modify_sub_pipeline ??= []).push(spec);
+      } catch (err) {
+        rejected.push({
+          change_type: "modify_sub_pipeline",
+          spec,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     for (const spec of req.changes.add_sub_pipeline ?? []) {
       try {
         this.applyAddSubPipeline(plan, spec, now);
-        applied.push(spec);
+        (applied.add_sub_pipeline ??= []).push(spec);
       } catch (err) {
         rejected.push({
+          change_type: "add_sub_pipeline",
           spec,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (req.changes.reorder) {
+      try {
+        this.applyReorder(plan, req.changes.reorder);
+        applied.reorder = req.changes.reorder;
+      } catch (err) {
+        rejected.push({
+          change_type: "reorder",
+          spec: req.changes.reorder,
           reason: err instanceof Error ? err.message : String(err),
         });
       }
@@ -419,7 +500,7 @@ export class PipelineServer {
       replan_history_id: `rp-${this.uuid()}`,
       at: now.toISOString(),
       ...(req.reason ? { reason: req.reason } : {}),
-      applied_changes: { add_sub_pipeline: applied },
+      applied_changes: applied,
       ...(rejected.length > 0 ? { rejected_changes: rejected } : {}),
     };
     plan.replan_history.push(entry);
@@ -427,7 +508,7 @@ export class PipelineServer {
 
     return {
       pipeline_id: plan.id,
-      applied_changes: entry.applied_changes,
+      applied_changes: applied,
       rejected_changes: rejected,
       replan_history_id: entry.replan_history_id,
       plan,
@@ -756,6 +837,121 @@ export class PipelineServer {
       if (err instanceof TopologyError) throw new PipelineConflictError(err.message, { required_action: "fix the DAG topology: ensure no cycles exist and all blocked_by references point to valid sub_pipelines" });
       throw err;
     }
+  }
+
+  private applyRemoveSubPipeline(plan: PipelinePlan, spec: RemoveSubPipelineSpec): void {
+    const idx = plan.sub_pipelines.findIndex((s) => s.id === spec.id);
+    if (idx < 0) {
+      throw new PipelineConflictError(
+        `remove_sub_pipeline: ${spec.id} not found`,
+        { required_action: "verify the sub_pipeline id exists in the pipeline plan" },
+      );
+    }
+    const sub = plan.sub_pipelines[idx]!;
+    if (sub.status === "in_progress") {
+      throw new PipelineConflictError(
+        `cannot remove in_progress sub_pipeline ${spec.id}`,
+        { required_action: `abort or complete sub_pipeline ${spec.id} before removing it; use opc_pipeline_lifecycle({action:"abort"}) for stuck subs` },
+      );
+    }
+    // Remove from execution_order groups, then remove the sub itself.
+    for (const group of plan.execution_order) {
+      group.sub_pipeline_ids = group.sub_pipeline_ids.filter((id) => id !== spec.id);
+    }
+    plan.execution_order = plan.execution_order.filter((g) => g.sub_pipeline_ids.length > 0);
+    // Re-index groups to keep them sequential.
+    plan.execution_order.forEach((g, i) => { g.group = i; });
+    plan.sub_pipelines.splice(idx, 1);
+    // Clean up blocked_by references to the removed sub.
+    for (const s of plan.sub_pipelines) {
+      s.blocked_by = s.blocked_by.filter((dep) => dep !== spec.id);
+    }
+    // Validate the resulting DAG is still acyclic.
+    if (plan.sub_pipelines.length > 0) {
+      try {
+        validateDag({ sub_pipelines: plan.sub_pipelines });
+      } catch (err) {
+        if (err instanceof TopologyError) {
+          throw new PipelineConflictError(
+            `remove_sub_pipeline ${spec.id} would create an invalid DAG: ${err.message}`,
+            { required_action: "the removal would break the topology; add replacement blocked_by dependencies or reorder first" },
+          );
+        }
+        throw err;
+      }
+    }
+  }
+
+  private applyModifySubPipeline(plan: PipelinePlan, spec: ModifySubPipelineSpec): void {
+    const sub = plan.sub_pipelines.find((s) => s.id === spec.id);
+    if (!sub) {
+      throw new PipelineConflictError(
+        `modify_sub_pipeline: ${spec.id} not found`,
+        { required_action: "verify the sub_pipeline id exists in the pipeline plan" },
+      );
+    }
+    if (spec.title !== undefined) sub.title = spec.title;
+    if (spec.description !== undefined) sub.description = spec.description;
+    if (spec.knowledge_unit !== undefined) sub.knowledge_unit = spec.knowledge_unit;
+    if (spec.blocked_by !== undefined) {
+      // Validate all referenced subs exist.
+      for (const dep of spec.blocked_by) {
+        if (!plan.sub_pipelines.some((s) => s.id === dep) && dep !== spec.id) {
+          throw new PipelineConflictError(
+            `modify_sub_pipeline: blocked_by references unknown sub: ${dep}`,
+            { required_action: `verify sub_pipeline ${dep} exists in the plan before referencing it` },
+          );
+        }
+      }
+      sub.blocked_by = spec.blocked_by;
+    }
+    if (spec.suggested_phases !== undefined) sub.phases = spec.suggested_phases;
+    if (spec.execution_priority !== undefined) sub.execution_priority = spec.execution_priority;
+    // Re-validate DAG if blocked_by changed.
+    if (spec.blocked_by !== undefined) {
+      try {
+        validateDag({ sub_pipelines: plan.sub_pipelines });
+      } catch (err) {
+        if (err instanceof TopologyError) {
+          throw new PipelineConflictError(
+            `modify_sub_pipeline ${spec.id} created a DAG cycle: ${err.message}`,
+            { required_action: "the blocked_by change introduced a cycle; adjust dependencies to keep the DAG acyclic" },
+          );
+        }
+        throw err;
+      }
+    }
+  }
+
+  private applyReorder(plan: PipelinePlan, spec: ReorderSpec): void {
+    const allIds = plan.sub_pipelines.map((s) => s.id);
+    const reorderedIds = spec.execution_order.flatMap((g) => g.sub_pipeline_ids);
+    // Every existing sub must appear exactly once in the new order.
+    const missing = allIds.filter((id) => !reorderedIds.includes(id));
+    if (missing.length > 0) {
+      throw new PipelineConflictError(
+        `reorder: missing sub_pipelines [${missing.join(",")}]`,
+        { required_action: `include all existing sub_pipelines in the new execution_order; missing: [${missing.join(",")}]` },
+      );
+    }
+    const extra = reorderedIds.filter((id) => !allIds.includes(id));
+    if (extra.length > 0) {
+      throw new PipelineConflictError(
+        `reorder: unknown sub_pipelines [${extra.join(",")}]`,
+        { required_action: `remove unknown sub_pipeline ids from execution_order: [${extra.join(",")}]` },
+      );
+    }
+    const dupes = reorderedIds.filter((id, i, arr) => arr.indexOf(id) !== i);
+    if (dupes.length > 0) {
+      throw new PipelineConflictError(
+        `reorder: duplicate sub_pipeline ids [${dupes.join(",")}]`,
+        { required_action: `remove duplicate entries from execution_order: [${dupes.join(",")}]` },
+      );
+    }
+    // Validate the new execution order against the DAG.
+    validateExecutionOrder({ sub_pipelines: plan.sub_pipelines }, spec.execution_order);
+    plan.execution_order = spec.execution_order;
+    plan.status = "in_progress";
   }
 
   private materializeSubs(req: PipelineCreateRequest, _now: Date): SubPipeline[] {
