@@ -155,7 +155,7 @@ sequenceDiagram
 
 ## 七、与 opc-state-server 的接口契约
 
-state-server 调用 reflection-server 的所有入口（4 个工具按 discriminator 分支汇总）：
+state-server 调用 reflection-server 的所有入口（5 个工具按 discriminator 分支汇总）：
 
 | 阶段 | state-server 触发 | reflection-server 响应 |
 |---|---|---|
