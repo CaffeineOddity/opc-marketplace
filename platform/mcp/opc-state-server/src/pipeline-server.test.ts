@@ -545,3 +545,190 @@ describe("PipelineServer.create A4 kit-loaded pre-flight gate", () => {
     expect(e.message).toContain("KIT_NOT_LOADED_PRE_FLIGHT");
   });
 });
+
+describe("PipelineServer.lifecycle (M17.b discriminator facade)", () => {
+  async function bootstrapSinglePipeline(): Promise<{
+    session_id: string;
+    pipeline_id: string;
+    p: PipelineServer;
+  }> {
+    const session_id = await freshSession();
+    const p = pipe();
+    const c = await p.create({
+      session_id,
+      description: "x",
+      brief_content: "b",
+      complexity: "medium",
+      knowledge_unit: [],
+      suggested_phases: [],
+      phase_selection_rationale: "n/a",
+    });
+    return { session_id, pipeline_id: c.pipeline_id, p };
+  }
+
+  it("lifecycle(complete) succeeds when all subs are completed", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const plan = await loadPipelinePlan(root, session_id, pipeline_id);
+    plan.sub_pipelines[0]!.status = "completed";
+    const { savePipelinePlan } = await import("./pipeline-plan.js");
+    await savePipelinePlan(root, session_id, plan, fixedNow());
+
+    const r = await p.lifecycle({
+      action: "complete",
+      session_id,
+      pipeline_id,
+      reason: "all subs done",
+    });
+    expect(r.action).toBe("complete");
+    if (r.action === "complete") {
+      expect(r.status).toBe("completed");
+      expect(r.flow_next.tool).toBe("opc_flow_lifecycle");
+    }
+    const reloaded = await loadPipelinePlan(root, session_id, pipeline_id);
+    expect(reloaded.status).toBe("completed");
+  });
+
+  it("lifecycle(complete) rejects when a sub is still pending", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    await expect(
+      p.lifecycle({ action: "complete", session_id, pipeline_id }),
+    ).rejects.toThrow(/not settled/);
+  });
+
+  it("lifecycle(complete) rejects when pending_reflections is non-empty (registry-guard)", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const plan = await loadPipelinePlan(root, session_id, pipeline_id);
+    plan.sub_pipelines[0]!.status = "completed";
+    const { savePipelinePlan } = await import("./pipeline-plan.js");
+    await savePipelinePlan(root, session_id, plan, fixedNow());
+
+    const { loadFlowState, saveFlowState } = await import("./flow-state.js");
+    const flow = await loadFlowState(root, session_id);
+    flow.pending_reflections.push({
+      reflection_id: "rf-1",
+      origin: "before_node_start",
+      registered_at: fixedNow().toISOString(),
+      ttl_until: new Date(fixedNow().getTime() + 600_000).toISOString(),
+    });
+    await saveFlowState(root, flow, fixedNow());
+
+    await expect(
+      p.lifecycle({ action: "complete", session_id, pipeline_id }),
+    ).rejects.toThrow(/registry-guard/);
+  });
+
+  it("lifecycle(abort) succeeds and is registry-guard exempt (per §4.4)", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+
+    const { loadFlowState, saveFlowState } = await import("./flow-state.js");
+    const flow = await loadFlowState(root, session_id);
+    flow.pending_reflections.push({
+      reflection_id: "rf-1",
+      origin: "before_node_start",
+      registered_at: fixedNow().toISOString(),
+      ttl_until: new Date(fixedNow().getTime() + 600_000).toISOString(),
+    });
+    await saveFlowState(root, flow, fixedNow());
+
+    const r = await p.lifecycle({
+      action: "abort",
+      session_id,
+      pipeline_id,
+      reason: "user gave up",
+    });
+    expect(r.action).toBe("abort");
+    if (r.action === "abort") {
+      expect(r.status).toBe("aborted");
+      expect(r.reason).toBe("user gave up");
+    }
+    const reloaded = await loadPipelinePlan(root, session_id, pipeline_id);
+    expect(reloaded.status).toBe("aborted");
+    expect(reloaded.sub_pipelines.every((s) => s.status === "aborted")).toBe(true);
+  });
+
+  it("lifecycle(replan) forwards to replan() add_sub_pipeline", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const r = await p.lifecycle({
+      action: "replan",
+      session_id,
+      pipeline_id,
+      reason: "user wants more",
+      changes: {
+        add_sub_pipeline: [{ id: "extra", title: "Extra", knowledge_unit: ["x"] }],
+      },
+    });
+    expect(r.action).toBe("replan");
+    if (r.action === "replan") {
+      expect(r.rejected_changes).toEqual([]);
+    }
+    const reloaded = await loadPipelinePlan(root, session_id, pipeline_id);
+    expect(reloaded.sub_pipelines.find((s) => s.id === "extra")).toBeTruthy();
+  });
+
+  it("lifecycle(resume) resumes the first paused sub_pipeline", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const plan = await loadPipelinePlan(root, session_id, pipeline_id);
+    plan.sub_pipelines[0]!.status = "paused";
+    plan.sub_pipelines[0]!.paused_at = {
+      at: fixedNow().toISOString(),
+      reason: "test pause",
+    };
+    const { savePipelinePlan } = await import("./pipeline-plan.js");
+    await savePipelinePlan(root, session_id, plan, fixedNow());
+
+    const r = await p.lifecycle({ action: "resume", session_id, pipeline_id });
+    expect(r.action).toBe("resume");
+    if (r.action === "resume") {
+      expect(r.resumed_sub_pipeline).toBe("sub-1");
+      expect(r.flow_next.tool).toBe("opc_phase_start");
+    }
+    const reloaded = await loadPipelinePlan(root, session_id, pipeline_id);
+    expect(reloaded.sub_pipelines[0]!.status).toBe("in_progress");
+    expect(reloaded.sub_pipelines[0]!.paused_at).toBeUndefined();
+  });
+
+  it("lifecycle(resume) without paused sub returns no_paused flow_next (status)", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const r = await p.lifecycle({ action: "resume", session_id, pipeline_id });
+    expect(r.action).toBe("resume");
+    if (r.action === "resume") {
+      expect(r.resumed_sub_pipeline).toBeNull();
+      expect(r.flow_next.tool).toBe("opc_pipeline_status");
+    }
+  });
+
+  it("lifecycle(resume) rejects named sub_pipeline that is not paused", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    await expect(
+      p.lifecycle({
+        action: "resume",
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+      }),
+    ).rejects.toThrow(/expected paused/);
+  });
+
+  it("lifecycle() rejects unknown action via exhaustiveness check", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      p.lifecycle({ action: "bogus" as any, session_id, pipeline_id }),
+    ).rejects.toThrow(/unknown action/);
+  });
+
+  it("lifecycle(complete) writes history with tool=opc_pipeline_lifecycle", async () => {
+    const { session_id, pipeline_id, p } = await bootstrapSinglePipeline();
+    const plan = await loadPipelinePlan(root, session_id, pipeline_id);
+    plan.sub_pipelines[0]!.status = "completed";
+    const { savePipelinePlan } = await import("./pipeline-plan.js");
+    await savePipelinePlan(root, session_id, plan, fixedNow());
+
+    await p.lifecycle({ action: "complete", session_id, pipeline_id });
+    const { loadFlowState } = await import("./flow-state.js");
+    const flow = await loadFlowState(root, session_id);
+    const last = flow.history[flow.history.length - 1]!;
+    expect(last.tool).toBe("opc_pipeline_lifecycle");
+    expect(last.step).toBe("pipeline_complete");
+  });
+});

@@ -62,6 +62,11 @@ export type {
   PipelineStatusResponse,
   PipelineReplanRequest,
   PipelineReplanResponse,
+  PipelineLifecycleRequest,
+  PipelineLifecycleResponse,
+  PipelineCompleteResponse,
+  PipelineAbortResponse,
+  PipelineResumeResponse,
   SubPipelineCreateSpec,
   AddSubPipelineSpec,
 } from "./pipeline-server.js";

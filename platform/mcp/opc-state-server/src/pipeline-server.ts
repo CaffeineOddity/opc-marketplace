@@ -104,6 +104,49 @@ export type PipelineReplanRequest = {
   };
 };
 
+/**
+ * Spec §07 §2.1: `opc_pipeline_lifecycle` discriminator facade. Folds
+ * complete/abort/replan/resume into one tool entry while preserving the
+ * existing underlying methods. The wire layer (M19) will route MCP
+ * tool calls based on `action`.
+ */
+export type PipelineLifecycleRequest =
+  | { action: "complete"; session_id: string; pipeline_id: string; reason?: string }
+  | { action: "abort"; session_id: string; pipeline_id: string; reason?: string }
+  | ({ action: "replan" } & PipelineReplanRequest)
+  | {
+      action: "resume";
+      session_id: string;
+      pipeline_id: string;
+      sub_pipeline_id?: string;
+    };
+
+export interface PipelineCompleteResponse {
+  pipeline_id: string;
+  status: "completed";
+  completed_at: string;
+  flow_next: { tool: string; args?: Record<string, unknown> };
+}
+
+export interface PipelineAbortResponse {
+  pipeline_id: string;
+  status: "aborted";
+  aborted_at: string;
+  reason: string | null;
+}
+
+export interface PipelineResumeResponse {
+  pipeline_id: string;
+  resumed_sub_pipeline: string | null;
+  flow_next: { tool: string; args?: Record<string, unknown>; why?: string };
+}
+
+export type PipelineLifecycleResponse =
+  | ({ action: "complete" } & PipelineCompleteResponse)
+  | ({ action: "abort" } & PipelineAbortResponse)
+  | ({ action: "replan" } & PipelineReplanResponse)
+  | ({ action: "resume" } & PipelineResumeResponse);
+
 export interface AddSubPipelineSpec {
   id?: string;
   title: string;
@@ -362,6 +405,206 @@ export class PipelineServer {
       plan,
     };
   }
+
+  /**
+   * Spec §07 §2.1 facade. Transitions an `in_progress` pipeline to
+   * `completed` once every sub-pipeline has settled into `completed`.
+   * registry-guard / pending-question-guard apply (`opc_pipeline_complete`
+   * is a protected anchor per §4.1).
+   */
+  async complete(req: {
+    session_id: string;
+    pipeline_id: string;
+    reason?: string;
+  }): Promise<PipelineCompleteResponse> {
+    const flow = await loadFlowState(this.root, req.session_id);
+    if (flow.pending_reflections.length > 0) {
+      const ids = flow.pending_reflections.map((p) => p.reflection_id).join(",");
+      throw new PipelineConflictError(
+        `reflection-registry-guard: opc_pipeline_complete blocked; pending_reflections=[${ids}]; register via opc_flow_reflect first`,
+      );
+    }
+    if (flow.pending_user_question) {
+      throw new PipelineConflictError(
+        `pending-question-guard: opc_pipeline_complete blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
+      );
+    }
+    const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
+    const unfinished = plan.sub_pipelines.filter(
+      (s) => s.status !== "completed" && s.status !== "aborted" && s.status !== "failed",
+    );
+    if (unfinished.length > 0) {
+      throw new PipelineConflictError(
+        `cannot complete pipeline ${plan.id}: sub_pipelines [${unfinished
+          .map((s) => `${s.id}=${s.status}`)
+          .join(",")}] not settled`,
+      );
+    }
+    const now = this.now();
+    plan.status = "completed";
+    plan.last_active_at = now.toISOString();
+    await savePipelinePlan(this.root, req.session_id, plan, now);
+    flow.history.push({
+      step: "pipeline_complete",
+      tool: "opc_pipeline_lifecycle",
+      input: { action: "complete", ...req },
+      output: { pipeline_id: plan.id },
+      at: now.toISOString(),
+    });
+    await saveFlowState(this.root, flow, now);
+    return {
+      pipeline_id: plan.id,
+      status: "completed",
+      completed_at: now.toISOString(),
+      flow_next: {
+        tool: "opc_flow_lifecycle",
+        args: { action: "start" },
+      },
+    };
+  }
+
+  /**
+   * Spec §07 §2.1 facade. Aborts an in_progress pipeline (registry-guard
+   *豁免 per §4.4: abort is intentionally allowed even with pending
+   * reflections — it short-circuits the loop). Marks unsettled
+   * sub-pipelines as `aborted`.
+   */
+  async abort(req: {
+    session_id: string;
+    pipeline_id: string;
+    reason?: string;
+  }): Promise<PipelineAbortResponse> {
+    const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
+    const now = this.now();
+    for (const sub of plan.sub_pipelines) {
+      if (sub.status !== "completed" && sub.status !== "aborted") {
+        sub.status = "aborted";
+      }
+    }
+    plan.status = "aborted";
+    plan.last_active_at = now.toISOString();
+    await savePipelinePlan(this.root, req.session_id, plan, now);
+    const flow = await loadFlowState(this.root, req.session_id);
+    flow.history.push({
+      step: "pipeline_abort",
+      tool: "opc_pipeline_lifecycle",
+      input: { action: "abort", ...req },
+      output: { pipeline_id: plan.id, reason: req.reason ?? null },
+      at: now.toISOString(),
+    });
+    await saveFlowState(this.root, flow, now);
+    return {
+      pipeline_id: plan.id,
+      status: "aborted",
+      aborted_at: now.toISOString(),
+      reason: req.reason ?? null,
+    };
+  }
+
+  /**
+   * Spec §07 §2.1 facade. Resumes the first `paused` sub-pipeline (set
+   * by add_sub_pipeline immediate insertions per memory
+   * `project_phase_reset_and_insert.md`). When no `sub_pipeline_id` is
+   * given, picks the earliest paused sub; otherwise validates the named
+   * sub is paused. The state-manager normally calls this automatically
+   * on node boundaries; the tool is exposed for manual recovery.
+   */
+  async resume(req: {
+    session_id: string;
+    pipeline_id: string;
+    sub_pipeline_id?: string;
+  }): Promise<PipelineResumeResponse> {
+    const plan = await loadPipelinePlan(this.root, req.session_id, req.pipeline_id);
+    const target = req.sub_pipeline_id
+      ? plan.sub_pipelines.find((s) => s.id === req.sub_pipeline_id)
+      : plan.sub_pipelines.find((s) => s.status === "paused");
+    if (req.sub_pipeline_id && !target) {
+      throw new PipelineConflictError(
+        `sub_pipeline ${req.sub_pipeline_id} not found in pipeline ${plan.id}`,
+      );
+    }
+    if (target && target.status !== "paused") {
+      throw new PipelineConflictError(
+        `cannot resume sub_pipeline ${target.id}: status=${target.status} (expected paused)`,
+      );
+    }
+    const now = this.now();
+    if (target) {
+      target.status = "in_progress";
+      delete target.paused_at;
+      plan.status = "in_progress";
+      plan.last_active_at = now.toISOString();
+      await savePipelinePlan(this.root, req.session_id, plan, now);
+    }
+    const flow = await loadFlowState(this.root, req.session_id);
+    flow.history.push({
+      step: "pipeline_resume",
+      tool: "opc_pipeline_lifecycle",
+      input: { action: "resume", ...req },
+      output: { resumed: target?.id ?? null },
+      at: now.toISOString(),
+    });
+    await saveFlowState(this.root, flow, now);
+    const flow_next = target
+      ? {
+          tool: "opc_phase_start",
+          args: { pipeline_id: plan.id, sub_pipeline_id: target.id },
+          why: "resumed from paused (sub_pipeline ready to advance)",
+        }
+      : {
+          tool: "opc_pipeline_status",
+          args: { pipeline_id: plan.id },
+          why: "no paused sub_pipeline; inspect status to plan next move",
+        };
+    return {
+      pipeline_id: plan.id,
+      resumed_sub_pipeline: target?.id ?? null,
+      flow_next,
+    };
+  }
+
+  /**
+   * Spec §07 §2.1 + §2.3: discriminator-routed facade for the four
+   * pipeline lifecycle operations. The internal `complete/abort/replan/
+   * resume` methods stay public so existing call sites and tests work
+   * untouched; M19 wire layer will expose only `opc_pipeline_lifecycle`
+   * + a deprecated alias for each old name.
+   */
+  async lifecycle(req: PipelineLifecycleRequest): Promise<PipelineLifecycleResponse> {
+    switch (req.action) {
+      case "complete": {
+        const { action: _a, ...rest } = req;
+        void _a;
+        const r = await this.complete(rest);
+        return { action: "complete", ...r };
+      }
+      case "abort": {
+        const { action: _a, ...rest } = req;
+        void _a;
+        const r = await this.abort(rest);
+        return { action: "abort", ...r };
+      }
+      case "replan": {
+        const { action: _a, ...rest } = req;
+        void _a;
+        const r = await this.replan(rest);
+        return { action: "replan", ...r };
+      }
+      case "resume": {
+        const { action: _a, ...rest } = req;
+        void _a;
+        const r = await this.resume(rest);
+        return { action: "resume", ...r };
+      }
+      default: {
+        const exhaustive: never = req;
+        throw new PipelineConflictError(
+          `opc_pipeline_lifecycle: unknown action ${JSON.stringify(exhaustive)}`,
+        );
+      }
+    }
+  }
+
 
   private applyAddSubPipeline(plan: PipelinePlan, spec: AddSubPipelineSpec, now: Date): void {
     const id = spec.id ?? `sub-${this.uuid()}`;
