@@ -57,11 +57,11 @@ describe("validators", () => {
     const bad = baseArtifact() as unknown as Record<string, unknown>;
     delete bad.step;
     const r = validateV1Schema(bad as unknown as EvidenceArtifact);
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("V1 accepts a well-formed artifact", () => {
-    expect(validateV1Schema(baseArtifact()).pass).toBe(true);
+    expect(validateV1Schema(baseArtifact()).verdict).toBe("pass");
   });
 
   it("V2 rejects unknown knowledge_ref", () => {
@@ -69,8 +69,8 @@ describe("validators", () => {
       payload: { items: [{ knowledge_ref: "unit/missing" }] },
     });
     const r = validateV2Referential(art, { known_paths: new Set(["unit/known"]) });
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("unknown knowledge_ref");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toContain("knowledge_ref");
   });
 
   it("V2 accepts when known_paths includes ref", () => {
@@ -78,14 +78,14 @@ describe("validators", () => {
       payload: { items: [{ knowledge_ref: "unit/known" }] },
     });
     const r = validateV2Referential(art, { known_paths: new Set(["unit/known"]) });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("V3 rejects when required step field missing", async () => {
     const art = baseArtifact({ step: "P5", payload: { blocked_by_graph: {} } });
     const r = await validateV3Presence(art);
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("matched_tags");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toBe("matched_tags");
   });
 
   it("V3 rejects when referenced file does not exist", async () => {
@@ -98,8 +98,8 @@ describe("validators", () => {
       },
     });
     const r = await validateV3Presence(art);
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("does not exist");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toContain("file_ref");
   });
 
   it("V3 accepts when file_ref points at a real file", async () => {
@@ -116,7 +116,7 @@ describe("validators", () => {
         },
       });
       const r = await validateV3Presence(art);
-      expect(r.pass).toBe(true);
+      expect(r.verdict).toBe("pass");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -132,7 +132,7 @@ describe("validators", () => {
       },
     });
     const r = validateV4Coverage(art, { coverage_threshold: 0.5 });
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("V5 fails when all candidates matched (no discrimination)", () => {
@@ -144,27 +144,27 @@ describe("validators", () => {
       },
     });
     const r = validateV5Discrimination(art, { discrimination_threshold: 0.1 });
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("rounds-guard fails when round exceeds max", () => {
     const r = checkRoundsGuard({ current_round: 4, max_rounds: 3 });
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("freshness fails when current_version < min_version", () => {
     const r = checkFreshness({
       freshness_refs: [{ path: "unit/x", min_version: 3, current_version: 2 }],
     });
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
-  it("validateAll short-circuits on V1 failure", async () => {
+  it("validateAll collects all results even on V1 failure", async () => {
     const bad = baseArtifact() as unknown as Record<string, unknown>;
     delete bad.step;
     const { pass, results } = await validateAll(bad as unknown as EvidenceArtifact);
     expect(pass).toBe(false);
-    expect(results.length).toBe(1);
+    expect(results.length).toBe(8);
     expect(results[0]?.validator).toBe("V1");
   });
 
@@ -185,16 +185,16 @@ describe("validators", () => {
 
   it("V1 rejects null artifact", () => {
     const r = validateV1Schema(null as unknown as EvidenceArtifact);
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("must be an object");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toBe("artifact");
   });
 
   it("V1 rejects missing artifact_type", () => {
     const art = baseArtifact() as unknown as Record<string, unknown>;
     delete art.artifact_type;
     const r = validateV1Schema(art as unknown as EvidenceArtifact);
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("artifact_type");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toBe("artifact_type");
   });
 
   it("V2 rejects unknown node_ref", () => {
@@ -202,14 +202,14 @@ describe("validators", () => {
       payload: { items: [{ node_ref: "ghost-node" }] },
     });
     const r = validateV2Referential(art, { known_nodes: new Set(["real-node"]) });
-    expect(r.pass).toBe(false);
-    expect(r.reason).toContain("unknown node_ref");
+    expect(r.verdict).toBe("fail");
+    expect(r.failures[0]?.field).toContain("node_ref");
   });
 
   it("V2 passes without context", () => {
     const art = baseArtifact({ payload: { items: [{ knowledge_ref: "x" }] } });
     const r = validateV2Referential(art, {});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("V3 rejects null value for required field", async () => {
@@ -218,7 +218,7 @@ describe("validators", () => {
       payload: { matched_tags: null, blocked_by_graph: {} },
     });
     const r = await validateV3Presence(art as unknown as EvidenceArtifact);
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("V4 passes when coverage ratio meets threshold", () => {
@@ -231,7 +231,7 @@ describe("validators", () => {
       },
     });
     const r = validateV4Coverage(art, { coverage_threshold: 0.5 });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("V4 passes without coverage fields (no-op)", () => {
@@ -239,7 +239,7 @@ describe("validators", () => {
       payload: { matched_tags: ["x"], blocked_by_graph: {} },
     });
     const r = validateV4Coverage(art, {});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("V5 passes when discrimination ratio is OK", () => {
@@ -251,7 +251,7 @@ describe("validators", () => {
       },
     });
     const r = validateV5Discrimination(art, { discrimination_threshold: 0.1 });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("V5 passes without discrimination fields (no-op)", () => {
@@ -259,7 +259,7 @@ describe("validators", () => {
       payload: { matched_tags: ["x"], blocked_by_graph: {} },
     });
     const r = validateV5Discrimination(art, {});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("coverage-guard fails when matched_tags/requirements ratio below threshold", () => {
@@ -271,7 +271,7 @@ describe("validators", () => {
       },
     });
     const r = checkCoverageGuard(art, { coverage_threshold: 0.5 });
-    expect(r.pass).toBe(false);
+    expect(r.verdict).toBe("fail");
   });
 
   it("coverage-guard passes without coverage fields (no-op)", () => {
@@ -279,17 +279,17 @@ describe("validators", () => {
       payload: { matched_tags: ["x"], blocked_by_graph: {} },
     });
     const r = checkCoverageGuard(art, {});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("rounds-guard passes when round equals max (boundary)", () => {
     const r = checkRoundsGuard({ current_round: 3, max_rounds: 3 });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("rounds-guard passes when context undefined (no-op)", () => {
     const r = checkRoundsGuard({});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("freshness passes when all refs are current", () => {
@@ -299,17 +299,17 @@ describe("validators", () => {
         { path: "unit/b", min_version: 1, current_version: 1 },
       ],
     });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("freshness passes with empty refs (no-op)", () => {
     const r = checkFreshness({ freshness_refs: [] });
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 
   it("freshness passes without refs (no-op)", () => {
     const r = checkFreshness({});
-    expect(r.pass).toBe(true);
+    expect(r.verdict).toBe("pass");
   });
 });
 
@@ -485,7 +485,7 @@ describe("ReflectionServer", () => {
     });
     expect(resp.verdict).toBe("objections_remain");
     expect(resp.kept_objections.some((o) => o.category === "validator")).toBe(true);
-    expect(resp.validator_results?.some((r) => !r.pass)).toBe(true);
+    expect(resp.validator_results?.some((r) => r.verdict === "fail")).toBe(true);
   });
 
   it("recordInterventions returns full distiller dispatch context", async () => {

@@ -12,10 +12,19 @@ export type ValidatorId =
   | "rounds-guard"
   | "freshness";
 
+export interface ValidatorFailure {
+  field: string;
+  expected: string;
+  actual: string;
+  severity: "error" | "warning";
+}
+
 export interface ValidatorResult {
   validator: ValidatorId;
-  pass: boolean;
-  reason?: string;
+  verdict: "pass" | "fail";
+  failures: ValidatorFailure[];
+  ran_at: string;
+  duration_us: number;
 }
 
 export interface ValidatorContext {
@@ -40,23 +49,49 @@ const REQUIRED_PAYLOAD_FIELDS_BY_STEP: Record<StepId, string[]> = {
   P8: ["evidence"],
 };
 
+function fail(
+  validator: ValidatorId,
+  field: string,
+  expected: string,
+  actual: string,
+  severity: "error" | "warning" = "error",
+): ValidatorResult {
+  return {
+    validator,
+    verdict: "fail",
+    failures: [{ field, expected, actual, severity }],
+    ran_at: new Date().toISOString(),
+    duration_us: 0,
+  };
+}
+
+function pass(validator: ValidatorId): ValidatorResult {
+  return {
+    validator,
+    verdict: "pass",
+    failures: [],
+    ran_at: new Date().toISOString(),
+    duration_us: 0,
+  };
+}
+
 export function validateV1Schema(artifact: EvidenceArtifact): ValidatorResult {
   if (!artifact || typeof artifact !== "object") {
-    return { validator: "V1", pass: false, reason: "artifact must be an object" };
+    return fail("V1", "artifact", "object", typeof artifact);
   }
   if (!artifact.step || typeof artifact.step !== "string") {
-    return { validator: "V1", pass: false, reason: "missing step" };
+    return fail("V1", "step", "non-empty string", String(artifact.step));
   }
   if (!artifact.artifact_type || typeof artifact.artifact_type !== "string") {
-    return { validator: "V1", pass: false, reason: "missing artifact_type" };
+    return fail("V1", "artifact_type", "non-empty string", String(artifact.artifact_type));
   }
   if (!artifact.payload || typeof artifact.payload !== "object") {
-    return { validator: "V1", pass: false, reason: "missing payload" };
+    return fail("V1", "payload", "object", typeof artifact.payload);
   }
   if (!artifact.collected_at || !artifact.collected_by) {
-    return { validator: "V1", pass: false, reason: "missing collected_at/by" };
+    return fail("V1", "collected_at/collected_by", "both present", `${!!artifact.collected_at}/${!!artifact.collected_by}`);
   }
-  return { validator: "V1", pass: true };
+  return pass("V1");
 }
 
 export function validateV2Referential(
@@ -67,11 +102,7 @@ export function validateV2Referential(
   if (ctx.known_paths) {
     for (const r of refs) {
       if (!ctx.known_paths.has(r)) {
-        return {
-          validator: "V2",
-          pass: false,
-          reason: `unknown knowledge_ref: ${r}`,
-        };
+        return fail("V2", `knowledge_ref:${r}`, "known path", "unknown path");
       }
     }
   }
@@ -79,11 +110,11 @@ export function validateV2Referential(
     const nodeRefs = collectStringRefs(artifact.payload, "node_ref");
     for (const n of nodeRefs) {
       if (!ctx.known_nodes.has(n)) {
-        return { validator: "V2", pass: false, reason: `unknown node_ref: ${n}` };
+        return fail("V2", `node_ref:${n}`, "known node", "unknown node");
       }
     }
   }
-  return { validator: "V2", pass: true };
+  return pass("V2");
 }
 
 export async function validateV3Presence(
@@ -93,11 +124,7 @@ export async function validateV3Presence(
   for (const field of required) {
     const v = artifact.payload[field];
     if (v === undefined || v === null || (typeof v === "string" && v.length === 0)) {
-      return {
-        validator: "V3",
-        pass: false,
-        reason: `required field ${field} missing for step ${artifact.step}`,
-      };
+      return fail("V3", field, `non-null non-empty ${typeof v === "string" ? "string" : "value"}`, String(v));
     }
   }
   const filePaths = collectStringRefs(artifact.payload, "file_ref");
@@ -105,10 +132,10 @@ export async function validateV3Presence(
     try {
       await stat(p);
     } catch {
-      return { validator: "V3", pass: false, reason: `referenced file does not exist: ${p}` };
+      return fail("V3", `file_ref:${p}`, "existing file", "not found");
     }
   }
-  return { validator: "V3", pass: true };
+  return pass("V3");
 }
 
 export function validateV4Coverage(
@@ -121,14 +148,10 @@ export function validateV4Coverage(
   if (Array.isArray(hits) && Array.isArray(required) && required.length > 0) {
     const ratio = hits.length / required.length;
     if (ratio < threshold) {
-      return {
-        validator: "V4",
-        pass: false,
-        reason: `coverage ratio ${ratio.toFixed(2)} < threshold ${threshold}`,
-      };
+      return fail("V4", "coverage_ratio", `>= ${threshold}`, ratio.toFixed(2), "warning");
     }
   }
-  return { validator: "V4", pass: true };
+  return pass("V4");
 }
 
 export function validateV5Discrimination(
@@ -141,14 +164,10 @@ export function validateV5Discrimination(
   if (Array.isArray(matched) && typeof candidatePool === "number" && candidatePool > 0) {
     const ratio = matched.length / candidatePool;
     if (ratio >= 1 - threshold) {
-      return {
-        validator: "V5",
-        pass: false,
-        reason: `all-pass tag matching detected (${matched.length}/${candidatePool}); no discrimination`,
-      };
+      return fail("V5", "discrimination_ratio", `< ${1 - threshold}`, ratio.toFixed(2), "warning");
     }
   }
-  return { validator: "V5", pass: true };
+  return pass("V5");
 }
 
 export function checkCoverageGuard(
@@ -164,39 +183,27 @@ export function checkCoverageGuard(
     requirements.length > 0 &&
     matchedTags.length / requirements.length < threshold
   ) {
-    return {
-      validator: "coverage-guard",
-      pass: false,
-      reason: `matched_tags/requirements ratio < ${threshold}`,
-    };
+    return fail("coverage-guard", "coverage", `>= ${threshold}`, (matchedTags.length / requirements.length).toFixed(2));
   }
-  return { validator: "coverage-guard", pass: true };
+  return pass("coverage-guard");
 }
 
 export function checkRoundsGuard(ctx: ValidatorContext): ValidatorResult {
   if (typeof ctx.current_round === "number" && typeof ctx.max_rounds === "number") {
     if (ctx.current_round > ctx.max_rounds) {
-      return {
-        validator: "rounds-guard",
-        pass: false,
-        reason: `round ${ctx.current_round} exceeds max_rounds ${ctx.max_rounds}`,
-      };
+      return fail("rounds-guard", "current_round", `<= ${ctx.max_rounds}`, String(ctx.current_round));
     }
   }
-  return { validator: "rounds-guard", pass: true };
+  return pass("rounds-guard");
 }
 
 export function checkFreshness(ctx: ValidatorContext): ValidatorResult {
   for (const ref of ctx.freshness_refs ?? []) {
     if (ref.current_version < ref.min_version) {
-      return {
-        validator: "freshness",
-        pass: false,
-        reason: `${ref.path}@v${ref.current_version} stale; requires >=v${ref.min_version}`,
-      };
+      return fail("freshness", ref.path, `>= v${ref.min_version}`, `v${ref.current_version}`);
     }
   }
-  return { validator: "freshness", pass: true };
+  return pass("freshness");
 }
 
 export async function validateAll(
@@ -204,25 +211,17 @@ export async function validateAll(
   ctx: ValidatorContext = {},
 ): Promise<{ pass: boolean; results: ValidatorResult[] }> {
   const results: ValidatorResult[] = [];
-  const v1 = validateV1Schema(artifact);
-  results.push(v1);
-  if (!v1.pass) return { pass: false, results };
 
-  const v2 = validateV2Referential(artifact, ctx);
-  results.push(v2);
-  if (!v2.pass) return { pass: false, results };
-
-  const v3 = await validateV3Presence(artifact);
-  results.push(v3);
-  if (!v3.pass) return { pass: false, results };
-
+  results.push(validateV1Schema(artifact));
+  results.push(validateV2Referential(artifact, ctx));
+  results.push(await validateV3Presence(artifact));
   results.push(validateV4Coverage(artifact, ctx));
   results.push(validateV5Discrimination(artifact, ctx));
   results.push(checkCoverageGuard(artifact, ctx));
   results.push(checkRoundsGuard(ctx));
   results.push(checkFreshness(ctx));
 
-  const pass = results.every((r) => r.pass);
+  const pass = results.every((r) => r.verdict === "pass");
   return { pass, results };
 }
 
