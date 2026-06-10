@@ -468,10 +468,10 @@ session_id 由 Claude Code pid + 启动 ts 派生，详见
 | 子文档 | 状态 | 内容 |
 |---|---|---|
 | 01_validation-log.md | ✅ 已落地（2026-06-10） | V1–V7 PoC 验证结果聚合索引（V1/V2/V3/V6/V7 已 PASS，V4/V5 待操作员运行 spike runbook）|
-| 02_subagent-fallback-plans.md | 占位 | C3 降级方案（代理模式 / 延迟写入）的详细工程规范 |
-| 03_kit-agent-conventions.md | 占位 | 每个 kit 的 `agents/*.md` 必须声明的字段规范（含 `tools` 强制）|
-| 04_http-sse-deployment.md | 占位（A1 落地后补） | HTTP/SSE 模式部署指南：Mcp-Session-Id 配置、heartbeat 参数、advisory lock 实施 |
-| 05_installed-kits-registry.md | 占位（A4 落地后补） | `.opc/installed-kits.json` schema + 维护责任 + 对账启发式调参 |
+| 02_subagent-fallback-plans.md | ✅ | C3 降级方案（代理模式 / 延迟写入）的详细工程规范 |
+| 03_kit-agent-conventions.md | ✅ | 每个 kit 的 `agents/*.md` 必须声明的字段规范（含 `tools` 强制）|
+| 04_http-sse-deployment.md | ✅ | HTTP/SSE 模式部署指南：Mcp-Session-Id 配置、heartbeat 参数、advisory lock 实施 |
+| 05_installed-kits-registry.md | ✅ | `.opc/installed-kits.json` schema + 维护责任 + 对账启发式调参 |
 
 ---
 
