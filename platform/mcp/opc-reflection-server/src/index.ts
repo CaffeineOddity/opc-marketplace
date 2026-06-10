@@ -14,6 +14,12 @@ export type {
   ReflectCritiqueCompleteResponse,
   ReflectRecordInterventionsRequest,
   ReflectRecordInterventionsResponse,
+  ReflectExecuteRequest,
+  ReflectExecuteResponse,
+  ReflectCompleteRequest,
+  ReflectCompleteResponse,
+  ReflectAdminRequest,
+  ReflectAdminResponse,
   DistillerDispatchContext,
   DistillerTaskSpec,
 } from "./reflection-server.js";

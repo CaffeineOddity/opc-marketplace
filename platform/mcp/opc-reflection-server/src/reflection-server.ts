@@ -138,6 +138,33 @@ export interface ReflectRecordInterventionsResponse {
   notes: string;
 }
 
+// ---- M17.e: discriminator-style facades for opc_reflect_execute / complete / admin ----
+
+export type ReflectExecuteRequest =
+  | ({ method: ReflectionMethod } & ReflectCritiqueRequest);
+
+export type ReflectExecuteResponse = ReflectCritiqueResponse & {
+  method: ReflectionMethod;
+};
+
+export type ReflectCompleteRequest =
+  | ({ method: ReflectionMethod } & Omit<ReflectCritiqueCompleteRequest, "method">);
+
+export type ReflectCompleteResponse = ReflectCritiqueCompleteResponse & {
+  method: ReflectionMethod;
+};
+
+export type ReflectAdminRequest =
+  | ({ action: "record_interventions" } & ReflectRecordInterventionsRequest)
+  | { action: "on_demand"; session_id: string; reason?: string }
+  | { action: "explain"; session_id: string; reflection_id: string }
+  | { action: "query_stats"; session_id: string; window?: string }
+  | { action: "unlearn_method"; session_id: string; method: ReflectionMethod; reason?: string };
+
+export type ReflectAdminResponse =
+  | ({ action: "record_interventions" } & ReflectRecordInterventionsResponse)
+  | { action: "on_demand" | "explain" | "query_stats" | "unlearn_method"; not_implemented: true; reason: string };
+
 const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "Read",
   "Glob",
@@ -340,6 +367,83 @@ export class ReflectionServer {
         "host must Task(subagent_type=opc-distiller) with the tools whitelist above; distiller commits via opc_corrections_upsert; on failure, log to opc-logs/distiller/ and continue",
     };
   }
+
+  /**
+   * Tool 5 (M17.e): opc_reflect_execute — facade over critique(); passes the
+   * declared method through to critic_spec.context so the dispatching host
+   * knows which method this round is running.
+   */
+  async execute(req: ReflectExecuteRequest): Promise<ReflectExecuteResponse> {
+    if (!isReflectionMethod(req.method)) {
+      throw new ReflectionServerError(
+        `opc_reflect_execute: unknown method=${String(req.method)}`,
+      );
+    }
+    const { method, ...inner } = req;
+    const resp = await this.critique({ ...inner, method });
+    return { ...resp, method };
+  }
+
+  /**
+   * Tool 6 (M17.e): opc_reflect_complete — facade over critiqueComplete().
+   * Requires method discriminator (the 4 baked methods M3-cove / M4-critique /
+   * M5-debate / M6-tot all share the same complete signature).
+   */
+  async complete(req: ReflectCompleteRequest): Promise<ReflectCompleteResponse> {
+    if (!isReflectionMethod(req.method)) {
+      throw new ReflectionServerError(
+        `opc_reflect_complete: unknown method=${String(req.method)}`,
+      );
+    }
+    const { method, ...inner } = req;
+    const resp = await this.critiqueComplete({ ...inner, method });
+    return { ...resp, method };
+  }
+
+  /**
+   * Tool 7 (M17.e): opc_reflect_admin — dispatcher for non-method admin ops.
+   * Implemented: record_interventions. Other actions (on_demand / explain /
+   * query_stats / unlearn_method) return not_implemented: true for now;
+   * full impl tracked in M18.
+   */
+  async admin(req: ReflectAdminRequest): Promise<ReflectAdminResponse> {
+    switch (req.action) {
+      case "record_interventions": {
+        const { action: _a, ...inner } = req;
+        void _a;
+        const resp = await this.recordInterventions(inner);
+        return { action: "record_interventions", ...resp };
+      }
+      case "on_demand":
+      case "explain":
+      case "query_stats":
+      case "unlearn_method":
+        return {
+          action: req.action,
+          not_implemented: true,
+          reason: `opc_reflect_admin.${req.action} deferred to M18 (observability/admin tooling)`,
+        };
+      default: {
+        const _exhaustive: never = req;
+        throw new ReflectionServerError(
+          `opc_reflect_admin: unknown action=${String((_exhaustive as { action?: string }).action)}`,
+        );
+      }
+    }
+  }
+}
+
+const ALL_REFLECTION_METHODS: readonly ReflectionMethod[] = Object.freeze([
+  "cove",
+  "critique",
+  "debate",
+  "tot",
+  "reflexion",
+  "validator",
+]);
+
+function isReflectionMethod(m: unknown): m is ReflectionMethod {
+  return typeof m === "string" && (ALL_REFLECTION_METHODS as readonly string[]).includes(m);
 }
 
 function renderDistillerPrompt(ctx: DistillerDispatchContext): string {

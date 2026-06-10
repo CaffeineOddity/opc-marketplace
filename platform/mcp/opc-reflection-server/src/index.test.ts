@@ -375,6 +375,140 @@ describe("ReflectionServer", () => {
   });
 });
 
+describe("ReflectionServer M17.e discriminator facades", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m17e-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  describe("opc_reflect_execute", () => {
+    it("delegates to critique() and tags response with method", async () => {
+      const srv = newServer();
+      const resp = await srv.execute({
+        method: "cove",
+        session_id: "s1",
+        step_id: "P5",
+        artifact: baseArtifact(),
+        enhanced_prompt: "verify step by step",
+      });
+      expect(resp.method).toBe("cove");
+      expect(resp.critic_spec.context.method).toBe("cove");
+      expect(resp.critic_spec.tools).toContain("Read");
+      expect(resp.critic_spec.tools).not.toContain("Write");
+    });
+
+    it("rejects unknown method", async () => {
+      const srv = newServer();
+      await expect(
+        srv.execute({
+          method: "nonsense" as never,
+          session_id: "s1",
+          step_id: "P5",
+          artifact: baseArtifact(),
+          enhanced_prompt: "x",
+        }),
+      ).rejects.toThrow(/unknown method=nonsense/);
+    });
+  });
+
+  describe("opc_reflect_complete", () => {
+    it("delegates to critiqueComplete() and tags response with method", async () => {
+      const srv = newServer();
+      const resp = await srv.complete({
+        method: "cove",
+        session_id: "s1",
+        step_id: "P5",
+        objections: [],
+        reasoning_trace: ["checked"],
+        round: 1,
+        max_rounds: 3,
+      });
+      expect(resp.method).toBe("cove");
+      expect(resp.verdict).toBe("clean");
+      expect(resp.pending_reflection.must_be_registered_by).toBe("opc_flow_reflect");
+    });
+
+    it("rejects unknown method", async () => {
+      const srv = newServer();
+      await expect(
+        srv.complete({
+          method: "wrong" as never,
+          session_id: "s1",
+          step_id: "P5",
+          objections: [],
+          reasoning_trace: [],
+          round: 1,
+          max_rounds: 3,
+        }),
+      ).rejects.toThrow(/unknown method=wrong/);
+    });
+  });
+
+  describe("opc_reflect_admin", () => {
+    it("action=record_interventions delegates to recordInterventions()", async () => {
+      const srv = newServer();
+      const resp = await srv.admin({
+        action: "record_interventions",
+        session_id: "s1",
+        pipeline_id: "pl-1",
+        rounds_exceeded_artifacts: ["opc-logs/reflection/p3-r3.json"],
+      });
+      expect(resp.action).toBe("record_interventions");
+      if (resp.action === "record_interventions") {
+        expect(resp.dispatched).toBe(true);
+        expect(resp.distiller_agent).toBe("opc-distiller");
+        expect(resp.task_spec.dispatch_context.pipeline_id).toBe("pl-1");
+      }
+    });
+
+    it.each([
+      ["on_demand"],
+      ["explain"],
+      ["query_stats"],
+      ["unlearn_method"],
+    ] as const)(
+      "action=%s returns not_implemented:true (deferred to M18)",
+      async (action) => {
+        const srv = newServer();
+        const req =
+          action === "explain"
+            ? { action, session_id: "s1", reflection_id: "rf-1" }
+            : action === "unlearn_method"
+              ? { action, session_id: "s1", method: "critique" as const }
+              : { action, session_id: "s1" };
+        const resp = await srv.admin(req);
+        expect(resp.action).toBe(action);
+        if (resp.action !== "record_interventions") {
+          expect(resp.not_implemented).toBe(true);
+          expect(resp.reason).toContain(action);
+          expect(resp.reason).toContain("M18");
+        }
+      },
+    );
+
+    it("rejects unknown action with ReflectionServerError", async () => {
+      const srv = newServer();
+      await expect(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        srv.admin({ action: "ghost", session_id: "s1" } as any),
+      ).rejects.toThrow(/unknown action=ghost/);
+    });
+  });
+});
+
 describe("similarity engine", () => {
   const sample = (overrides: Partial<Correction> = {}): Correction => ({
     id: "corr-x",
