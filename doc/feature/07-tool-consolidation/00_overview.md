@@ -151,14 +151,14 @@
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
 | `opc_reflect_plan` | `opc_reflect_plan` | —（保留）|
-| `opc_reflect_execute({method:"cove"})` | `opc_reflect_execute` | `method: "M3-cove"` |
-| `opc_reflect_execute({method:"critique"})` | `opc_reflect_execute` | `method: "M4-critique"` |
-| `opc_reflect_execute({method:"debate"})` | `opc_reflect_execute` | `method: "M5-debate"` |
-| `opc_reflect_execute({method:"tot"})` | `opc_reflect_execute` | `method: "M6-tot"` |
-| `opc_reflect_complete({method:"cove"})` | `opc_reflect_complete` | `method: "M3-cove"` + `result` |
-| `opc_reflect_complete({method:"critique"})` | `opc_reflect_complete` | `method: "M4-critique"` + `result` |
-| `opc_reflect_complete({method:"debate"})` | `opc_reflect_complete` | `method: "M5-debate"` + `result` |
-| `opc_reflect_complete({method:"tot"})` | `opc_reflect_complete` | `method: "M6-tot"` + `result` |
+| `opc_reflect_execute({method:"cove"})` | `opc_reflect_execute` | `method: "cove"` |
+| `opc_reflect_execute({method:"critique"})` | `opc_reflect_execute` | `method: "critique"` |
+| `opc_reflect_execute({method:"debate"})` | `opc_reflect_execute` | `method: "debate"` |
+| `opc_reflect_execute({method:"tot"})` | `opc_reflect_execute` | `method: "tot"` |
+| `opc_reflect_complete({method:"cove"})` | `opc_reflect_complete` | `method: "cove"` + `result` |
+| `opc_reflect_complete({method:"critique"})` | `opc_reflect_complete` | `method: "critique"` + `result` |
+| `opc_reflect_complete({method:"debate"})` | `opc_reflect_complete` | `method: "debate"` + `result` |
+| `opc_reflect_complete({method:"tot"})` | `opc_reflect_complete` | `method: "tot"` + `result` |
 | `opc_reflect_admin({action:"record_interventions"})` | `opc_reflect_admin` | `action: "record_interventions"` |
 | `opc_reflect_admin({action:"on_demand"})` | `opc_reflect_admin` | `action: "on_demand"` |
 | `opc_reflect_admin({action:"explain"})` | `opc_reflect_admin` | `action: "explain"` |
@@ -216,7 +216,7 @@
 |---|---|---|
 | 生命周期类（start/abort/recover/complete/replan） | `action` | 动词字符串 |
 | 流程步骤类（intent/task_analysis/...） | `step` | 与 `flow-state.json.current_step` 对齐的枚举 |
-| 反思方法类（M3/M4/M5/M6） | `method` | `"M3-cove"` / `"M4-critique"` / `"M5-debate"` / `"M6-tot"` |
+| 反思方法类（M3/M4/M5/M6） | `method` | `"cove"` / `"critique"` / `"debate"` / `"tot"` |
 | 读取模式类（single/batch/list/search） | `mode` | 名词字符串 |
 | 结果状态类（success/failed/retry） | `status` | 与 node.status 枚举对齐 |
 | CRUD 类 | `action` | `"query"` / `"record"` / `"unlearn"` / `"reindex"` / `"promote"` / `"migrate"` / `"endorse"` / `"freeze"` / `"delete"` |
@@ -353,13 +353,13 @@ opc_flow_reflect({reflection_id})       // 3
 ```typescript
 {
   name: "opc_reflect_execute",
-  description: "执行反思方法。method=M3-cove 拆断言逐条验证；M4-critique 派 critic 列 objection；M5-debate 多 agent 辩论；M6-tot 多分支搜索。inline=true 时一次性跑完 plan + Task + complete，返回 pending_reflection；inline=false 仅返回 agent_spec 让 Host 自行派 Task。",
+  description: "执行反思方法。method=cove 拆断言逐条验证；critique 派 critic 列 objection；debate 多 agent 辩论；tot 多分支搜索；reflexion 反思教训记忆；validator 确定性校验。inline=true 时一次性跑完 plan + Task + complete，返回 pending_reflection；inline=false 仅返回 agent_spec 让 Host 自行派 Task。",
   input_schema: {
     type: "object",
     required: ["step", "method", "artifact"],
     properties: {
       step: {enum: ["intent_analysis", "task_analysis", "task_decomposition", "brief_generation", "node_selection", "node_execution", "phase_completion", "phase_advance"]},
-      method: {enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"]},
+      method: {enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"]},
       artifact: {type: "object"},
       inline: {type: "boolean", default: true},
       enhanced_prompt: {type: "string"}
@@ -387,7 +387,7 @@ opc_flow_reflect({reflection_id})       // 3
 | 枚举 | 用途 |
 |---|---|
 | `step_id` 8 项（intent_analysis/task_analysis/task_decomposition/brief_generation/node_selection/node_execution/phase_completion/phase_advance） | `opc_flow_reflect.step_id` 入参；`flow-state.reflection_log[].step_id` 持久化字段 |
-| `method` 4 项（M3-cove/M4-critique/M5-debate/M6-tot） | `reflection_log[].method` 持久化字段 |
+| `method` 6 项（cove/critique/debate/tot/reflexion/validator） | `reflection_log[].method` 持久化字段 |
 | `node.status` 3 项（success/failed/retry） | 工具入参 + state.json 字段 |
 
 ### 4.3 registry-guard 保护清单的工具名更新

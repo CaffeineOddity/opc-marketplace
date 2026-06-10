@@ -110,7 +110,7 @@ opc_reflect_admin({
     step: "P3",
     round: 1    // 可选，不传则对最新一轮
   },
-  method: "M5-debate"  // 可选，不传则按决策矩阵自动选择
+  method: "debate"  // 可选，不传则按决策矩阵自动选择
 })
 ```
 
@@ -138,7 +138,7 @@ opc_reflect_admin({
 
 ```json
 {
-  "method": "M3-cove",
+  "method": "cove",
   "intensity_suggestion": {
     "recommended": "low",
     "reason": "近 24h P1 步 FP 率 0.45（> 0.3 阈值），反思收益低",

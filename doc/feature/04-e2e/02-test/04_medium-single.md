@@ -62,11 +62,11 @@ opc_phase_start("05-implement")
   → 候选: [tdd-implementation, backend-endpoint, security-review] + reflection_budget_hint{max_rounds: 3}
   → Claude 收集第 1 轮 selection_evidence: V5 discrimination fail（backend-endpoint 与 auth 相关节点文件域冲突）
   → 走反思工具面（详细 5 步 / 3 步 inline 见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)）：
-    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:true, artifact:{selection_evidence}})
+    · opc_reflect_execute({step:"node_selection", method:"critique", inline:true, artifact:{selection_evidence}})
     · → 返回 { verdict:"objections_remain", kept_objections:[{text:"backend-endpoint 与 auth 节点冲突"}], pending_reflection:{reflection_id} }
     · opc_flow_reflect({reflection_id}) → 持久化到 state.json.phases[].reflection_log + flow-state 指针
   → Claude 调整方案（移除 backend-endpoint）→ 第 2 轮反思
-    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:true, artifact:{修正后 evidence}})
+    · opc_reflect_execute({step:"node_selection", method:"critique", inline:true, artifact:{修正后 evidence}})
     · → 返回 { verdict:"clean", pending_reflection:{reflection_id} }
     · opc_flow_reflect({reflection_id}) → 跳出，路由 phase_confirm
   → opc_phase_confirm

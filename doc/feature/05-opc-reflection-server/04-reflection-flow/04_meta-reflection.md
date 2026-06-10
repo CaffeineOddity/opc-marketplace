@@ -34,13 +34,13 @@
 
 | 规则 ID | 适用方法 | 触发条件 | 行动 | 计入指标 |
 |---|---|---|---|---|
-| **C-Critique-1** | M4-critique | critic 返回 0 条 objection 且 reasoning_trace 中含 "no issues" 类肯定句 | 标 `confirmatory_bias`，要求 sub-agent 重做（强 prompt 加 "你必须至少提出一个 risk"） | `meta_confirmatory_count.M4` |
-| **C-Debate-1** | M5-debate | 双方立场重合度 > 0.7（cosine on 立场摘要） | reject 整次 debate；判 `fake_debate`；本轮直接降级 secondary | `meta_fake_debate_count` |
-| **C-Debate-2** | M5-debate | 双方 round 数 < 2（连一个回合都没辩） | 同 C-Debate-1 | 同上 |
-| **C-ToT-1** | M6-tot | 所有分支评分 > 0.9 | 标 `optimism_bias`；强制追加一个 critic agent 做悲观裁定 | `meta_optimism_count.M6` |
-| **C-ToT-2** | M6-tot | 分支数 < 2 | reject；ToT 退化为 single-path 失去意义 | `meta_single_path_count` |
-| **C-CoVe-1** | M3-cove | 断言数 < 2 | reject | `meta_under_decomposed.M3` |
-| **C-CoVe-2** | M3-cove | 断言全部 `verified=true` 但 artifact 有 V4 coverage < 0.7 | 标 `surface_verification`，要求重做 | `meta_surface_count` |
+| **C-Critique-1** | critique | critic 返回 0 条 objection 且 reasoning_trace 中含 "no issues" 类肯定句 | 标 `confirmatory_bias`，要求 sub-agent 重做（强 prompt 加 "你必须至少提出一个 risk"） | `meta_confirmatory_count.M4` |
+| **C-Debate-1** | debate | 双方立场重合度 > 0.7（cosine on 立场摘要） | reject 整次 debate；判 `fake_debate`；本轮直接降级 secondary | `meta_fake_debate_count` |
+| **C-Debate-2** | debate | 双方 round 数 < 2（连一个回合都没辩） | 同 C-Debate-1 | 同上 |
+| **C-ToT-1** | tot | 所有分支评分 > 0.9 | 标 `optimism_bias`；强制追加一个 critic agent 做悲观裁定 | `meta_optimism_count.M6` |
+| **C-ToT-2** | tot | 分支数 < 2 | reject；ToT 退化为 single-path 失去意义 | `meta_single_path_count` |
+| **C-CoVe-1** | cove | 断言数 < 2 | reject | `meta_under_decomposed.M3` |
+| **C-CoVe-2** | cove | 断言全部 `verified=true` 但 artifact 有 V4 coverage < 0.7 | 标 `surface_verification`，要求重做 | `meta_surface_count` |
 
 **性质**：C 类需要语义判断的部分（"no issues" 类肯定句、"立场重合度"）由短 TS 启发式 + 关键词词典实现；不调 LLM。FP 率会比 A/B 高，因此**只发 warning 不直接 reject**（除 C-Debate-1/2、C-ToT-2、C-CoVe-1）。
 
@@ -67,7 +67,7 @@ type MetaEvent = {
   session_id: string
   reflection_id: string
   step: 'intent_analysis' | ... | 'phase_advance'
-  method: 'M3-cove' | 'M4-critique' | 'M5-debate' | 'M6-tot'
+  method: 'cove' | 'critique' | 'debate' | 'tot'
   rule_id: 'A1' | 'A2' | ... | 'D4'
   outcome: 'dropped' | 'warned' | 'rejected'
   detail?: object   // 规则专属上下文（如 dropped objection 的 id、similarity score）
@@ -128,7 +128,7 @@ const UNLEARN_TTL_HOURS = 24        // 默认熔断 24h，到期自动恢复
 {
   "active": [
     {
-      "method": "M5-debate",
+      "method": "debate",
       "step": "task_decomposition",
       "reason": "fake_debate_rate=0.52 > 0.40",
       "activated_at": "2026-06-09T11:00:00Z",
@@ -166,7 +166,7 @@ reflection-server 启动时加载该文件；`opc_reflect_plan` 在选 method �
 - ...
 
 ## 4. 建议的 unlearn
-- (M5-debate, task_decomposition): fake_debate_rate=0.52 — 建议熔断 24h
+- (debate, task_decomposition): fake_debate_rate=0.52 — 建议熔断 24h
 
 ## 5. 高价值 corrections（建议 L3 晋升）
 - correction-id-1: 在 P5 反思中命中 <n> 次

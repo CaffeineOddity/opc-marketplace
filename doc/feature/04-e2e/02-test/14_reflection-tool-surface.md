@@ -127,19 +127,19 @@
 
 ---
 
-## 模式 B：3 步 inline（P5 / M4-critique，medium 复杂度）
+## 模式 B：3 步 inline（P5 / critique，medium 复杂度）
 
 ```
-当前: 同样 opc_phase_start("05-implement") 但 reflection_budget_hint{method:"M4-critique", max_rounds:1}
+当前: 同样 opc_phase_start("05-implement") 但 reflection_budget_hint{method:"critique", max_rounds:1}
 
 [B1] Claude → opc_reflect_execute({
               step: "node_selection",
-              method: "M4-critique",
+              method: "critique",
               inline: true,
               artifact: {selection_evidence:{...}}
             })
             reflection-server:
-              · 内置 opc_reflect_plan 选 M4-critique（不返回 plan_id 给外部）
+              · 内置 opc_reflect_plan 选 critique（不返回 plan_id 给外部）
               · 内置 Task spawn critic agent（1 个，short-running）
               · 收到 critic 输出后内置跑 meta-validator V1+V2+V5
               · 假设 V5 保留 1 条 objection → verdict="objections_remain"
@@ -174,7 +174,7 @@
 - 工具往返从 5 → 3 次（plan/execute/Task/complete 4 步折叠成 1 个 `opc_reflect_execute`）
 - artifact / pending_reflection / registry-guard 行为**完全一致**（同一份 schema）
 - 通过 `_inline_internal_log` 字段保留可观察性（调试时可看到内部 plan_id 和 spawned tasks）
-- 适合 M3-debate / M4-critique 等短链 method（节省 token 与延迟）
+- 适合 M3-debate / critique 等短链 method（节省 token 与延迟）
 
 ---
 
@@ -200,7 +200,7 @@
 | 触发条件 | 选模式 | reflection_budget_hint.execution_mode |
 |---|---|---|
 | method ∈ {M5-ToT, M6-MAD} | A (5 步) | `"external"`（默认） |
-| method ∈ {M3-debate, M4-critique} 且 max_rounds ≤ 2 | B (3 步 inline) | `"inline"` |
+| method ∈ {M3-debate, critique} 且 max_rounds ≤ 2 | B (3 步 inline) | `"inline"` |
 | complexity == "high" 且 step ∈ {P3 task_decomposition, P4 brief_generation} | A (5 步)（重决策值得透明) | `"external"` |
 | step ∈ {P6 node_execution, P7 phase_completion}（已由 Validator-only 路径覆盖） | **不走反思工具面** | n/a（见 [P6/P7 决策](../../05-opc-reflection-server/02-server-design/00_overview.md#p6p7-validator-only-路径)） |
 | 用户在 corrections.jsonl 中标记某 step 需要"全展开调试" | A (5 步)（强制 override) | `"external"` |
@@ -248,9 +248,9 @@
 ```
 P2 task_analysis → 模式 A (M5-ToT, high)
 P3 task_decomposition → 模式 A (M5-ToT, high)
-P4 brief_generation → 模式 B (M4-critique, medium)
+P4 brief_generation → 模式 B (critique, medium)
 P5 node_selection (sub-1) → 模式 A (M6-MAD, high)
-P5 node_selection (sub-2) → 模式 B (M4-critique, medium)
+P5 node_selection (sub-2) → 模式 B (critique, medium)
 ```
 断言：每个 step 各自的 `execution_mode` 独立决定，state-server 不强制统一；reflection_log 在 step 维度分别累积，互不影响。
 

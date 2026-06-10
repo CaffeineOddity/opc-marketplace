@@ -34,7 +34,7 @@ type TelemetryEvent = {
 
   // —— 反思上下文 ——
   step: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8'
-  method: 'M2-reflexion' | 'M3-cove' | 'M4-critique' | 'M5-debate' | 'M6-tot'
+  method: 'M2-reflexion' | 'cove' | 'critique' | 'debate' | 'tot'
   reflection_id: string          // "rfl-<step>-r<n>-<ulid>"
   round: number                  // 当前 step 的第几轮反思
   pipeline_id?: string           // P5+ 时必填
@@ -115,9 +115,9 @@ async function appendTelemetry(
 ### 2.5 示例
 
 ```jsonl
-{"ts":"2026-06-11T10:00:00Z","session_id":"sess-abc","event":"reflection.started","step":"P5","method":"M4-critique","reflection_id":"rfl-P5-r1-01HXY8","round":1,"pipeline_id":"pl-xxx","phase":"impl"}
-{"ts":"2026-06-11T10:00:04Z","session_id":"sess-abc","event":"reflection.completed","step":"P5","method":"M4-critique","reflection_id":"rfl-P5-r1-01HXY8","round":1,"pipeline_id":"pl-xxx","phase":"impl","verdict":"objections_remain","objections_raised":3,"objections_kept":2,"evidence_diff":true,"fallback_triggered":false,"validator_pass":true,"meta_validator_pass":true,"meta_validator_warnings":0,"latency_ms":4200,"tokens_in":1200,"tokens_out":350,"agent_count":1,"corrections_injected":2,"corrections_adopted":1,"corrections_hotness_updated":1}
-{"ts":"2026-06-11T10:00:30Z","session_id":"sess-abc","event":"reflection.rejected","step":"P5","method":"M5-debate","reflection_id":"rfl-P5-r2-01HXY9","round":2,"pipeline_id":"pl-xxx","phase":"impl","verdict":"rejected","objections_raised":5,"objections_kept":0,"evidence_diff":false,"fallback_triggered":true,"fallback_reason":"meta_validator_reject_debate_synthesis_overlap","validator_pass":true,"meta_validator_pass":false,"meta_validator_warnings":1,"latency_ms":8100,"tokens_in":2400,"tokens_out":800,"agent_count":2,"corrections_injected":2,"corrections_adopted":0,"corrections_hotness_updated":0,"error_type":"meta_validator_reject","error_detail":"双方立场重合度 0.92 > 阈值 0.85，视为假辩论"}
+{"ts":"2026-06-11T10:00:00Z","session_id":"sess-abc","event":"reflection.started","step":"P5","method":"critique","reflection_id":"rfl-P5-r1-01HXY8","round":1,"pipeline_id":"pl-xxx","phase":"impl"}
+{"ts":"2026-06-11T10:00:04Z","session_id":"sess-abc","event":"reflection.completed","step":"P5","method":"critique","reflection_id":"rfl-P5-r1-01HXY8","round":1,"pipeline_id":"pl-xxx","phase":"impl","verdict":"objections_remain","objections_raised":3,"objections_kept":2,"evidence_diff":true,"fallback_triggered":false,"validator_pass":true,"meta_validator_pass":true,"meta_validator_warnings":0,"latency_ms":4200,"tokens_in":1200,"tokens_out":350,"agent_count":1,"corrections_injected":2,"corrections_adopted":1,"corrections_hotness_updated":1}
+{"ts":"2026-06-11T10:00:30Z","session_id":"sess-abc","event":"reflection.rejected","step":"P5","method":"debate","reflection_id":"rfl-P5-r2-01HXY9","round":2,"pipeline_id":"pl-xxx","phase":"impl","verdict":"rejected","objections_raised":5,"objections_kept":0,"evidence_diff":false,"fallback_triggered":true,"fallback_reason":"meta_validator_reject_debate_synthesis_overlap","validator_pass":true,"meta_validator_pass":false,"meta_validator_warnings":1,"latency_ms":8100,"tokens_in":2400,"tokens_out":800,"agent_count":2,"corrections_injected":2,"corrections_adopted":0,"corrections_hotness_updated":0,"error_type":"meta_validator_reject","error_detail":"双方立场重合度 0.92 > 阈值 0.85，视为假辩论"}
 ```
 
 ## 三、聚合指标（query_stats）
@@ -303,7 +303,7 @@ type BudgetStats = {
 | `budget_exhausted_rate` | > 0.2 | warning | 频繁耗尽预算，考虑增加 budget 或降低 intensity |
 | `fallback_triggered` 占比 | > 0.3 | warning | 降级触发过多，检查 method 健康度 |
 | `expired_pending_count_24h` | > 5 | warning | 用户可能未及时处理 pending_reflection |
-| `avg_latency_ms`（M5-debate）| > 15000 | warning | Debate 延迟过高，考虑减少 max_rounds |
+| `avg_latency_ms`（debate）| > 15000 | warning | Debate 延迟过高，考虑减少 max_rounds |
 | `agent_count` 单次反思 | > 4 | warning | 单次反思派 agent 过多 |
 | `corrections_merge_rate_7d` | < 0.1 且 total_entries > 20 | info | 纠正条目几乎全是新建无合并，可能存在碎片化 |
 | `skip_rate`（用户自治）| > 0.5 | info | 用户频繁跳过反思，考虑建议降低 intensity |
@@ -320,10 +320,10 @@ type BudgetStats = {
     {
       level: 'warning',
       code: 'FP_RATE_HIGH',
-      method: 'M5-debate',
+      method: 'debate',
       value: 0.38,
       threshold: 0.3,
-      message: 'M5-debate FP rate 0.38 exceeds threshold 0.3; unlearned until 2026-06-12T10:00:00Z'
+      message: 'debate FP rate 0.38 exceeds threshold 0.3; unlearned until 2026-06-12T10:00:00Z'
     }
   ]
 }

@@ -217,7 +217,7 @@ reflection-server 恢复后，后续 step 正常走 reflection。
 ### 5.2 查询
 
 ```
-opc_reflect_admin({action:"query_stats", method:"M4-critique", window:"7d"})
+opc_reflect_admin({action:"query_stats", method:"critique", window:"7d"})
 ```
 
 ### 5.3 自动 unlearn 阈值

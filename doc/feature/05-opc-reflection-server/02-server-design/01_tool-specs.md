@@ -89,9 +89,9 @@ type ReflectionResponse = {
 ```typescript
 {
   // —— method 选择 ——
-  method: "M3-cove" | "M4-critique" | "M5-debate" | "M6-tot",
-  secondary_method: "M2-reflexion" | "M3-cove" | "M4-critique" | "M5-debate" | null,
-  method_choice_reason: "step=P5, complexity=medium → primary=M4-critique",
+  method: "cove" | "critique" | "debate" | "tot",
+  secondary_method: "M2-reflexion" | "cove" | "critique" | "debate" | null,
+  method_choice_reason: "step=P5, complexity=medium → primary=critique",
 
   // —— agent spec ——
   agent_spec: {
@@ -119,9 +119,9 @@ type ReflectionResponse = {
 
   // —— 提示 ——
   next_step_hint: {
-    suggestion: "调 opc_reflect_execute({method:\"M4-critique\", artifact, enhanced_prompt})",
+    suggestion: "调 opc_reflect_execute({method:\"critique\", artifact, enhanced_prompt})",
     suggested_tool: "opc_reflect_execute",
-    suggested_args: { method: "M4-critique", step: "P5", artifact: "..." },
+    suggested_args: { method: "critique", step: "P5", artifact: "..." },
     why: "P5 决策点需要独立 critic 审查节点组合"
   },
 
@@ -157,7 +157,7 @@ type ReflectionResponse = {
     required: ["step", "method", "artifact"],
     properties: {
       step: { enum: ["P1","P2","P3","P4","P5","P6","P7","P8"] },
-      method: { enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot"] },
       artifact: { type: "object" },
       inline: { type: "boolean", default: true },
       enhanced_prompt: { type: "string" },
@@ -169,10 +169,10 @@ type ReflectionResponse = {
 
 ### 3.2 各 method 的 input_contract
 
-**M3-cove**：
+**cove**：
 ```typescript
 {
-  method: "M3-cove",
+  method: "cove",
   artifact: {
     payload: object,        // 原始输出内容
     step: "P1" | "P2" | "P4" | "P7"
@@ -181,10 +181,10 @@ type ReflectionResponse = {
 }
 ```
 
-**M4-critique**：
+**critique**：
 ```typescript
 {
-  method: "M4-critique",
+  method: "critique",
   artifact: {
     payload: object,
     node_type: string,
@@ -195,10 +195,10 @@ type ReflectionResponse = {
 }
 ```
 
-**M5-debate**：
+**debate**：
 ```typescript
 {
-  method: "M5-debate",
+  method: "debate",
   topic: string,
   artifact: object,
   positions: ("pro" | "con" | "third_party")[],
@@ -207,10 +207,10 @@ type ReflectionResponse = {
 }
 ```
 
-**M6-tot**：
+**tot**：
 ```typescript
 {
-  method: "M6-tot",
+  method: "tot",
   problem_statement: string,
   artifact: object,
   max_depth: number,
@@ -263,7 +263,7 @@ type ReflectionResponse = {
 | `METHOD_UNLEARNED` | 请求的 method 已被临时禁用 |
 | `BUDGET_EXHAUSTED` | token 预算已耗尽 |
 | `INVALID_METHOD_FOR_STEP` | method 不适用于该 step（如对 P6 请求 M6 ToT） |
-| `INLINE_NOT_SUPPORTED` | 该方法不支持 inline（如 M5-debate 多 agent） |
+| `INLINE_NOT_SUPPORTED` | 该方法不支持 inline（如 debate 多 agent） |
 
 ## 四、`opc_reflect_complete` — 完成反思
 
@@ -277,7 +277,7 @@ type ReflectionResponse = {
     type: "object",
     required: ["method", "reflection_id", "result"],
     properties: {
-      method: { enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot"] },
       reflection_id: { type: "string" },
       result: { type: "object" },
       session_id: { type: "string" }
@@ -341,7 +341,7 @@ type ReflectionResponse = {
   next_step_hint: {
     suggestion: "本次反思作废，降级到 secondary method 或 ask_user",
     suggested_tool: "opc_reflect_execute",
-    suggested_args: { method: "M4-critique", /* secondary */ },
+    suggested_args: { method: "critique", /* secondary */ },
     why: "primary method 的输出被 meta-validator 拒绝"
   }
 }
@@ -406,7 +406,7 @@ type ReflectionResponse = {
     step: "P1" | ... | "P8",
     round: number  // optional
   },
-  method: "M3-cove" | ...  // optional
+  method: "cove" | ...  // optional
 }
 
 // output: 同 opc_reflect_execute(inline=true) 的返回
@@ -423,8 +423,8 @@ type ReflectionResponse = {
   explanation: {
     reflection_id: "rfl-P5-r2-01HXY8",
     step: "P5",
-    method: "M4-critique",
-    method_choice_reason: "step=P5, complexity=medium → M4-critique",
+    method: "critique",
+    method_choice_reason: "step=P5, complexity=medium → critique",
     prior_corrections_used: ["corr-xxx"],
     evidence_input: { /* artifact payload */ },
     objections_raised: [/* ... */],
@@ -448,14 +448,14 @@ type ReflectionResponse = {
 // output
 {
   method_stats: {
-    "M3-cove": {
+    "cove": {
       total_calls: 120,
       fp_rate: 0.12,
       objection_to_diff_rate: 0.35,
       avg_latency_ms: 3200,
       unlearned: false
     },
-    "M4-critique": {
+    "critique": {
       total_calls: 85,
       fp_rate: 0.18,
       objection_to_diff_rate: 0.42,
@@ -493,7 +493,7 @@ type ReflectionResponse = {
 // input
 {
   action: "unlearn_method",
-  method: "M3-cove" | "M4-critique" | "M5-debate" | "M6-tot",
+  method: "cove" | "critique" | "debate" | "tot",
   undo: false,
   ttl_hours: 24
 }
@@ -501,7 +501,7 @@ type ReflectionResponse = {
 // output
 {
   unlearned: {
-    method: "M5-debate",
+    method: "debate",
     until: "2026-06-12T10:00:00Z",
     reason: "FP rate 0.45 exceeds threshold 0.3"
   }

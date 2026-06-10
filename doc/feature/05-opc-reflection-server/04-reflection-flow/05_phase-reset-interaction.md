@@ -127,7 +127,7 @@ opc_reflect_plan({step: "P3", ...})
 {
   "reflection_id": "rfl-P5-r2-01HXY8",
   "step": "P5",
-  "method": "M4-critique",
+  "method": "critique",
   "verdict": "objections_remain",
   "superseded": true,
   "superseded_by": "phase_reset_L1",

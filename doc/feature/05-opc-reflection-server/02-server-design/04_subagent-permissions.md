@@ -203,7 +203,7 @@ task agent 在 `opc_node_start` 时获得 `dispatch_context`，其中包含 `rol
     "role": "reflection_sub_agent",
     "pipeline_id": "pl-xxx",
     "step": "P5",
-    "method": "M4-critique"
+    "method": "critique"
   }
 }
 ```

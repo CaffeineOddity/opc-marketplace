@@ -23,10 +23,10 @@ opc_phase_start("04-implement-design")
   → 候选: [api-design, database-schema, scaffold]
   → Claude 收集 selection_evidence: V4 coverage ok
   → 走反思工具面 5 步铁律（high 复杂度默认 inline=false 以便观察 reasoning_trace；详见 [14_reflection-tool-surface.md](14_reflection-tool-surface.md)）：
-    · opc_reflect_plan({step:"node_selection"}) → method:M4-critique, agent_spec
-    · opc_reflect_execute({step:"node_selection", method:"M4-critique", inline:false, artifact:{selection_evidence}}) → agent_spec
+    · opc_reflect_plan({step:"node_selection"}) → method:critique, agent_spec
+    · opc_reflect_execute({step:"node_selection", method:"critique", inline:false, artifact:{selection_evidence}}) → agent_spec
     · Task(critic) → objections
-    · opc_reflect_complete({method:"M4-critique", result:{objections}}) → meta-validator 保留 1 条中等 objection（scaffold 与 api-design 部分重叠）→ pending_reflection
+    · opc_reflect_complete({method:"critique", result:{objections}}) → meta-validator 保留 1 条中等 objection（scaffold 与 api-design 部分重叠）→ pending_reflection
     · opc_flow_reflect({reflection_id}) → P5 路径 B 快速确认（展示 reasoning_trace + objection 供用户一键确认）
   → complexity=high → auto_advance: false（每阶段必须用户确认）
 

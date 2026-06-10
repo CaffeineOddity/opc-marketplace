@@ -559,13 +559,13 @@
 ```typescript
 {
   name: "opc_reflect_execute",
-  description: "执行反思方法。method=M3-cove 拆断言逐条验证；M4-critique 派 critic 列 objection；M5-debate 多 agent 辩论；M6-tot 多分支搜索。inline=true 一次性跑完 plan+Task+complete，返回 pending_reflection。",
+  description: "执行反思方法。method=cove 拆断言逐条验证；critique 派 critic 列 objection；debate 多 agent 辩论；tot 多分支搜索。inline=true 一次性跑完 plan+Task+complete，返回 pending_reflection。",
   input_schema: {
     type: "object",
     required: ["step", "method", "artifact"],
     properties: {
       step: { enum: ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"] },
-      method: { enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
       artifact: { type: "object" },
       inline: { type: "boolean", default: true },
       enhanced_prompt: { type: "string" },
@@ -574,7 +574,7 @@
     oneOf: [
       {
         properties: {
-          method: { const: "M3-cove" },
+          method: { const: "cove" },
           artifact: {
             type: "object",
             required: ["payload"],
@@ -584,7 +584,7 @@
       },
       {
         properties: {
-          method: { const: "M4-critique" },
+          method: { const: "critique" },
           artifact: {
             type: "object",
             required: ["payload"],
@@ -598,7 +598,7 @@
       },
       {
         properties: {
-          method: { const: "M5-debate" },
+          method: { const: "debate" },
           artifact: { type: "object" },
           topic: { type: "string" },
           positions: { type: "array", items: { enum: ["pro", "con", "third_party"] } }
@@ -607,7 +607,7 @@
       },
       {
         properties: {
-          method: { const: "M6-tot" },
+          method: { const: "tot" },
           artifact: { type: "object" },
           problem_statement: { type: "string" },
           max_depth: { type: "integer", default: 3 }
@@ -629,14 +629,14 @@
     type: "object",
     required: ["method", "reflection_id", "result"],
     properties: {
-      method: { enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+      method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] },
       reflection_id: { type: "string" },
       result: { type: "object" }
     },
     oneOf: [
       {
         properties: {
-          method: { const: "M3-cove" },
+          method: { const: "cove" },
           result: {
             type: "object",
             required: ["claims"],
@@ -649,7 +649,7 @@
       },
       {
         properties: {
-          method: { const: "M4-critique" },
+          method: { const: "critique" },
           result: {
             type: "object",
             required: ["objections"],
@@ -662,7 +662,7 @@
       },
       {
         properties: {
-          method: { const: "M5-debate" },
+          method: { const: "debate" },
           result: {
             type: "object",
             required: ["debate_synthesis"],
@@ -674,7 +674,7 @@
       },
       {
         properties: {
-          method: { const: "M6-tot" },
+          method: { const: "tot" },
           result: {
             type: "object",
             required: ["search_tree"],
@@ -719,7 +719,7 @@
             properties: {
               pipeline_id: { type: "string" },
               step: { type: "string" },
-              method: { enum: ["M3-cove", "M4-critique", "M5-debate", "M6-tot"] }
+              method: { enum: ["cove", "critique", "debate", "tot", "reflexion", "validator"] }
             }
           }
         },
@@ -736,14 +736,14 @@
       {
         properties: {
           action: { const: "query_stats" },
-          method: { enum: ["M2-reflexion", "M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+          method: { enum: ["reflexion", "cove", "critique", "debate", "tot", "reflexion", "validator"] },
           window: { type: "string", default: "24h" }
         }
       },
       {
         properties: {
           action: { const: "unlearn_method" },
-          method: { enum: ["M2-reflexion", "M3-cove", "M4-critique", "M5-debate", "M6-tot"] },
+          method: { enum: ["reflexion", "cove", "critique", "debate", "tot", "reflexion", "validator"] },
           undo: { type: "boolean", default: false }
         },
         required: ["method"]

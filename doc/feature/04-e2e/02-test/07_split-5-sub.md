@@ -24,7 +24,7 @@ Claude 拆分:
 
 Claude → opc_flow_step_complete({step:"task_decomposition", sub_pipelines, execution_order, decomposition_evidence})
   → P3 反思走 M6 ToT 主路径（详见 [01_per-step-sequence.md P3](../../05-opc-reflection-server/04-reflection-flow/01_per-step-sequence.md#p3-任务拆分--m6-tot-主路径)）
-  → opc_reflect_execute({step:"task_decomposition", method:"M6-tot", inline:true, artifact:{...}}) → { verdict:"clean", pending_reflection }
+  → opc_reflect_execute({step:"task_decomposition", method:"tot", inline:true, artifact:{...}}) → { verdict:"clean", pending_reflection }
   → opc_flow_reflect({reflection_id}) → 路由 brief_generation
 Claude → opc_flow_step_complete({step:"brief_generation", brief_content, brief_evidence}) → opc_pipeline_create
 

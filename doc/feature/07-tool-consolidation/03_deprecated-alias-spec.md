@@ -115,7 +115,7 @@ M19 wire 层捕获 → 返回 MCP error:
   "error": "tool_removed",
   "tool": "opc_phase_adjust",
   "reason": "deleted; replaced by reflection loop self-correction",
-  "alternative": "Use opc_reflect_execute({method:\"M4-critique\"}) for phase-level self-correction."
+  "alternative": "Use opc_reflect_execute({method:\"critique\"}) for phase-level self-correction."
 }
 ```
 

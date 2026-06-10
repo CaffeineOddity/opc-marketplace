@@ -85,7 +85,7 @@ type ReasoningStepType =
 {
   "reflection_id": "rfl-P5-r1-01HXY8",
   "step": "P5",
-  "method": "M4-critique",
+  "method": "critique",
   "round": 1,
   "steps": [
     {
@@ -178,7 +178,7 @@ function validateReasoningTrace(
   }
 
   // ⑤ Debate 专属：双方立场重合度
-  if (method === 'M5-debate') {
+  if (method === 'debate') {
     const proClaims = trace.steps.filter(s => s.type === 'objection').map(s => s.claim)
     const conClaims = trace.steps.filter(s => s.type === 'counter_argument').map(s => s.claim)
     const overlap = claimOverlap(proClaims, conClaims)
@@ -188,7 +188,7 @@ function validateReasoningTrace(
   }
 
   // ⑥ ToT 专属：分支评分分布
-  if (method === 'M6-tot') {
+  if (method === 'tot') {
     const evalSteps = trace.steps.filter(s => s.type === 'branch_evaluation')
     if (evalSteps.length > 0 && evalSteps.every(s => parseFloat(s.conclusion ?? '1') > 0.9)) {
       failures.push('ToT 所有分支评分 > 0.9，怀疑乐观偏差')
@@ -235,11 +235,11 @@ opc_reflect_admin({
     // —— 标识 ——
     reflection_id: "rfl-P5-r2-01HXY8"
     step: "P5"
-    method: "M4-critique"
+    method: "critique"
     round: 2
 
     // —— 决策 ——
-    method_choice_reason: "step=P5, complexity=medium → primary=M4-critique"
+    method_choice_reason: "step=P5, complexity=medium → primary=critique"
     fallback_chain: ["M4 → ok"]  // 或 ["M4 → timeout", "M5 → ok"]
 
     // —— 输入 ——

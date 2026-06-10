@@ -24,7 +24,7 @@ Claude → opc_flow_step_complete({step:"task_decomposition",
 
 Claude → opc_reflect_execute({
            step:"task_decomposition",
-           method:"M6-tot",
+           method:"tot",
            inline:true,
            artifact:{...decomposition_evidence...}
          })
@@ -49,7 +49,7 @@ Claude → opc_flow_reflect({reflection_id:"rfl-P3-r1-01H"})
   → flow_next: opc_flow_step_complete({step:"brief_generation"})
 ```
 
-**Secondary 升级路径**：若 verdict=objections_remain 且 complexity ≥ medium，state-server 路由 `opc_reflect_execute({method:"M5-debate", inline:true})` 派 2 个 debater 对立辩论（"5 sub 是否过细" vs "5 sub 边界天然清晰"），meta-validator 校验立场重合度 < 阈值。
+**Secondary 升级路径**：若 verdict=objections_remain 且 complexity ≥ medium，state-server 路由 `opc_reflect_execute({method:"debate", inline:true})` 派 2 个 debater 对立辩论（"5 sub 是否过细" vs "5 sub 边界天然清晰"），meta-validator 校验立场重合度 < 阈值。
 
 ---
 
@@ -71,7 +71,7 @@ Claude → opc_flow_step_complete({step:"brief_generation",
   → state-server V1 + V4 coverage：阈值 0.8，0.83 ≥ 0.8 ✓
   → 默认 budget = 1 轮，flow_next: opc_reflect_execute({step:"brief_generation", inline:true})
 
-Claude → opc_reflect_execute({step:"brief_generation", method:"M3-cove", inline:true,
+Claude → opc_reflect_execute({step:"brief_generation", method:"cove", inline:true,
                               artifact:{brief_content, brief_evidence}})
   → reflection-server 内部:
     1. CoVe 拆 brief 为 4 条断言:
@@ -114,7 +114,7 @@ Claude → opc_phase_complete({phase:"06-testing"})
   → state-manager 检测到 mutation gate ≥ 3 次连续 fail
   → 不直接 reject，而是 flow_next: opc_reflect_execute({
         step:"phase_completion",
-        method:"M3-cove",
+        method:"cove",
         inline:true,
         upgrade_reason:"quality_gate_consecutive_failures"
       })
@@ -171,7 +171,7 @@ Claude → opc_phase_complete({phase:"05-implement"})
   → state-server V1+V3+V4 校验 4 条件全 ✓，但 regression_signals 非空 → 强制反思
   → flow_next: opc_reflect_execute({step:"phase_advance", inline:true})
 
-Claude → opc_reflect_execute({step:"phase_advance", method:"M4-critique", inline:true,
+Claude → opc_reflect_execute({step:"phase_advance", method:"critique", inline:true,
                               artifact:{advance_evidence}})
   → reflection-server:
     1. 派 critic agent (read-only + opc_corrections({action:"query"}) 查"回退决策"类教训)

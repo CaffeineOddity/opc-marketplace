@@ -19,11 +19,11 @@
               + flow_next: opc_reflect_execute({step:"node_selection"})
 
 [02] Claude → opc_reflect_execute({
-              step:"node_selection", method:"M4-critique", inline:true,
+              step:"node_selection", method:"critique", inline:true,
               artifact:{selection_evidence}
             })
             内部:
-              · opc_reflect_plan 选 M4-critique
+              · opc_reflect_plan 选 critique
               · Task spawn critic agent
               · meta-validator 保留 1 条 objection: "backend-endpoint 与 auth 节点文件域冲突"
               · 写盘 opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json
@@ -78,7 +78,7 @@
               4. 从 pending_reflections[] 移除（length=0）
               5. verdict=objections_remain 且 round=1 < max_rounds=3
               → flow_next: opc_reflect_execute（再跑 1 轮处理 objection-1）
-            ← { flow_next: {tool:"opc_reflect_execute", args:{step:"node_selection", method:"M4-critique", inline:true, artifact:{修正后 evidence}}} }
+            ← { flow_next: {tool:"opc_reflect_execute", args:{step:"node_selection", method:"critique", inline:true, artifact:{修正后 evidence}}} }
 
 [06] Claude 调整 selection_evidence（移除 backend-endpoint）
      Claude → opc_reflect_execute(...) → verdict=clean → pending_reflection rfl-P5-r2-01HXY9
