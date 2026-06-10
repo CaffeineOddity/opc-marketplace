@@ -6,6 +6,7 @@ import { atomicWrite, withFileLock } from "@opc/memory-store";
 import type { StepId } from "./store.js";
 
 export const CORRECTIONS_DIR = "opc-memory/corrections";
+const CORRECTIONS_INDEX_FILENAME = "corrections-index.json";
 
 export type CorrectionSource = "user" | "distiller" | "reflexion" | "seed";
 export type CorrectionTrigger =
@@ -160,4 +161,87 @@ function isENOENT(err: unknown): boolean {
     "code" in err &&
     (err as { code: string }).code === "ENOENT"
   );
+}
+
+// --- Full-text index ---
+
+export interface CorrectionIndexEntry {
+  id: string;
+  step: StepId;
+  unit: string;
+  section: string;
+  subsection: string;
+  tokens: string[];
+}
+
+export interface CorrectionIndex {
+  entries: CorrectionIndexEntry[];
+  built_at: string;
+  total: number;
+}
+
+export function correctionsIndexPath(root: string): string {
+  return join(correctionsRoot(root), CORRECTIONS_INDEX_FILENAME);
+}
+
+export function buildIndex(corrections: Correction[]): CorrectionIndex {
+  const entries: CorrectionIndexEntry[] = corrections.map((c) => ({
+    id: c.id,
+    step: c.step,
+    unit: c.unit,
+    section: c.section,
+    subsection: c.subsection,
+    tokens: tokenizeAll(c),
+  }));
+  return {
+    entries,
+    built_at: new Date().toISOString(),
+    total: entries.length,
+  };
+}
+
+export async function saveCorrectionIndex(
+  root: string,
+  index: CorrectionIndex,
+): Promise<string> {
+  const path = correctionsIndexPath(root);
+  await mkdir(dirname(path), { recursive: true });
+  await withFileLock(path, async () => {
+    await atomicWrite(path, `${JSON.stringify(index, null, 2)}\n`);
+  });
+  return path;
+}
+
+export async function loadCorrectionIndex(
+  root: string,
+): Promise<CorrectionIndex | null> {
+  const path = correctionsIndexPath(root);
+  try {
+    const raw = await readFile(path, "utf8");
+    return JSON.parse(raw) as CorrectionIndex;
+  } catch (err) {
+    if (isENOENT(err)) return null;
+    throw err;
+  }
+}
+
+function tokenizeAll(c: Correction): string[] {
+  const texts = [
+    c.lesson,
+    c.rationale ?? "",
+    c.subsection,
+    c.section,
+    ...c.applies_when.keywords,
+  ];
+  const tokens = new Set<string>();
+  for (const text of texts) {
+    for (const t of text
+      .toLowerCase()
+      .replace(/[^a-z0-9一-鿿\s]+/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 1)) {
+      tokens.add(t);
+    }
+  }
+  return Array.from(tokens);
 }

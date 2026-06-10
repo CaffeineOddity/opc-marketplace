@@ -119,6 +119,7 @@ export type {
   CorrectionsUpsertResponse,
   CorrectionsActionRequest,
   CorrectionsActionResponse,
+  ReindexResponse,
   UnlearnResponse,
 } from "./corrections-server.js";
 
@@ -127,15 +128,21 @@ export {
   CorrectionNotFoundError,
   correctionPath,
   correctionsRoot,
+  correctionsIndexPath,
   listAllCorrections,
   listCorrectionsByStep,
   loadCorrection,
   loadCorrectionById,
+  loadCorrectionIndex,
   saveCorrection,
+  saveCorrectionIndex,
+  buildIndex,
 } from "./corrections-store.js";
 export type {
   AppliesWhen,
   Correction,
+  CorrectionIndex,
+  CorrectionIndexEntry,
   CorrectionLocation,
   CorrectionSource,
   CorrectionTrigger,

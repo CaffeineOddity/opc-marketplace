@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  buildIndex,
   listAllCorrections,
   listCorrectionsByStep,
   loadCorrectionById,
   saveCorrection,
+  saveCorrectionIndex,
   type AppliesWhen,
   type Correction,
   type CorrectionSource,
@@ -79,11 +81,16 @@ export interface UnlearnResponse {
   reason: string;
 }
 
+export interface ReindexResponse {
+  indexed: number;
+  duration_ms: number;
+}
+
 export type CorrectionsActionResponse =
   | ({ action: "query" } & CorrectionsQueryResponse)
   | ({ action: "record" } & CorrectionsUpsertResponse)
   | ({ action: "unlearn" } & UnlearnResponse)
-  | { action: "reindex"; not_implemented: true; reason: string };
+  | ({ action: "reindex" } & ReindexResponse);
 
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
@@ -289,12 +296,12 @@ export class CorrectionsServer {
         const resp = await this.unlearn(params);
         return { action: "unlearn", ...resp };
       }
-      case "reindex":
-        return {
-          action: "reindex",
-          not_implemented: true,
-          reason: `opc_corrections.reindex deferred to M18 (reindex worker)`,
-        };
+      case "reindex": {
+        const { action, ...params } = req;
+        void action;
+        const resp = await this.reindex(params);
+        return { action: "reindex", ...resp };
+      }
       default: {
         const _exhaustive: never = req;
         throw new CorrectionsServerError(
@@ -328,6 +335,25 @@ export class CorrectionsServer {
       frozen: true,
       reason: params.reason ?? "manual unlearn",
     };
+  }
+
+  private async reindex(params: {
+    scope?: "all" | { step: StepId };
+  }): Promise<{ indexed: number; duration_ms: number }> {
+    const start = performance.now();
+    const all = await listAllCorrections(this.root);
+    const scope = params.scope ?? "all";
+
+    const filtered =
+      scope === "all"
+        ? all
+        : all.filter((x) => x.correction.step === scope.step);
+
+    const index = buildIndex(filtered.map((x) => x.correction));
+    await saveCorrectionIndex(this.root, index);
+
+    const duration_ms = Math.round(performance.now() - start);
+    return { indexed: filtered.length, duration_ms };
   }
 
   async findSimilar(

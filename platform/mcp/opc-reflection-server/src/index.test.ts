@@ -1630,13 +1630,99 @@ describe("CorrectionsServer", () => {
       ).rejects.toThrow(/corr-nonexistent/);
     });
 
-    it("action=reindex returns not_implemented:true (deferred to M18)", async () => {
+    it("action=reindex builds index from all corrections", async () => {
       const srv = newServer();
-      const resp = await srv.crud({ action: "reindex" });
+      // Create some corrections first
+      const recordResp = await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "node_selection",
+              unit: "ns",
+              section: "s1",
+              subsection: "ss1",
+              lesson: "lesson one avoid parallel writes",
+              rationale: "files conflict",
+              applies_when: { keywords: ["parallel", "write"] },
+              source: "distiller",
+            }),
+          },
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "task_decomposition",
+              unit: "td",
+              section: "s2",
+              subsection: "ss2",
+              lesson: "lesson two define interface contract",
+              rationale: "tight coupling causes failures",
+              applies_when: { keywords: ["interface", "coupling"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+      expect(
+        recordResp.action === "record" ? recordResp.new_count : 0,
+      ).toBe(2);
+
+      // Run reindex
+      const reindexResp = await srv.crud({ action: "reindex" });
+      expect(reindexResp.action).toBe("reindex");
+      if (reindexResp.action === "reindex") {
+        expect(reindexResp.indexed).toBeGreaterThanOrEqual(2);
+        expect(reindexResp.duration_ms).toBeGreaterThanOrEqual(0);
+      }
+
+      // Verify index file exists
+      const { loadCorrectionIndex } = await import("./corrections-store.js");
+      const index = await loadCorrectionIndex(root);
+      expect(index).not.toBeNull();
+      expect(index!.total).toBeGreaterThanOrEqual(2);
+      expect(index!.entries.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("reindex with scope:step only indexes matching corrections", async () => {
+      const srv = newServer();
+      await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "node_selection",
+              unit: "a",
+              section: "b",
+              subsection: "c",
+              lesson: "x",
+              applies_when: { keywords: ["k1"] },
+              source: "distiller",
+            }),
+          },
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "task_decomposition",
+              unit: "d",
+              section: "e",
+              subsection: "f",
+              lesson: "y",
+              applies_when: { keywords: ["k2"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+
+      const resp = await srv.crud({
+        action: "reindex",
+        scope: { step: "node_selection" },
+      });
       expect(resp.action).toBe("reindex");
       if (resp.action === "reindex") {
-        expect(resp.not_implemented).toBe(true);
-        expect(resp.reason).toContain("reindex");
+        expect(resp.indexed).toBe(1);
       }
     });
 
