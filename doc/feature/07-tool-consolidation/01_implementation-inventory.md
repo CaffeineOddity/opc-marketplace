@@ -24,7 +24,7 @@
 | **opc_phase_confirm** | `PhaseServer.confirm` | ✅ 已对齐（registry-guard 锚点 + commit 确认） | — |
 | **opc_phase_complete** | `PhaseServer.complete` | ✅ 已对齐 | — |
 | **opc_node_start** | `NodeServer.start` | ✅ 已对齐 | — |
-| **opc_node_finish** | `NodeServer.finish` | ✅ 已对齐（completed/failed/retry 三路分派） | — |
+| **opc_node_finish** | `NodeServer.finish` | ✅ 已对齐（success/failed/retry 三路分派） | — |
 | **opc_knowledge_open** | `KnowledgeServer.open` | ✅ 已对齐 | — |
 | **opc_knowledge_read** | `KnowledgeServer.read` | ✅ 已对齐（5 mode） | — |
 | **opc_knowledge_write** | `KnowledgeServer.write` | ✅ 已对齐（base_version） | — |
@@ -51,7 +51,7 @@
 | Server | 测试覆盖 | 状态 |
 |---|---|---|
 | PipelineServer | create/status/lifecycle(complete/abort/resume/replan) + remove/modify/reorder + kill_agents + dirty_paths | ✅ 完备 |
-| NodeServer | start/finish(completed/failed/retry) + 拒未知 status | ✅ 完备 |
+| NodeServer | start/finish(success/failed/retry) + 拒未知 status | ✅ 完备 |
 | PhaseServer | start/confirm/complete/reset + V0.9 目录扫描 | ✅ 完备 |
 | ReflectionServer | plan/execute(6 methods: cove/critique/debate/tot/reflexion/validator)/complete(6 method)/admin(5 action) | ✅ 完备 |
 | CorrectionsServer | crud(query/record/unlearn/reindex/promote) | ✅ 完备 |
