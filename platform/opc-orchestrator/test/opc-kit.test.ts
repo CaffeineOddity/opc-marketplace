@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
 const SCRIPTS_DIR = resolve(import.meta.dirname ?? __dirname, "../../../scripts");
 const OPC_KIT = join(SCRIPTS_DIR, "opc-kit.mjs");
@@ -220,6 +221,221 @@ describe("opc-kit CLI", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
       expect(out).toContain("Kit installed");
+    });
+  });
+
+  describe("validate command", () => {
+    it("validates official-kits (all 27 pass)", () => {
+      const out = kit("validate kits/official-kits");
+      expect(out).toContain("27 agents validated");
+      expect(out).toContain("0 errors, 0 warnings");
+      expect(out).toContain("reflection(6)");
+    });
+
+    it("rejects missing kit-path", () => {
+      const { stderr, status } = kitFail("validate");
+      expect(stderr).toContain("missing kit path");
+      expect(status).toBe(2);
+    });
+
+    it("rejects non-existent directory", () => {
+      const { stderr, status } = kitFail("validate /no/such/kit/path");
+      expect(stderr).toContain("not found");
+      expect(status).toBe(1);
+    });
+
+    it("detects frontmatter errors in a bad kit", async () => {
+      const tmp = join(tmpdir(), `opc-kit-val-err-${Date.now()}`);
+      await mkdir(join(tmp, "agents", "reflection"), { recursive: true });
+      await mkdir(join(tmp, "agents", "dev"), { recursive: true });
+      try {
+        // Agent with name mismatch and forbidden write tool
+        await writeFile(
+          join(tmp, "agents", "reflection", "bad-agent.md"),
+          [
+            "---",
+            "name: wrong-name",
+            "description: test",
+            "model: sonnet",
+            "tools:",
+            "  - Read",
+            "  - Write",
+            "---",
+            "# bad agent",
+          ].join("\n"),
+          "utf8",
+        );
+        // Agent with missing frontmatter
+        await writeFile(
+          join(tmp, "agents", "reflection", "nofm.md"),
+          "# no frontmatter",
+          "utf8",
+        );
+        // Agent with empty tools
+        await writeFile(
+          join(tmp, "agents", "dev", "empty-tools.md"),
+          [
+            "---",
+            "name: empty-tools",
+            "description: empty tools",
+            "model: haiku",
+            "tools:",
+            "---",
+            "# empty",
+          ].join("\n"),
+          "utf8",
+        );
+
+        const { stdout, stderr, status } = kitFail(`validate ${tmp}`);
+        expect(status).toBe(1);
+        const combined = stdout + stderr;
+        expect(combined).toContain("wrong-name");
+        expect(combined).toContain("no frontmatter");
+        expect(combined).toContain("Write");
+        expect(combined).toContain("forbidden tool");
+        expect(combined).toContain("tools list is empty");
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("doctor command", () => {
+    it("reports no kits installed", async () => {
+      const tmp = join(tmpdir(), `opc-kit-doc-empty-${Date.now()}`);
+      await mkdir(join(tmp, ".opc"), { recursive: true });
+      await writeFile(
+        join(tmp, ".opc", "installed-kits.json"),
+        JSON.stringify({ kits: [] }),
+        "utf8",
+      );
+      try {
+        const out = execSync(`node ${OPC_KIT} doctor`, {
+          cwd: tmp,
+          encoding: "utf8",
+          stdio: "pipe",
+        });
+        expect(out).toContain("No kits installed");
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it("reports healthy when all agents and servers present", async () => {
+      const tmp = join(tmpdir(), `opc-kit-doc-ok-${Date.now()}`);
+      await mkdir(join(tmp, ".claude", "agents"), { recursive: true });
+      await mkdir(join(tmp, ".opc"), { recursive: true });
+
+      await writeFile(
+        join(tmp, ".opc", "installed-kits.json"),
+        JSON.stringify({
+          kits: [
+            {
+              name: "test-kit",
+              version: "1.0.0",
+              agents: ["agent-a.md", "agent-b.md"],
+              mcp_servers: ["test-server"],
+              installed_at: "2026-06-10T00:00:00Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      await writeFile(join(tmp, ".claude", "agents", "agent-a.md"), "", "utf8");
+      await writeFile(join(tmp, ".claude", "agents", "agent-b.md"), "", "utf8");
+      await writeFile(
+        join(tmp, ".mcp.json"),
+        JSON.stringify({ mcpServers: { "test-server": { command: "node" } } }),
+        "utf8",
+      );
+
+      try {
+        const out = execSync(`node ${OPC_KIT} doctor`, {
+          cwd: tmp,
+          encoding: "utf8",
+          stdio: "pipe",
+        });
+        expect(out).toContain("✓ test-kit");
+        expect(out).toContain("all 2 agents present");
+        expect(out).toContain("1 MCP servers configured");
+        expect(out).toContain("All kits healthy");
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it("reports unhealthy when agents missing", async () => {
+      const tmp = join(tmpdir(), `opc-kit-doc-bad-${Date.now()}`);
+      await mkdir(join(tmp, ".claude", "agents"), { recursive: true });
+      await mkdir(join(tmp, ".opc"), { recursive: true });
+
+      await writeFile(
+        join(tmp, ".opc", "installed-kits.json"),
+        JSON.stringify({
+          kits: [
+            {
+              name: "broken-kit",
+              version: "0.5.0",
+              agents: ["present.md", "missing.md"],
+              mcp_servers: [],
+              installed_at: "2026-06-10T00:00:00Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      await writeFile(join(tmp, ".claude", "agents", "present.md"), "", "utf8");
+      // missing.md not created
+
+      try {
+        const out = execSync(`node ${OPC_KIT} doctor`, {
+          cwd: tmp,
+          encoding: "utf8",
+          stdio: "pipe",
+        });
+        expect(out).toContain("⚠ broken-kit");
+        expect(out).toContain("1 agents missing");
+        expect(out).toContain("opc-kit repair broken-kit");
+        expect(out).not.toContain("All kits healthy");
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it("reports unhealthy when MCP servers missing", async () => {
+      const tmp = join(tmpdir(), `opc-kit-doc-mcp-${Date.now()}`);
+      await mkdir(join(tmp, ".claude", "agents"), { recursive: true });
+      await mkdir(join(tmp, ".opc"), { recursive: true });
+
+      await writeFile(
+        join(tmp, ".opc", "installed-kits.json"),
+        JSON.stringify({
+          kits: [
+            {
+              name: "needs-mcp",
+              version: "2.0.0",
+              agents: ["agent-x.md"],
+              mcp_servers: ["missing-server"],
+              installed_at: "2026-06-10T00:00:00Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      await writeFile(join(tmp, ".claude", "agents", "agent-x.md"), "", "utf8");
+      // .mcp.json not created
+
+      try {
+        const out = execSync(`node ${OPC_KIT} doctor`, {
+          cwd: tmp,
+          encoding: "utf8",
+          stdio: "pipe",
+        });
+        expect(out).toContain("⚠ needs-mcp");
+        expect(out).toContain("1 MCP servers missing");
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
     });
   });
 

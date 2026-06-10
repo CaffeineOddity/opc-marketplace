@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -482,7 +482,7 @@ async function main(argv) {
       console.error("opc-kit validate: missing kit path");
       process.exit(2);
     }
-    await validateKit(join(process.cwd(), kitPath));
+    await validateKit(resolve(kitPath));
     return;
   }
 
