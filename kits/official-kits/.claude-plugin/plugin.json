@@ -1,0 +1,9 @@
+{
+  "name": "opc/official-kits",
+  "version": "0.1.0",
+  "description": "OPC official kits: product, design, dev, QA, ship, growth — all sub-agents for the full pipeline lifecycle",
+  "author": "OPC",
+  "license": "MIT",
+  "homepage": "https://github.com/CaffeineOddity/opc-marketplace",
+  "agents": "./agents"
+}

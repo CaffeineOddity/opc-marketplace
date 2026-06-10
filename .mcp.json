@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "poc-host-contract": {
-      "command": "node",
-      "args": ["./poc/opc-host-contract-v2-v3/server/index.mjs"]
-    }
-  }
-}

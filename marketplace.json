@@ -1,7 +1,7 @@
 {
   "name": "opc-marketplace",
   "version": "0.2.0",
-  "description": "OPC (Opinionated Pipeline Compiler) — Claude Code 插件市场。State-machine-driven pipeline compiler with reflection loops, knowledge graph, and quality gates.",
+  "description": "OPC (Opinionated Pipeline Compiler) — state-machine-driven pipeline compiler with reflection loops, knowledge graph, and quality gates.",
   "author": "OPC",
   "license": "MIT",
   "repository": "https://github.com/CaffeineOddity/opc-marketplace",
@@ -9,61 +9,14 @@
     {
       "name": "opc-orchestrator",
       "version": "0.1.0",
-      "description": "OPC orchestrator: UserPromptSubmit hook + /opc-status slash command + opc-status CLI (read-only terminal health snapshot)",
+      "description": "OPC orchestrator: UserPromptSubmit hook + /opc-status slash command + 3 MCP servers (state, knowledge, reflection)",
       "entry": "platform/opc-orchestrator/.claude-plugin/plugin.json"
     },
     {
-      "name": "opc/product-kit",
+      "name": "opc/official-kits",
       "version": "0.1.0",
-      "description": "Product management, market research, PRD authoring for OPC pipelines",
-      "entry": "kits/product-kit/.claude-plugin/plugin.json"
-    },
-    {
-      "name": "opc/design-kit",
-      "version": "0.1.0",
-      "description": "UI/UX design, brand system, accessibility for OPC pipelines",
-      "entry": "kits/design-kit/.claude-plugin/plugin.json"
-    },
-    {
-      "name": "opc/dev-kit",
-      "version": "0.1.0",
-      "description": "Frontend / backend / DB / security / architecture engineers for OPC pipelines",
-      "entry": "kits/dev-kit/.claude-plugin/plugin.json"
-    },
-    {
-      "name": "opc/qa-kit",
-      "version": "0.1.0",
-      "description": "Testing, QA, penetration testing, and reflection critics for OPC pipelines",
-      "entry": "kits/qa-kit/.claude-plugin/plugin.json"
-    },
-    {
-      "name": "opc/ship-kit",
-      "version": "0.1.0",
-      "description": "CI/CD, SRE, runbook, SLO monitoring for OPC pipelines",
-      "entry": "kits/ship-kit/.claude-plugin/plugin.json"
-    },
-    {
-      "name": "opc/growth-kit",
-      "version": "0.1.0",
-      "description": "SEO, marketing, analytics, performance for OPC pipelines",
-      "entry": "kits/growth-kit/.claude-plugin/plugin.json"
+      "description": "OPC official kits: all sub-agents for the full pipeline lifecycle — product, design, dev, QA, ship, growth",
+      "entry": "kits/official-kits/.claude-plugin/plugin.json"
     }
-  ],
-  "mcpServers": {
-    "opc-state-server": {
-      "package": "@opc/state-server",
-      "entry": "platform/mcp/opc-state-server/src/index.ts",
-      "transport": "stdio"
-    },
-    "opc-knowledge-server": {
-      "package": "@opc/knowledge-server",
-      "entry": "platform/mcp/opc-knowledge-server/src/index.ts",
-      "transport": "stdio"
-    },
-    "opc-reflection-server": {
-      "package": "@opc/reflection-server",
-      "entry": "platform/mcp/opc-reflection-server/src/index.ts",
-      "transport": "stdio"
-    }
-  }
+  ]
 }

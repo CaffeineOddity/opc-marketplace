@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "opc-state-server": {
+      "command": "npx",
+      "args": ["tsx", "../../mcp/opc-state-server/src/server.ts"]
+    },
+    "opc-knowledge-server": {
+      "command": "npx",
+      "args": ["tsx", "../../mcp/opc-knowledge-server/src/mcp-server.ts"]
+    },
+    "opc-reflection-server": {
+      "command": "npx",
+      "args": ["tsx", "../../mcp/opc-reflection-server/src/mcp-server.ts"]
+    }
+  }
+}

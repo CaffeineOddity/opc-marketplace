@@ -65,7 +65,7 @@ describe("opc-kit CLI", () => {
       const tmp = join(tmpdir(), `opc-kit-no-claude-${Date.now()}`);
       await mkdir(tmp, { recursive: true });
       try {
-        execSync(`node ${OPC_KIT} install dev-kit`, {
+        execSync(`node ${OPC_KIT} install official-kits`, {
           cwd: tmp,
           encoding: "utf8",
           stdio: "pipe",
@@ -139,16 +139,16 @@ describe("opc-kit CLI", () => {
     });
 
     it("installs a kit", () => {
-      const out = kitInProject("install dev-kit");
+      const out = kitInProject("install official-kits");
       expect(out).toContain("Kit installed");
-      expect(out).toContain("dev-kit");
+      expect(out).toContain("official-kits");
       expect(out).toContain("Wrote .claude/agents/*.md");
       expect(out).toContain("Restart required");
     });
 
     it("lists installed kits after install", () => {
       const out = kitInProject("list");
-      expect(out).toContain("dev-kit");
+      expect(out).toContain("official-kits");
       expect(out).toContain("agents");
       expect(out).toContain("installed");
     });
@@ -165,20 +165,20 @@ describe("opc-kit CLI", () => {
       const manifest = JSON.parse(raw);
       expect(manifest.kits).toBeInstanceOf(Array);
       expect(manifest.kits.length).toBe(1);
-      expect(manifest.kits[0].name).toBe("dev-kit");
+      expect(manifest.kits[0].name).toBe("official-kits");
       expect(manifest.kits[0].agents.length).toBeGreaterThan(0);
     });
 
     it("updates a kit (reinstall)", () => {
-      const out = kitInProject("update dev-kit");
+      const out = kitInProject("update official-kits");
       expect(out).toContain("Kit updated");
-      expect(out).toContain("dev-kit");
+      expect(out).toContain("official-kits");
     });
 
     it("removes a kit", () => {
-      const out = kitInProject("remove dev-kit");
+      const out = kitInProject("remove official-kits");
       expect(out).toContain("Kit removed");
-      expect(out).toContain("dev-kit");
+      expect(out).toContain("official-kits");
       expect(out).toContain("Deleted .claude/agents/*.md");
       expect(out).toContain("Restart required");
     });
@@ -197,12 +197,12 @@ describe("opc-kit CLI", () => {
     });
 
     it("remove of non-installed kit is a no-op message", () => {
-      const out = kitInProject("remove dev-kit");
+      const out = kitInProject("remove official-kits");
       expect(out).toContain("Kit not installed");
     });
   });
 
-  describe("install with full kit name (opc/dev-kit)", () => {
+  describe("install with full kit name (opc/official-kits)", () => {
     let projectDir: string;
 
     beforeAll(async () => {
@@ -213,8 +213,8 @@ describe("opc-kit CLI", () => {
       await rm(projectDir, { recursive: true, force: true });
     });
 
-    it("resolves opc/dev-kit name", () => {
-      const out = execSync(`node ${OPC_KIT} install opc/dev-kit`, {
+    it("resolves opc/official-kits name", () => {
+      const out = execSync(`node ${OPC_KIT} install opc/official-kits`, {
         cwd: projectDir,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -235,7 +235,7 @@ describe("opc-kit CLI", () => {
     });
 
     it("prints restart warning on install", () => {
-      const out = execSync(`node ${OPC_KIT} install dev-kit`, {
+      const out = execSync(`node ${OPC_KIT} install official-kits`, {
         cwd: projectDir,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -245,7 +245,7 @@ describe("opc-kit CLI", () => {
     });
 
     it("prints restart warning on remove", () => {
-      const out = execSync(`node ${OPC_KIT} remove dev-kit`, {
+      const out = execSync(`node ${OPC_KIT} remove official-kits`, {
         cwd: projectDir,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
