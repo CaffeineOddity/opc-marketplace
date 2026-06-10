@@ -60,15 +60,30 @@ async function saveInstalled(projectRoot, manifest) {
   await writeFile(path, JSON.stringify(manifest, null, 2) + "\n", "utf8");
 }
 
-/** List agent .md files in a kit directory. */
+/** Recursively list agent .md files under a directory. */
+async function listAgentFilesRecursive(dir) {
+  let results = [];
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory() && !e.name.startsWith(".")) {
+        results = results.concat(await listAgentFilesRecursive(full));
+      } else if (e.isFile() && e.name.endsWith(".md")) {
+        results.push(full);
+      }
+    }
+  } catch {
+    // skip missing dirs
+  }
+  return results;
+}
+
+/** List agent .md files in a kit directory. Supports both flat agents/ and
+ *  categorized subdirectories (agents/product/, agents/dev/, etc.). */
 async function listAgentFiles(kitDir) {
   const agentsDir = join(kitDir, "agents");
-  try {
-    const entries = await readdir(agentsDir);
-    return entries.filter((e) => e.endsWith(".md")).map((e) => join(agentsDir, e));
-  } catch {
-    return [];
-  }
+  return listAgentFilesRecursive(agentsDir);
 }
 
 /**

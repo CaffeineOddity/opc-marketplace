@@ -5,5 +5,5 @@
   "author": "OPC",
   "license": "MIT",
   "homepage": "https://github.com/CaffeineOddity/opc-marketplace",
-  "agents": "./agents"
+  "agents": ["./agents/product", "./agents/design", "./agents/dev", "./agents/infra", "./agents/qa", "./agents/reflection"]
 }
