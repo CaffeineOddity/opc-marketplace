@@ -102,7 +102,7 @@ State-server behaviour:
    Commit hash is written to
    `state.json.phases[phase].confirm_commit_ref`. This is the
    anchor used by `opc_phase_reset` (§6).
-6. Once confirmed, `opc_phase_adjust` is rejected for this phase —
+6. Once confirmed, `opc_phase_confirm` is rejected for this phase —
    adjustments must roll forward via `opc_node_retry` or
    `opc_phase_reset`.
 7. Updates `flow-state.json`: `current_step = "phase_confirmed"`.
@@ -208,7 +208,7 @@ Restrictions:
 
 | Layer | Scope | Tool | Mechanism |
 |---|---|---|---|
-| L0 | Adjust node selection (pre-confirm only) | `opc_phase_adjust` | rewrite `state.json` node list |
+| L0 | Adjust node selection (pre-confirm only) | `opc_phase_confirm` | rewrite `state.json` node list |
 | L1 | Redo a single output | `opc_node_retry` | per-node retry, cascade downstream reset |
 | L2 | Discard knowledge of one phase | `opc_phase_reset` | git checkout anchor → v+1 rewrite |
 | L3 | Full rollback (knowledge + code) | git checkout/revert | OPC does NOT wrap |
@@ -219,9 +219,9 @@ L0–L2 are OPC-built-in. L3 is left to plain git.
 
 | User phrase | Tool to call |
 |---|---|
-| "改节点" / "加节点 X" (pre-confirm) | `opc_phase_adjust({nodes:[...]})` |
+| "改节点" / "加节点 X" (pre-confirm) | `opc_phase_confirm({nodes:[...]})` |
 | "重做 phase" | `opc_phase_reset({phase})` |
 | "重做节点 X" | `opc_node_retry({node_name:"X"})` |
 | "插队做 Y" | `opc_pipeline_replan({add_sub_pipeline:[{...,execution_priority:"immediate"}]})` — see [in-flow-decision.md](./06_in-flow-decision.md) |
-| "暂停" | `opc_pipeline_pause` |
+| "暂停" | `opc_pipeline_lifecycle({action:"replan"})` |
 | "继续" (after auto_advance=false) | Honor previous `flow_next` (`opc_phase_start`) |

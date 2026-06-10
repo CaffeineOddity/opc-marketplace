@@ -182,6 +182,6 @@ optimistic-lock + 3-way merge path.
 |---|---|---|
 | "在继续之前，先做 X" | Side-task insertion | `opc_pipeline_replan({changes:{add_sub_pipeline:[{...,execution_priority:"immediate"}]}})` |
 | "插队做 X" / "插一个 X" | Same | Same |
-| "暂停" | Explicit pause without insertion | `opc_pipeline_pause` (different tool) |
+| "暂停" | Explicit pause without insertion | `opc_pipeline_lifecycle({action:"replan"})` with immediate priority — pauses current sub at next node boundary (different tool) |
 | "继续刚才挂起的" | Manual resume override | `opc_pipeline_resume({sub_pipeline_id:"<paused-id>"})` |
 | "算了不插了" | Cancel insertion | If `pending` and not yet flipped → call `opc_pipeline_replan` with `remove_sub_pipeline: ["<id>"]` (caller-supplied id). |

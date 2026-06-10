@@ -1,6 +1,6 @@
 # Task Analysis Method (P2)
 
-> Methodology for `opc_task_analysis_complete`. Loaded as a docs
+> Methodology for `opc_flow_step_complete({step:"task_analysis"})`. Loaded as a docs
 > reference when Claude is at `current_step = task_analysis`. Spec
 > source:
 > [doc/feature/02-opc-state-server/01-intent-analysis/06_task-analysis.md](../../../../doc/feature/02-opc-state-server/01-intent-analysis/06_task-analysis.md).
@@ -8,7 +8,7 @@
 ## 1. Purpose
 
 Convert a `task`-classified user request into a structured analysis
-that downstream `opc_task_decomposition_complete` /
+that downstream `opc_flow_step_complete({step:"task_decomposition"})` /
 `opc_pipeline_create` can consume. Emit `task_analysis_evidence` (NOT
 a confidence number) so the P2 reflection layer can validate via
 V1–V5 + meta-validator.
@@ -181,11 +181,11 @@ Definitions: [05-opc-reflection-server/01-method-theory/00_overview.md](../../..
     {"path": "user-auth/login", "operation": "create"}
   ],
   "task_analysis_evidence": { ... },
-  "next": { "tool": "opc_task_decomposition_complete" }
+  "next": { "tool": "opc_flow_step_complete({step:"task_decomposition"})" }
 }
 ```
 
-`opc_task_analysis_complete` cross-checks `phase_selection_rationale`
+`opc_flow_step_complete({step:"task_analysis"})` cross-checks `phase_selection_rationale`
 appears in BOTH the top-level field and inside
 `task_analysis_evidence` — mismatch is a hard validation error.
 
@@ -202,8 +202,8 @@ appears in BOTH the top-level field and inside
 
 | | P2 (task_analysis) | P5 (node_selection) |
 |---|---|---|
-| Trigger | `opc_task_analysis_complete` → `opc_flow_reflect` | between `opc_phase_start` and `opc_phase_confirm` |
+| Trigger | `opc_flow_step_complete({step:"task_analysis"})` → `opc_flow_reflect` | between `opc_phase_start` and `opc_phase_confirm` |
 | Persistence | `flow-state.json.reflection_log` | `state.json.phases[].reflection_log` |
 | Primary | M3 CoVe | M4 Critique |
 | Secondary | M2 Reflexion | M5 Debate (≥ medium) |
-| Adjustment | revise analysis fields (e.g. upgrade complexity) | `opc_phase_adjust` add/remove nodes |
+| Adjustment | revise analysis fields (e.g. upgrade complexity) | `opc_phase_confirm` add/remove nodes |

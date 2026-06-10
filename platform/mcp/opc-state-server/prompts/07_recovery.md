@@ -173,7 +173,7 @@ list — that path discards the old session.
 
 | Layer | Trigger | Tool | Effect |
 |---|---|---|---|
-| L0 Adjust nodes (pre-confirm) | user wants different nodes | `opc_phase_adjust` | rewrite node list |
+| L0 Adjust nodes (pre-confirm) | user wants different nodes | `opc_phase_confirm` | rewrite node list |
 | L1 Redo single output | node failed mid-execution | `opc_node_finish({status:"retry"})` | per-node retry, cascade downstream |
 | L2 Discard phase knowledge | phase output is wrong | `opc_phase_reset` | git checkout anchor → v+1 rewrite |
 | L3 Full git rollback | user wants source revert | plain git | OPC does NOT wrap |

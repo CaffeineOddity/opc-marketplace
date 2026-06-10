@@ -266,7 +266,7 @@ the parallel scheduling if needed.
 
 | User phrase | Intent | Action |
 |---|---|---|
-| "节点选得不对" / "重选节点" (pre-confirm) | Manual override before confirm | `opc_phase_adjust({nodes:[...]})` — bypasses P5 evidence; user has explicitly taken responsibility |
+| "节点选得不对" / "重选节点" (pre-confirm) | Manual override before confirm | `opc_phase_confirm({nodes:[...]})` — bypasses P5 evidence; user has explicitly taken responsibility |
 | "为什么选这些节点" | Show reasoning | Read `state.json.phases[].selection_method_trace` + latest `evidence_artifact_ref`, summarize objections-resolved |
 | "再反思一轮" | Force an extra round | `opc_flow_reflect({step_id:"node_selection", force_round:true})` — only honored if `max_rounds` not yet hit |
 | "就这些节点了，别反思了" | Skip reflection | NOT allowed if V1–V5 currently failing (registry-guard rejects confirm). User must either accept ask_user path or change node selection so V1–V5 pass. |

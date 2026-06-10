@@ -76,6 +76,10 @@ export const ALIAS_MAP: Readonly<Record<string, MappingTarget>> = Object.freeze(
     tool: "opc_flow_step_complete",
     discriminator: { field: "step", value: "task_decomposition" },
   },
+  opc_task_decomposition_complete: {
+    tool: "opc_flow_step_complete",
+    discriminator: { field: "step", value: "task_decomposition" },
+  },
   opc_brief_complete: {
     tool: "opc_flow_step_complete",
     discriminator: { field: "step", value: "brief_generation" },
