@@ -1,12 +1,12 @@
 # 04 反思流程
 
-> 反思在 pipeline 全链路中的串联：per-step 反思时序、用户介入处理、用户自治（intensity / skip / on_demand）、pipeline 级 meta-reflection、与 `opc_phase_reset` 的交互。
+> 反思在 pipeline 全链路中的串联：per-step 反思时序、用户介入处理、用户自治（intensity / skip / on_demand）、pipeline 级 meta-reflection、与 `opc_flow_correct({action:"phase_reset"})` 的交互。
 
 ---
 
 ## 一、per-step 反思链路（标准时序）
 
-> ⚠️ 本时序图遵循单驱动者原则：**`flow_next` 只从 state-server 发出**。`opc_reflect_*_complete` 写盘 artifact 并发出 `pending_reflection`，Claude 必须调 `opc_flow_reflect({reflection_id})` 登记才能推进。详见 [06_call-sequence-contract.md](06_call-sequence-contract.md)。
+> ⚠️ 本时序图遵循单驱动者原则：**`flow_next` 只从 state-server 发出**。`opc_reflect_complete({method})` 写盘 artifact 并发出 `pending_reflection`，Claude 必须调 `opc_flow_reflect({reflection_id})` 登记才能推进。详见 [06_call-sequence-contract.md](06_call-sequence-contract.md)。
 
 每个判断点 P1–P8 的统一时序：
 
@@ -21,7 +21,7 @@ sequenceDiagram
     actor U as User
 
     Note over C,U: ① 提交 evidence
-    C->>SS: opc_<step>_complete(evidence_artifact)
+    C->>SS: opc_flow_step_complete({step, evidence})
     SS->>SS: V1-V5 validator
     alt validator 失败
         SS-->>C: reject + 要求补 evidence
@@ -32,17 +32,17 @@ sequenceDiagram
 
     alt intensity != off
         C->>RS: opc_reflect_plan(step, ctx)
-        RS->>MS: corrections_query
+        RS->>MS: opc_corrections({action:"query"})
         RS-->>C: { method, secondary, prior_corrections, budget, next_step_hint }
 
         Note over C,U: ③ 执行 primary 方法
-        C->>RS: opc_reflect_<method>(artifact, prompt)
+        C->>RS: opc_reflect_execute({method, artifact, prompt})
         RS-->>C: agent_spec
         C->>A: Task(agent_spec)
         A-->>C: objections + reasoning_trace
 
         Note over C,U: ④ reflection-server 跑 meta-validator + 写盘 artifact + 发 pending_reflection
-        C->>RS: opc_reflect_<method>_complete(objections)
+        C->>RS: opc_reflect_complete({method, objections})
         RS->>RS: meta-validator + 写盘 artifact 到 opc-logs/reflection/
         RS-->>C: { verdict, kept_objections, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
 
@@ -50,10 +50,10 @@ sequenceDiagram
         C->>SS: opc_flow_reflect({ reflection_id })
         SS->>SS: registry-guard 读 artifact + 登记到 reflection_log[]
         alt verdict=objections_remain
-            SS-->>C: flow_next: opc_reflect_<secondary> (secondary 方法)
+            SS-->>C: flow_next: opc_reflect_execute({method: secondary}) (secondary 方法)
             Note over C,A: 重复 ③–⑤
         else verdict=clean
-            SS-->>C: flow_next: opc_<step>_finalize (上层流程继续)
+            SS-->>C: flow_next: opc_flow_step_complete({step}) 后续 (上层流程继续)
         else rounds 耗尽 (rounds_exceeded)
             SS-->>C: ask_user + reasoning_trace
         end
@@ -63,7 +63,7 @@ sequenceDiagram
     opt 反思建议 ask_user
         C->>U: ask_user(question + context)
         U-->>C: 纠正意见
-        C->>SS: opc_flow_revise<br/>写 user_interventions[] (L1)
+        C->>SS: opc_flow_correct({action:"revise"})<br/>写 user_interventions[] (L1)
     end
 ```
 
@@ -80,9 +80,9 @@ sequenceDiagram
 | `intensity: low` | 同上 | 只在 step P3 / P5 跑 primary，其他仅 validator |
 | `intensity: off` | 同上 | 全部跳过反思，仅 validator-only |
 | `skip once` | `opc_flow_skip_reflection({step})` | 仅当前 step 跳过 |
-| `on_demand` | `opc_reflect_on_demand({target})` | 用户主动触发对历史 step 的事后反思 |
+| `on_demand` | `opc_reflect_admin({action:"on_demand", target})` | 用户主动触发对历史 step 的事后反思 |
 
-**降级建议**：如果某 step 近 N 次反思 FP 率 > 阈值，server 会建议 `intensity` 降级或 `unlearn_method`，但**最终权在用户**。
+**降级建议**：如果某 step 近 N 次反思 FP 率 > 阈值，server 会建议 `intensity` 降级或 `opc_reflect_admin({action:"unlearn_method"})`，但**最终权在用户**。
 
 ---
 
@@ -99,18 +99,18 @@ sequenceDiagram
 
     Note over U,MS: ① 实时介入
     U->>C: "不对，应该 X"
-    C->>SS: opc_flow_revise / opc_pipeline_replan
+    C->>SS: opc_flow_correct({action:"revise"}) / opc_pipeline_lifecycle({action:"replan"})
     SS->>SS: 写 user_interventions[] (L1 flow-state.json)
     SS-->>C: flow_next: 修正后继续
 
     Note over U,MS: ② pipeline 结束归档
-    C->>SS: opc_pipeline_complete
-    SS-->>C: flow_next: opc_reflect_record_interventions
+    C->>SS: opc_pipeline_lifecycle({action:"complete"})
+    SS-->>C: flow_next: opc_reflect_admin({action:"record_interventions"})
 
-    C->>RS: opc_reflect_record_interventions(pipeline_id)
+    C->>RS: opc_reflect_admin({action:"record_interventions", pipeline_id})
     RS->>A: 派 distiller sub-agent
     A->>SS: 读 L1 user_interventions[]
-    A->>MS: corrections_query(相似匹配)
+    A->>MS: opc_corrections({action:"query"}) (相似匹配)
     alt 找到相似
         A->>MS: 合并 + hotness++
     else 没有
@@ -121,7 +121,7 @@ sequenceDiagram
 
     Note over U,MS: ③ 用户晋升到 L3（可选）
     U->>C: "这条经验所有项目都适用"
-    C->>RS: opc_corrections_promote(correction_id)
+    C->>RS: opc_corrections({action:"promote", correction_id})
     RS->>MS: 写 ~/.opc/global-corrections.jsonl
 ```
 
@@ -134,7 +134,7 @@ pipeline 结束时除了归档纠正，还跑一次 meta-reflection，**反思�
 | 评估项 | 方法 |
 |---|---|
 | 各 step 反思的命中率（objection → evidence_diff 转化率） | TS 统计 + meta synthesizer agent |
-| 哪些方法在哪些 step 表现差（FP 率高） | 自动建议 unlearn |
+| 哪些方法在哪些 step 表现差（FP 率高） | 自动建议 `opc_reflect_admin({action:"unlearn_method"})` |
 | 哪些 corrections 被反复命中（应升 L3） | 推送给用户决定 |
 | 反思总开销占比是否合理 | 与 budget 对比 |
 | 用户介入与反思发现的重合率（反思是否「发现了用户会发现的事」） | 关键质量指标 |
@@ -146,7 +146,7 @@ pipeline 结束时除了归档纠正，还跑一次 meta-reflection，**反思�
 
 ---
 
-## 五、与 `opc_phase_reset` 的交互
+## 五、与 `opc_flow_correct({action:"phase_reset"})` 的交互
 
 phase 回退时反思状态如何处理：
 
@@ -174,15 +174,15 @@ sequenceDiagram
     participant U as User
 
     Note over C,U: P1 意图
-    C->>SS: opc_intent_complete(intent_evidence)
+    C->>SS: opc_flow_step_complete({step:"intent_analysis", intent_evidence})
     SS-->>C: flow_next: opc_reflect_plan
-    C->>RS: opc_reflect_plan + opc_reflect_cove_complete
+    C->>RS: opc_reflect_plan + opc_reflect_complete({method:"cove"})
     RS-->>C: { verdict:clean, pending_reflection }
     C->>SS: opc_flow_reflect({ reflection_id })
-    SS-->>C: flow_next: opc_task_analysis_complete
+    SS-->>C: flow_next: opc_flow_step_complete({step:"task_analysis"})
 
     Note over C,U: P2 任务分析
-    C->>SS: opc_task_analysis_complete(evidence)
+    C->>SS: opc_flow_step_complete({step:"task_analysis", evidence})
     SS-->>C: flow_next: opc_reflect_plan
     C->>RS: CoVe → objection → Critique (secondary)
     RS-->>C: { verdict:objections_remain, pending_reflection }
@@ -190,25 +190,25 @@ sequenceDiagram
     SS-->>C: ask_user (budget 或严重 objection)
     C->>U: ask_user
     U-->>C: 补充需求
-    C->>SS: opc_flow_revise → L1 写
+    C->>SS: opc_flow_correct({action:"revise"}) → L1 写
 
     Note over C,U: P3 分解 / P4 brief / P5 节点选择
     Note over C,U: ... 每个 step 重复 plan → method → complete → ack → flow_reflect
 
     Note over C,U: P6/P7 执行与完成
-    C->>SS: opc_node_complete (validator-heavy)
+    C->>SS: opc_node_finish({status:"completed"}) (validator-heavy)
     C->>SS: opc_phase_complete
 
     Note over C,U: P8 推进 / 回退
     alt auto_advance
         SS-->>C: flow_next phase_start
     else reset
-        SS-->>C: phase_reset
+        SS-->>C: opc_flow_correct({action:"phase_reset"})
     end
 
     Note over C,U: Pipeline 结束
-    C->>SS: opc_pipeline_complete
-    SS-->>C: flow_next: opc_reflect_record_interventions
+    C->>SS: opc_pipeline_lifecycle({action:"complete"})
+    SS-->>C: flow_next: opc_reflect_admin({action:"record_interventions"})
     C->>RS: distiller 提炼 L1 → L2
     RS->>RS: meta-reflection (本次方法表现)
     RS-->>C: { manifest, 新增教训, 健康度变化 } (无 flow_next)

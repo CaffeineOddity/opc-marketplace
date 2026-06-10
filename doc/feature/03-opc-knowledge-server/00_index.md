@@ -5,7 +5,7 @@
 ## 主题地图
 
 - [01 知识模型与存储](01-knowledge-model/00_overview.md) — unit→section→subsection 三层结构、`.md` frontmatter、`.opc-knowledge.json`（`_refs`）、版本管理、智能复用
-- [02 知识 MCP API](02-knowledge-api/00_overview.md) — 8 个工具完整规范、初始化时序、与 state-server 协作
+- [02 知识 MCP API](02-knowledge-api/00_overview.md) — 4 个工具（`open` / `read` / `write` / `admin`）完整规范、初始化时序、与 state-server 协作
 
 ## 阅读顺序
 

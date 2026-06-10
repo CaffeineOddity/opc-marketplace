@@ -3,6 +3,10 @@
 > 本文档是 [知识 API 总览](00_overview.md) 的子文档。其他子文档：
 > [初始化时序](03_initialization-flow.md)
 
+opc-knowledge-server 对外暴露 **4 个 MCP 工具**。`opc_knowledge_read` 通过 `mode` discriminator 路由到 5 种读操作（`single` / `batch` / `list` / `search` / `diff`）；`opc_knowledge_admin` 通过 `action` discriminator 路由到 2 种管理操作（`delete` / `reindex`）。
+
+> **工具合并**：历史名 `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_list` / `opc_knowledge_search` 已折叠为 `opc_knowledge_read({mode})`；`opc_knowledge_delete` / `opc_knowledge_reindex` 已折叠为 `opc_knowledge_admin({action})`。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
+
 ---
 
 ## 2.1 `opc_knowledge_open` — 打开知识点
@@ -33,28 +37,90 @@
 
 ---
 
-## 2.2 `opc_knowledge_get` — 读取单条知识
+## 2.2 `opc_knowledge_read` — 统一读取入口
+
+请求体顶层必含 `mode` 字段（discriminator），路由到 single / batch / list / search / diff 子分支。
 
 ```
-参数: unit, section, subsection, version? (可选)
-返回: { content, version, updated_at }
+公共参数:
+  mode: "single" | "batch" | "list" | "search" | "diff"
+
+discriminator 分支:
+  mode="single"  → 见 §2.2.1
+  mode="batch"   → 见 §2.2.2
+  mode="list"    → 见 §2.2.3
+  mode="search"  → 见 §2.2.4
+  mode="diff"    → 见 §2.2.5（详见 §2.10）
+```
+
+---
+
+### 2.2.1 `opc_knowledge_read({mode:"single"})` — 读取单条知识
+
+```
+参数: { mode:"single", unit, section, subsection, version? (可选) }
+返回: { content, version, updated_at } | null
 若不存在则返回 null
-若指定 version 则返回对应版本，不传返回最新
+若指定 version 则返回对应版本（走 git history），不传返回最新
 ```
 
 ---
 
-## 2.3 `opc_knowledge_get_batch` — 批量读取
+### 2.2.2 `opc_knowledge_read({mode:"batch"})` — 批量读取
 
 ```
-参数: entries: [{unit, section, subsection, min_version?}]
-返回: [{unit, section, subsection, content, version, updated_at, found}]
+参数: { mode:"batch", entries: [{unit, section, subsection, min_version?}] }
+返回: [{ unit, section, subsection, content, version, updated_at, found }]
 一次性读取多条知识，避免 Agent 逐条调用的 round-trip。
+opc_node_start 内部固定走此 mode 加载 input.knowledge。
 ```
 
 ---
 
-## 2.4 `opc_knowledge_write` — 写入知识
+### 2.2.3 `opc_knowledge_read({mode:"list"})` — 列出知识结构
+
+```
+参数: { mode:"list", unit, section? (可选), subsection? (可选) }
+行为: readdir 直接扫描目录结构，不读文件内容（5000+ 文件无性能问题）
+
+返回:
+  只传 unit → 返回该 unit 下所有 section 及 subsection 列表
+  传 unit + section → 返回该 section 下所有 subsection 列表
+  传 unit + subsection → 返回该 unit 下所有包含此 subsection 的 section
+
+例: opc_knowledge_read({mode:"list", unit:"user-auth"})
+      → [login, register, logout, session]
+    opc_knowledge_read({mode:"list", unit:"user-auth", section:"login"})
+      → [api, ui, architecture]
+    opc_knowledge_read({mode:"list", unit:"user-auth", subsection:"api"})
+      → [login/api, register/api, session/api]
+```
+
+---
+
+### 2.2.4 `opc_knowledge_read({mode:"search"})` — 全文搜索
+
+```
+参数: { mode:"search", query, unit? (可选), consistency?: "eventual" | "fresh" (默认 eventual) }
+返回: [{ unit, section, subsection, snippet, score, indexed_at }, ...]
+行为:
+  → consistency == "eventual"（默认）:
+      走 .opc-knowledge.idx；索引不存在或损坏 → 自动降级遍历 .md 文件
+      可能漏读最近 ≤ 2s 内的写入（reindex debounce 窗口，详见 § 2.9）
+  → consistency == "fresh"（关键场景，如反思 sub-agent 校验 evidence）:
+      若有 pending reindex job → 先等待 flush（最多 5s），再走 .idx
+      超时则降级遍历 .md，保证不漏读
+```
+
+---
+
+### 2.2.5 `opc_knowledge_read({mode:"diff"})` — 3-way 合并预演
+
+详见 [§ 2.10](#210-版本冲突与-3-way-diff-and-merge-契约)。
+
+---
+
+## 2.3 `opc_knowledge_write` — 写入知识
 
 ```
 参数:
@@ -86,14 +152,29 @@
     ["accept_theirs", "keep_ours", "spawn_merge_node"], written: false }
 ```
 
-> **注**：`opc_node_complete` L1 evidence 校验时若收到 `merge_status="conflict"`，会拒绝节点完成并把 `suggested_actions` 通过 `opc_flow_query` 暴露给 Claude；不会自动 keep_ours 静默覆盖。
+> **注**：`opc_node_finish({status:"completed"})` L1 evidence 校验时若收到 `merge_status="conflict"`，会拒绝节点完成并把 `suggested_actions` 通过 `opc_flow_query` 暴露给 Claude；不会自动 keep_ours 静默覆盖。
 
 ---
 
-## 2.5 `opc_knowledge_delete` — 删除知识
+## 2.4 `opc_knowledge_admin` — 统一管理入口
+
+请求体顶层必含 `action` 字段（discriminator），路由到 delete / reindex 子分支。
 
 ```
-参数: unit, section, subsection, base_version?: number
+公共参数:
+  action: "delete" | "reindex"
+
+discriminator 分支:
+  action="delete"   → 见 §2.4.1
+  action="reindex"  → 见 §2.4.2
+```
+
+---
+
+### 2.4.1 `opc_knowledge_admin({action:"delete"})` — 删除知识
+
+```
+参数: { action:"delete", unit, section, subsection, base_version?: number }
 行为:
   → 若传了 base_version 且 ≠ current_version → **reject**（删除不走 merge）
     返回 { deleted: false, reason: "version_mismatch", current_version }
@@ -107,53 +188,19 @@
 
 ---
 
-## 2.6 `opc_knowledge_list` — 列出知识结构
+### 2.4.2 `opc_knowledge_admin({action:"reindex"})` — 重建搜索索引
 
 ```
-参数: unit, section? (可选)
-行为: readdir 直接扫描目录结构，不读文件内容（5000+ 文件无性能问题）
-
-返回:
-  只传 unit → 返回该 unit 下所有 section 及 subsection 列表
-  传 unit + section → 返回该 section 下所有 subsection 列表
-  传 unit + subsection → 返回该 unit 下所有包含此 subsection 的 section
-
-例: opc_knowledge_list("user-auth") → [login, register, logout, session]
-    opc_knowledge_list("user-auth", "login") → [api, ui, architecture]
-    opc_knowledge_list("user-auth", subsection="api") → [login/api, register/api, session/api]
-```
-
----
-
-## 2.7 `opc_knowledge_search` — 全文搜索
-
-```
-参数: query, unit? (可选), consistency?: "eventual" | "fresh" (默认 eventual)
-返回: [{ unit, section, subsection, snippet, score, indexed_at }, ...]
-行为:
-  → consistency == "eventual"（默认）:
-      走 .opc-knowledge.idx；索引不存在或损坏 → 自动降级遍历 .md 文件
-      可能漏读最近 ≤ 2s 内的写入（reindex debounce 窗口，详见 § 2.9）
-  → consistency == "fresh"（关键场景，如反思 sub-agent 校验 evidence）:
-      若有 pending reindex job → 先等待 flush（最多 5s），再走 .idx
-      超时则降级遍历 .md，保证不漏读
-```
-
----
-
-## 2.8 `opc_knowledge_reindex` — 重建搜索索引
-
-```
-参数: { mode?: "full" | "incremental" } (默认 incremental)
+参数: { action:"reindex", mode?: "full" | "incremental" } (默认 incremental)
 行为:
   → full:        遍历 opc-knowledge/ 下所有 .md，全量重建 .opc-knowledge.idx
   → incremental: 只重建调度队列 dirty_paths[] 中的条目（详见 § 2.9）
 返回: { indexed: number, mode, duration_ms }
 ```
 
-`opc_knowledge_reindex` **不是 Claude 路径的常规工具**，主要用于：
+`opc_knowledge_admin({action:"reindex"})` **不是 Claude 路径的常规工具**，主要用于：
 - 启动时检测到 `.idx` 缺失/损坏的自愈
-- `opc_node_complete` 完成时的 flush 触发点（详见 § 2.9 节点级 flush）
+- `opc_node_finish({status:"completed"})` 完成时的 flush 触发点（详见 § 2.9 节点级 flush）
 - 用户在 `/opc-status` 看到 stale-window 异常时的手动修复
 
 ---
@@ -162,7 +209,7 @@
 
 ### 背景
 
-`opc_knowledge_write` 触发后必须更新 `.opc-knowledge.idx`，否则 `opc_knowledge_search` 漏读新内容。但**直接同步 reindex 会拖慢 sub-agent**——一个 node 内多次 write 就要重建多次索引，扰动 sub-agent 上下文且无意义。
+`opc_knowledge_write` 触发后必须更新 `.opc-knowledge.idx`，否则 `opc_knowledge_read({mode:"search"})` 漏读新内容。但**直接同步 reindex 会拖慢 sub-agent**——一个 node 内多次 write 就要重建多次索引，扰动 sub-agent 上下文且无意义。
 
 R6 的核心矛盾：**sub-agent 上下文不能背 reindex**，但 search 也不能漏读。
 
@@ -182,10 +229,10 @@ write 调用 → │  ┌─────────────┐    ┌──
             └──────────────────────────────────────────┘
                        ▲
                        │ Hard flush 触发点：
-                       ├─ opc_node_complete 调用
+                       ├─ opc_node_finish({status:"completed"}) 调用
                        ├─ opc_phase_complete 调用
-                       ├─ opc_knowledge_search({consistency:"fresh"})
-                       └─ opc_knowledge_reindex 显式调用
+                       ├─ opc_knowledge_read({mode:"search", consistency:"fresh"})
+                       └─ opc_knowledge_admin({action:"reindex"}) 显式调用
 ```
 
 ### 工程细节
@@ -193,9 +240,9 @@ write 调用 → │  ┌─────────────┐    ┌──
 | 维度 | 设计 |
 |---|---|
 | **跑在哪里** | knowledge-server 的**主进程**（与 stdio MCP 同进程），用 `setImmediate` / Node worker thread；**不在 sub-agent 上下文里跑** |
-| **触发** | `opc_knowledge_write` / `opc_knowledge_delete` 调用时把 path 推入 `dirty_paths: Set<string>` 后立刻返回 |
+| **触发** | `opc_knowledge_write` / `opc_knowledge_admin({action:"delete"})` 调用时把 path 推入 `dirty_paths: Set<string>` 后立刻返回 |
 | **debounce** | 默认 2s（`OPC_REINDEX_DEBOUNCE_MS` 可配）。短时间内多个 write 合并为一次 incremental reindex |
-| **失败处理** | reindex 抛错 → 不阻塞写；error 写 `opc-logs/knowledge-reindex.log`；下次 `opc_knowledge_search` 检测到 `.idx.broken` 标记 → 自动降级遍历 |
+| **失败处理** | reindex 抛错 → 不阻塞写；error 写 `opc-logs/knowledge-reindex.log`；下次 search 检测到 `.idx.broken` 标记 → 自动降级遍历 |
 | **进程退出** | knowledge-server 进程退出前必须 flush 队列（注册 `process.on('beforeExit')` hook）；崩溃则 `.idx` 滞后，下次启动自检 → 自动 incremental reindex |
 | **并发写合并** | OPC 内部串行模型保证同一时刻只有一个 sub-agent 在跑 → 同 `subsection.md` 不会被并发写；队列只需 Set 去重 |
 
@@ -205,17 +252,17 @@ knowledge-server 在以下时机**同步 flush** dirty queue（最多 5s 超时�
 
 | 触发 | 调用方 | 目的 |
 |---|---|---|
-| `opc_node_complete` 被 state-server 接收时 | state-server 内部跨进程通知 knowledge-server flush | 保证 node 边界后下一个 node 的 sub-agent search 不漏读上个 node 的产物 |
+| `opc_node_finish({status:"completed"})` 被 state-server 接收时 | state-server 内部跨进程通知 knowledge-server flush | 保证 node 边界后下一个 node 的 sub-agent search 不漏读上个 node 的产物 |
 | `opc_phase_complete` 同上 | state-server | 跨 phase / sub-pipeline 切换前的强一致点 |
-| `opc_knowledge_search({consistency:"fresh"})` | 反思 sub-agent 等关键路径 | 校验 evidence 时不漏读 |
-| `opc_knowledge_reindex` 显式调用 | 用户 / 自愈脚本 | 修复异常 |
+| `opc_knowledge_read({mode:"search", consistency:"fresh"})` | 反思 sub-agent 等关键路径 | 校验 evidence 时不漏读 |
+| `opc_knowledge_admin({action:"reindex"})` 显式调用 | 用户 / 自愈脚本 | 修复异常 |
 
-> **跨进程通知 = 文件信号**：state-server 不直接调 knowledge-server 的内部函数。`opc_node_complete` 写一个标记文件 `.opc/sessions/<id>/.knowledge-flush-required`，knowledge-server 主进程 fs.watch 监听并 flush。简单可靠、无 IPC 复杂度。
+> **跨进程通知 = 文件信号**：state-server 不直接调 knowledge-server 的内部函数。`opc_node_finish({status:"completed"})` 写一个标记文件 `.opc/sessions/<id>/.knowledge-flush-required`，knowledge-server 主进程 fs.watch 监听并 flush。简单可靠、无 IPC 复杂度。
 
-### `opc_node_complete` 的 reindex 协作
+### `opc_node_finish({status:"completed"})` 的 reindex 协作
 
 ```
-state-server.opc_node_complete(node_evidence) 内部:
+state-server.opc_node_finish({status:"completed"}, node_evidence) 内部:
   1. L1 evidence 校验 + L2 unblocked_by 校验
   2. 若 evidence.artifacts[] 含 knowledge_write 标记:
      → touch .opc/sessions/<id>/.knowledge-flush-required
@@ -228,18 +275,18 @@ state-server.opc_node_complete(node_evidence) 内部:
 
 | 不变量 | 强度 |
 |---|---|
-| sub-agent **不应**调 `opc_knowledge_reindex` | **约定**（kit 规范）。sub-agent 的 `allowed_tools` 不允许包含 `opc_knowledge_reindex` |
+| sub-agent **不应**调 `opc_knowledge_admin({action:"reindex"})` | **约定**（kit 规范）。sub-agent 的 `allowed_tools` 不允许包含该工具 |
 | sub-agent `opc_knowledge_write` 返回 `{reindex_enqueued: true}` 即返回，不等 reindex 完成 | **hard** |
 | reindex 失败永不影响 write 的 success 返回 | **hard** |
-| sub-agent 在同一 node 内多次 search **可能** stale ≤ 2s | **acceptable**（同 node 内 sub-agent 通常通过 `get_batch` 拿自己刚写的内容，不靠 search） |
+| sub-agent 在同一 node 内多次 search **可能** stale ≤ 2s | **acceptable**（同 node 内 sub-agent 通常通过 `read({mode:"batch"})` 拿自己刚写的内容，不靠 search） |
 
 ### 失败模式与降级链
 
 | 失败 | 降级 |
 |---|---|
 | reindex worker hang | 队列堆积 > 50 → `.idx.broken` 标记 → search 全部降级遍历 |
-| `.opc-knowledge.idx` 损坏 | search 检测 → 自动降级遍历 + 后台触发 `opc_knowledge_reindex({mode:"full"})` |
-| Hard flush 5s 超时 | `opc_node_complete` 不阻塞，返回 warning `{knowledge_index_stale: true}`，state-server 在下一次 `opc_knowledge_search` 前重试 |
+| `.opc-knowledge.idx` 损坏 | search 检测 → 自动降级遍历 + 后台触发 `opc_knowledge_admin({action:"reindex", mode:"full"})` |
+| Hard flush 5s 超时 | `opc_node_finish({status:"completed"})` 不阻塞，返回 warning `{knowledge_index_stale: true}`，state-server 在下一次 search 前重试 |
 | knowledge-server 进程崩溃后启动 | 启动自检脚本扫 `.md` 文件 mtime > `.idx` mtime → 自动 incremental reindex |
 
 ---
@@ -282,7 +329,7 @@ flowchart TD
 
     Conflict --> S1[accept_theirs:<br/>丢弃 ours]
     Conflict --> S2[keep_ours:<br/>强制覆盖 v=C+1]
-    Conflict --> S3[spawn_merge_node:<br/>opc_pipeline_replan 插节点手动合]
+    Conflict --> S3[spawn_merge_node:<br/>opc_pipeline_lifecycle action:replan 插节点手动合]
 ```
 
 ### diff 粒度
@@ -300,10 +347,10 @@ flowchart TD
 | **L1/L2/L3 corrections 注入** | reflection-server 写时**必须**传 base_version；否则反思可能静默覆盖 sub-agent 的产出 |
 | **knowledge-server 内部 reindex** | 不调 write，不涉及 |
 
-### 与 `opc_node_complete` 的衔接
+### 与 `opc_node_finish({status:"completed"})` 的衔接
 
 ```
-state-server.opc_node_complete(node_evidence) 内部:
+state-server.opc_node_finish({status:"completed"}, node_evidence) 内部:
   1. L1 evidence 校验
      → 若 evidence.artifacts[] 中任一 write 返回 merge_status="conflict":
        → node 不允许 complete
@@ -315,7 +362,7 @@ state-server.opc_node_complete(node_evidence) 内部:
   5. 路由 flow_next
 ```
 
-### `opc_knowledge_read({mode: "diff"})` — 显式查 diff
+### `opc_knowledge_read({mode:"diff"})` — 显式查 diff
 
 调用方需要在 write 之前**预演** diff（比如 reflection-server 评估"如果我现在写下去会不会冲突"），可走 `opc_knowledge_read` 的 diff 模式：
 
@@ -348,8 +395,9 @@ opc_knowledge_read({
 
 ---
 
+## 相关文档
 
-
-- [00_overview.md](00_overview.md#8-个工具速览) — 工具速览
+- [00_overview.md](00_overview.md#4-个工具速览) — 工具速览
 - [03_initialization-flow.md](03_initialization-flow.md) — 流程启动中的工具时序
 - [00_overview.md](00_overview.md#与-state-server-协作矩阵) — 与 state-server 的协作分工
+- [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md) — 54→28 工具合并方案

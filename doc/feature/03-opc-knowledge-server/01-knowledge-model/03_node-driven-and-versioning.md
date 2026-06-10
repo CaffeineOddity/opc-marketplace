@@ -27,10 +27,10 @@ output:
 
 ```
 Agent 执行 node:
-  → opc_knowledge_get_batch([...]) 批量加载 input.knowledge
+  → opc_knowledge_read({mode:"batch", entries:[...]}) 批量加载 input.knowledge
     → 按 min_version 校验版本，不满足则阻止
   → 执行 node 指令
-  → 需要更多知识时调用 opc_knowledge_list / opc_knowledge_search
+  → 需要更多知识时调用 opc_knowledge_read({mode:"list"|"search"})
   → 产出知识时调用 opc_knowledge_write(unit, section, subsection, content)
     → MCP 工具自动处理创建 vs 更新
 ```
@@ -49,7 +49,7 @@ input:
     min_version: 2  # 至少 v2
 ```
 
-`min_version` 校验在 `opc_node_start` 时由 state-server 强制执行：调用 `opc_knowledge_get_batch` 获取全部 input 知识后，逐项比对返回的 version 是否 ≥ min_version。不满足则阻止 node 启动。
+`min_version` 校验在 `opc_node_start` 时由 state-server 强制执行：调用 `opc_knowledge_read({mode:"batch"})` 获取全部 input 知识后，逐项比对返回的 version 是否 ≥ min_version。不满足则阻止 node 启动。
 
 ---
 
@@ -77,5 +77,5 @@ Agent 写入时**应当**回传 `base_version`（即第 1 步读到的 version�
 ## 相关文档
 
 - [02_metadata-files.md](02_metadata-files.md) — version 在 frontmatter 中的位置
-- [../02-knowledge-api/02_core-tools.md](../02-knowledge-api/02_core-tools.md) — `opc_knowledge_get` / `opc_knowledge_get_batch` / `opc_knowledge_write` 接口
+- [../02-knowledge-api/02_core-tools.md](../02-knowledge-api/02_core-tools.md) — `opc_knowledge_read` (5 modes) / `opc_knowledge_write` 接口
 - [../../02-opc-state-server/04-node/02_field-spec.md](../../02-opc-state-server/04-node/02_field-spec.md) — node input/output 字段

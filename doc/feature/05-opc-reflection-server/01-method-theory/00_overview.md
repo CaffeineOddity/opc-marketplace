@@ -40,12 +40,12 @@
 
 | # | 位点 | 触发工具 | 风险 | 失败类型 |
 |---|---|---|---|---|
-| P1 | 意图分类 | opc_intent_complete | 把 chat 当 task | A 分类 |
-| P2 | 任务分析 | opc_task_analysis_complete | 漏需求、漏依赖 | B 完整性 |
-| P3 | 分解 | opc_decomposition_complete | sub-pipeline 切分不合理 | D 元决策 |
-| P4 | Brief | opc_brief_complete | brief 与 task 偏移 | B 完整性 |
+| P1 | 意图分类 | opc_flow_step_complete({step:"intent_analysis"}) | 把 chat 当 task | A 分类 |
+| P2 | 任务分析 | opc_flow_step_complete({step:"task_analysis"}) | 漏需求、漏依赖 | B 完整性 |
+| P3 | 分解 | opc_flow_step_complete({step:"task_decomposition"}) | sub-pipeline 切分不合理 | D 元决策 |
+| P4 | Brief | opc_flow_step_complete({step:"brief_generation"}) | brief 与 task 偏移 | B 完整性 |
 | P5 | 节点选择 | opc_phase_confirm | 选错节点组合 | D 元决策 |
-| P6 | 节点执行 | opc_node_complete | evidence 造假 / 缺失 | C 执行 |
+| P6 | 节点执行 | opc_node_finish({status:"completed"}) | evidence 造假 / 缺失 | C 执行 |
 | P7 | 阶段完成 | opc_phase_complete | quality_gate 没真跑 | C 执行 |
 | P8 | 阶段推进 | auto_advance | 该回退却前进 | D 元决策 |
 
@@ -90,10 +90,10 @@ state-server 在 `opc_reflect_plan` 时按下表自动选方法。primary 必跑
 flowchart TD
     Start([opc_reflect_plan]) --> Lookup[查表: step → primary + secondary]
     Lookup --> Hist[查 corrections: 同 step 历史教训]
-    Hist --> Health[查 method 健康度<br/>opc_reflect_query_stats]
+    Hist --> Health[查 method 健康度<br/>opc_reflect_admin action:query_stats]
 
     Health --> Bad{某方法<br/>近 N 次<br/>FP 率 > 阈值?}
-    Bad -->|是| Unlearn[临时禁用该方法<br/>opc_reflect_unlearn_method]
+    Bad -->|是| Unlearn[临时禁用该方法<br/>opc_reflect_admin action:unlearn_method]
     Bad -->|否| Plan[输出 reflection_plan]
 
     Unlearn --> Plan
@@ -165,7 +165,7 @@ corrections 三层存储 + 三层模型 + 4 个膨胀控制详见 [03-correction
 
 ## 十一、相关文档
 
-- [02 server 设计](../02-server-design/00_overview.md) — 13 个工具与 evidence schema 实现
+- [02 server 设计](../02-server-design/00_overview.md) — 4 个工具（plan / execute / complete / admin）与 evidence schema 实现
 - [03 corrections 存储](../03-corrections-store/00_overview.md) — Reflexion 教训记忆的存储引擎
 - [04 反思流程](../04-reflection-flow/00_overview.md) — 方法在 per-step 反思链路中的位置
 - [05 总览](../00_index.md) — 8 核心原则与端到端时序

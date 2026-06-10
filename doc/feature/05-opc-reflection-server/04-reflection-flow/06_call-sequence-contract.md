@@ -240,9 +240,9 @@ opc_flow_user_reply({
 >
 > 实施上，`opc_reflect_*_complete` 在写新 pending 前必须先校验"是否存在任何状态的旧 pending"——若有，要求 Claude 先调 `opc_flow_user_reply` 或 `opc_flow_reflect` 把旧的清掉。
 
-### 告警维度（opc_reflect_query_stats 新增字段）
+### 告警维度（opc_reflect_admin({action:"query_stats"}) 新增字段）
 
-`opc_reflect_query_stats` 返回中新增三个计数器，作为反思链路健康度的关键告警指标：
+`opc_reflect_admin({action:"query_stats"})` 返回中新增三个计数器，作为反思链路健康度的关键告警指标：
 
 ```typescript
 type ReflectionStatsResponse = {
@@ -292,7 +292,7 @@ type NextStepHint = {
 **示例**：
 
 ```typescript
-// opc_reflect_critique_complete 返回
+// opc_reflect_complete({method:"critique"}) 返回
 {
   verdict: "objections_remain",
   kept_objections: [{ id: "obj-1", text: "...", evidence_ref: "..." }],
@@ -367,22 +367,22 @@ type NextStepHint = {
 | # | 工具 | 校验时机 | 何时可能有未登记 pending | 拦截后 `required_action` |
 |---|---|---|---|---|
 | 1 | `opc_flow_reflect` | 登记入口（自身校验） | — | 缺 `reflection_id` / 不匹配 → reject |
-| 2 | `opc_task_analysis_complete` | P1 反思未登记时 Claude 跳过来调 | P1 pending 未登记 | `opc_flow_reflect({reflection_id})` |
-| 3 | `opc_decomposition_complete` | P2 反思未登记时 | P2 pending 未登记 | 同上 |
-| 4 | `opc_brief_complete` | P2 / P3 反思未登记时 | P2 或 P3 pending 未登记 | 同上 |
+| 2 | `opc_flow_step_complete({step:"task_analysis"})` | P1 反思未登记时 Claude 跳过来调 | P1 pending 未登记 | `opc_flow_reflect({reflection_id})` |
+| 3 | `opc_flow_step_complete({step:"task_decomposition"})` | P2 反思未登记时 | P2 pending 未登记 | 同上 |
+| 4 | `opc_flow_step_complete({step:"brief_generation"})` | P2 / P3 反思未登记时 | P2 或 P3 pending 未登记 | 同上 |
 | 5 | `opc_pipeline_create` | P4 反思未登记时 | P4 pending 未登记 | 同上 |
 | 6 | `opc_phase_confirm` | P5 反思未登记 | P5 pending 未登记 | 同上 |
 | 7 | `opc_node_start` | P5 反思未登记 | P5 pending 未登记 | 同上 |
 | 8 | `opc_phase_complete` | P5（残留）反思未登记 | P5 pending 未登记；**同时也是跨 phase/sub 切换的清空校验点**。P6 / P7 走 Validator-only 不产生 pending（[02-server-design 三·补](../02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)） | 同上 |
-| 9 | `opc_pipeline_complete` | P5 / P8 反思未登记 | 任意 phase 残留 pending（P6/P7 不入此列） | 同上 |
+| 9 | `opc_pipeline_lifecycle({action:"complete"})` | P5 / P8 反思未登记 | 任意 phase 残留 pending（P6/P7 不入此列） | 同上 |
 
 **不受保护清单（故意豁免）**：
 
 | 工具 | 豁免理由 |
 |---|---|
-| `opc_flow_revise` / `opc_flow_restart` / `opc_pipeline_replan` / `opc_phase_reset` | 纠错类通道——反思未登记时用户也可能想纠错，不该被锁死 |
-| `opc_flow_abort` | 用户跑路权，永远允许 |
-| `opc_node_complete` / `opc_node_fail` | sub-agent 回报通道，不能被反思阻塞 |
+| `opc_flow_correct({action:"revise"\|"restart"\|"phase_reset"})` / `opc_pipeline_lifecycle({action:"replan"})` | 纠错类通道——反思未登记时用户也可能想纠错，不该被锁死 |
+| `opc_flow_lifecycle({action:"abort"})` | 用户跑路权，永远允许 |
+| `opc_node_finish({status:"completed"\|"failed"})` | sub-agent 回报通道，不能被反思阻塞 |
 
 #### 失败返回示例
 
@@ -417,7 +417,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 | Claude 跳过 `opc_flow_reflect` 直接调 `opc_phase_confirm` | 返回 `pending_reflection_unregistered` 错误 | 看错误里的 `required_action`，按提示调 `opc_flow_reflect({reflection_id})` |
 | Claude 重复调 `opc_flow_reflect` 同一个 `reflection_id` | 第二次返回 `reflection_already_registered` | `flow-state.json.pending_reflections` 应已为空，无需再调 |
 | `reflection_id` 过期后再登记 | 返回 `reflection_id_expired` | 重新跑反思方法（reflection-server 会发新 `reflection_id`） |
-| Claude 跳过 `opc_flow_reflect` 又跑下一轮 `opc_reflect_critique` | reflection-server 自身 reject `previous_pending_unregistered` | 先调 `opc_flow_reflect` 登记上一轮 |
+| Claude 跳过 `opc_flow_reflect` 又跑下一轮 `opc_reflect_execute({method:"critique"})` | reflection-server 自身 reject `previous_pending_unregistered` | 先调 `opc_flow_reflect` 登记上一轮 |
 | `pending_reflections[]` 出现 2 个元素 | 视为**实现 bug**，单测必拦截 | 检查 reflection-server 是否漏了不变量校验（六 第 1 条）|
 | reflection-server 工具意外返回 `flow_next` | 视为**协议违反**，单测必拦截 | reflection-server 单测断言 `response.flow_next === undefined` |
 | `opc_flow_reflect` 收到的 `reflection_id` 文件不存在 | 返回 `artifact_missing` | 反思 server 写盘失败 → 检查磁盘权限 / 日志目录 |
@@ -494,16 +494,16 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 
 | step_id | 回灌后 flow_next | 行为细节 |
 |---|---|---|
-| `intent_analysis` (P1) | `opc_intent_complete`（带 resolution 修正后的 intent） | 跳过反思一次（避免 round 再触发） |
-| `task_analysis` (P2) | `opc_task_analysis_complete`（带 accumulated_patch 后的 analysis_result） | 跳过反思一次 |
-| `task_decomposition` (P3) | `opc_decomposition_complete`（带 resolution 修正后的 sub_pipelines） | 跳过反思一次 |
-| `brief_generation` (P4) | `opc_brief_complete` | 跳过反思一次 |
+| `intent_analysis` (P1) | `opc_flow_step_complete({step:"intent_analysis"})`（带 resolution 修正后的 intent） | 跳过反思一次（避免 round 再触发） |
+| `task_analysis` (P2) | `opc_flow_step_complete({step:"task_analysis"})`（带 accumulated_patch 后的 analysis_result） | 跳过反思一次 |
+| `task_decomposition` (P3) | `opc_flow_step_complete({step:"task_decomposition"})`（带 resolution 修正后的 sub_pipelines） | 跳过反思一次 |
+| `brief_generation` (P4) | `opc_flow_step_complete({step:"brief_generation"})` | 跳过反思一次 |
 | `node_selection` (P5) | `opc_phase_confirm`（直接采用用户决策的 selected_nodes，写入 state.json.phases[].selected_nodes） | 跳过反思一次 |
-| `node_execution` (P6) | `opc_node_complete`（直接采纳用户对 evidence 的裁定） | 跳过反思一次 |
+| `node_execution` (P6) | `opc_node_finish({status:"completed"})`（直接采纳用户对 evidence 的裁定） | 跳过反思一次 |
 | `phase_completion` (P7) | `opc_phase_complete` | 跳过反思一次 |
-| `phase_advance` (P8) | `opc_phase_start(next_phase)` 或 `opc_phase_reset`（按用户裁定） | 跳过反思一次 |
+| `phase_advance` (P8) | `opc_phase_start(next_phase)` 或 `opc_flow_correct({action:"phase_reset"})`（按用户裁定） | 跳过反思一次 |
 
-> **跳过反思一次**：实现上在 `opc_<step>_complete` 内部加临时标志（如 `_skip_reflection_once: true` 从 user_intervention 路径传入），避免立刻又走到 rounds-guard 形成 ping-pong。
+> **跳过反思一次**：实现上在 `opc_flow_step_complete({step})` / 对应工具内部加临时标志（如 `_skip_reflection_once: true` 从 user_intervention 路径传入），避免立刻又走到 rounds-guard 形成 ping-pong。
 
 ### `pending_user_question` 生命周期
 
@@ -542,7 +542,7 @@ checkPendingUserQuestion(flowState, callerTool) // ② 再校用户问答
 // 任一抛错即 reject
 ```
 
-豁免清单也复用——`opc_flow_abort` / `opc_flow_revise` / `opc_flow_restart` / `opc_pipeline_replan` / `opc_phase_reset` / `opc_node_complete` / `opc_node_fail` 永远放行（用户跑路 / 主动纠错 / sub-agent 回报通道）。
+豁免清单也复用——`opc_flow_lifecycle({action:"abort"})` / `opc_flow_correct({action:"revise"|"restart"|"phase_reset"})` / `opc_pipeline_lifecycle({action:"replan"})` / `opc_node_finish({status:"completed"|"failed"})` 永远放行（用户跑路 / 主动纠错 / sub-agent 回报通道）。
 
 ### Hard invariants（A3 补充）
 
@@ -557,7 +557,7 @@ checkPendingUserQuestion(flowState, callerTool) // ② 再校用户问答
 
 ### 与 corrections 三层归档的关系
 
-`opc_flow_user_reply` 写入的 `user_interventions[]` 条目带 `trigger: "ask_user_rounds_exceeded"`，distiller sub-agent 在 pipeline 结束时（`opc_reflect_record_interventions`）优先级更高地处理这类条目——因为它们附带了 `linked_reflection_artifacts`（指向 N 轮反思 artifact 路径），上下文比纯"用户主动纠错"丰富得多，提炼成 corrections 后命中率也更高。
+`opc_flow_user_reply` 写入的 `user_interventions[]` 条目带 `trigger: "ask_user_rounds_exceeded"`，distiller sub-agent 在 pipeline 结束时（`opc_reflect_admin({action:"record_interventions"})`）优先级更高地处理这类条目——因为它们附带了 `linked_reflection_artifacts`（指向 N 轮反思 artifact 路径），上下文比纯"用户主动纠错"丰富得多，提炼成 corrections 后命中率也更高。
 
 ### 失败返回示例
 
@@ -662,8 +662,8 @@ opc_phase_confirm({...}) {
   checkPendingReflection(loadFlowState(), "opc_phase_confirm")
   // 正常逻辑...
 }
-// opc_task_analysis_complete / opc_decomposition_complete / opc_brief_complete /
-// opc_pipeline_create / opc_phase_complete / opc_node_start / opc_pipeline_complete 同理
+// opc_flow_step_complete({step:"task_analysis"|"task_decomposition"|"brief_generation"}) /
+// opc_pipeline_create / opc_phase_complete / opc_node_start / opc_pipeline_lifecycle({action:"complete"}) 同理
 
 // 跨 phase 切换额外校验:
 opc_phase_complete({...}) {

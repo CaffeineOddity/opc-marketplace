@@ -98,14 +98,14 @@ deprecated_by: null        # 若被新纠正替代
 
 | # | 控制 | 实现 |
 |---|---|---|
-| C1 | 合并优先于新建 | distiller 写入前先 `corrections_query(step, keywords)`，相似度 > 阈值 → 合并 + hotness+1；否则新建 |
+| C1 | 合并优先于新建 | distiller 写入前先 `opc_corrections({action:"query", step, keywords})`，相似度 > 阈值 → 合并 + hotness+1；否则新建 |
 | C2 | hotness 衰减 + 冷冻 | 每周扫描，hotness *= 0.9；< 阈值 → `frozen=true`，停止注入但保留可查 |
 | C3 | per-step 容量上限 | 同 step 同时被注入的纠正条数 ≤ K（默认 5），按 hotness 取 top-K |
 | C4 | 注入 prompt 预算 | enhanced_prompt 中纠正片段总 tokens ≤ B（默认 800），超出按 hotness 截断 |
 
 ```mermaid
 flowchart TD
-    Write([distiller 准备写]) --> Query[corrections_query<br/>step + keywords]
+    Write([distiller 准备写]) --> Query[opc_corrections action:query<br/>step + keywords]
     Query --> Sim{相似度 > 阈值?}
     Sim -->|是| Merge[合并到现有<br/>hotness += 1<br/>updated_at = now]
     Sim -->|否| New[新建条目<br/>hotness = 1]
@@ -155,7 +155,7 @@ platform/mcp/opc-reflection-server/seed-corrections/
 |---|---|---|
 | 1 | 初版 | — |
 | 2 | 加入 `applies_when` / `deprecated_by` | reader 容忍缺失字段，writer 写最新版 |
-| ≥ 3 | 未来 | 提供 `opc_corrections_migrate` 工具，按 version 升级文件 |
+| ≥ 3 | 未来 | 提供 `opc_corrections({action:"migrate"})` 工具，按 version 升级文件 |
 
 **反例**：禁止删除已有字段。新字段必须 optional。
 
@@ -173,22 +173,22 @@ sequenceDiagram
 
     Note over RS,A: ① 规划反思
     H->>RS: opc_reflect_plan(P5, ctx)
-    RS->>MS: corrections_query<br/>(step=P5, keywords=[...])
+    RS->>MS: opc_corrections({action:"query", step:P5, keywords:[...]})
     MS-->>RS: top-K 条目 (hotness 排序)
     RS->>RS: 拼 enhanced_prompt<br/>(注入预算控制)
     RS-->>H: { method, enhanced_prompt, prior_corrections[] }
 
     Note over RS,A: ② 反思执行
-    H->>RS: opc_reflect_critique(artifact, enhanced_prompt)
+    H->>RS: opc_reflect_execute({method:"critique", artifact, enhanced_prompt})
     RS-->>H: critic_spec
     H->>A: Task(critic_spec)
-    A->>MS: corrections_query (R/O 验证)
+    A->>MS: opc_corrections({action:"query"}) (R/O 验证)
     A-->>H: objections + reasoning_trace
 
     Note over RS,A: ③ 命中反馈（提升 hotness）
-    H->>RS: opc_reflect_critique_complete(objections)
+    H->>RS: opc_reflect_complete({method:"critique", objections})
     RS->>MS: 标记被采纳的 prior_corrections<br/>hotness += 1
-    RS-->>H: flow_next
+    RS-->>H: { next_step_hint, pending_reflection }
 ```
 
 ---
@@ -198,13 +198,13 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     L1([flow-state.json<br/>user_interventions[]])
-    L1 -->|pipeline_complete<br/>opc_reflect_record_interventions| Distill[distiller sub-agent]
+    L1 -->|pipeline_complete<br/>opc_reflect_admin action:record_interventions| Distill[distiller sub-agent]
     Distill --> Sim{相似条目?}
     Sim -->|有| Merge[L2 合并 + hotness++]
     Sim -->|无| New[L2 新建]
     Merge --> L2([opc-memory/corrections/])
     New --> L2
-    L2 -->|用户手动晋升<br/>opc_corrections_promote| L3([~/.opc/global-corrections.jsonl])
+    L2 -->|用户手动晋升<br/>opc_corrections action:promote| L3([~/.opc/global-corrections.jsonl])
     L3 -->|新项目冷启动| Seed[seed 注入新 workspace]
 ```
 

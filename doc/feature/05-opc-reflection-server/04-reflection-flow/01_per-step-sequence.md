@@ -174,7 +174,7 @@ Claude → opc_phase_complete({phase:"05-implement"})
 Claude → opc_reflect_execute({step:"phase_advance", method:"M4-critique", inline:true,
                               artifact:{advance_evidence}})
   → reflection-server:
-    1. 派 critic agent (read-only + opc_corrections_query 查"回退决策"类教训)
+    1. 派 critic agent (read-only + opc_corrections({action:"query"}) 查"回退决策"类教训)
     2. critic 读 state.json.snapshots[] + git log user-auth/session.md
     3. 发现：05-implement 中某 node 误调 opc_knowledge_write 时 base_version 用了 v1 → auto_merged 把 v3 内容合并丢了一条
     4. kept_objection: "session unit 存在静默回滚，推进 06-testing 会基于错误状态"

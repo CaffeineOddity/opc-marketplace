@@ -19,7 +19,7 @@ sequenceDiagram
     participant IDX as .opc-knowledge.idx
 
     Note over A,IDX: ① 加载已有知识
-    A->>KS: opc_knowledge_get_batch<br/>([{unit, section, sub, min_version}])
+    A->>KS: opc_knowledge_read<br/>({mode:"batch", entries:[{unit, section, sub, min_version}]})
     KS->>FS: 读 .md + frontmatter
     KS->>KS: 校验 version ≥ min_version
     alt 版本不满足
@@ -29,7 +29,7 @@ sequenceDiagram
     end
 
     Note over A,IDX: ② 智能复用判定
-    A->>KS: opc_knowledge_get(unit, section, sub)
+    A->>KS: opc_knowledge_read({mode:"single", unit, section, sub})
     KS->>FS: stat 检查文件
     alt 文件存在
         KS-->>A: content + version=v
@@ -47,13 +47,13 @@ sequenceDiagram
 
     Note over A,IDX: ④ 索引降级 / 重建
     opt 索引损坏
-        A->>KS: opc_knowledge_search(query)
+        A->>KS: opc_knowledge_read({mode:"search", query})
         KS->>IDX: 读索引
         IDX-->>KS: 失败/缺失
         KS->>FS: 降级遍历 .md
         KS-->>A: 搜索结果
 
-        A->>KS: opc_knowledge_reindex()
+        A->>KS: opc_knowledge_admin({action:"reindex"})
         KS->>FS: 遍历全部 .md
         KS->>IDX: 全量重建
         KS-->>A: { indexed, duration_ms }
@@ -68,7 +68,7 @@ Agent 对每个 `output.knowledge` 路径的写入策略：
 
 ```mermaid
 flowchart TD
-    Start([Agent 准备写 output.knowledge]) --> Get[opc_knowledge_get<br/>unit/section/sub]
+    Start([Agent 准备写 output.knowledge]) --> Get[opc_knowledge_read<br/>mode:single<br/>unit/section/sub]
     Get --> Exist{文件存在?}
 
     Exist -->|否| New[准备新内容]
@@ -107,7 +107,7 @@ flowchart TD
 ## 核心设计原则
 
 - **文件系统单一真相源**：version 存 .md frontmatter，杜绝 index.json 与文件不一致的 crash 风险
-- **索引零数据风险**：`.opc-knowledge.idx` 是派生数据，可随时 `opc_knowledge_reindex` 全量重建
+- **索引零数据风险**：`.opc-knowledge.idx` 是派生数据，可随时 `opc_knowledge_admin({action:"reindex"})` 全量重建
 - **min_version 强制校验**：`opc_node_start` 阶段拦截，保证 node 输入的版本契约
 - **跨 unit 依赖通过 _refs 显式声明**：拆分管线时由 state-server 读 _refs 推导依赖
 
@@ -115,5 +115,5 @@ flowchart TD
 
 ## 相关文档
 
-- [知识 API](../02-knowledge-api/00_overview.md) — 8 个 MCP 工具完整规范
+- [知识 API](../02-knowledge-api/00_overview.md) — 4 个 MCP 工具完整规范（open / read / write / admin）
 - [节点](../../02-opc-state-server/04-node/00_overview.md) — 节点定义中的 knowledge input/output 声明

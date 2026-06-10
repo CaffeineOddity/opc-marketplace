@@ -1,37 +1,37 @@
 # 02 server 设计
 
-> opc-reflection-server 的工程实现：13 个 MCP 工具、Evidence Schema、Deterministic Validator、sub-agent 权限白名单、meta-validator、可观测性、可解释性。**零 LLM 依赖**，所有 sub-agent 由 Claude Host 派发。
+> opc-reflection-server 的工程实现：**4 个 MCP 工具**（`plan` / `execute({method})` / `complete({method})` / `admin({action})`）+ `opc_corrections({action})`、Evidence Schema、Deterministic Validator、sub-agent 权限白名单、meta-validator、可观测性、可解释性。**零 LLM 依赖**，所有 sub-agent 由 Claude Host 派发。
 >
 > ⚠️ **驱动权契约**：reflection-server **所有工具禁止返回 `flow_next`**。`flow_next` 字段的发起权 100% 归 state-server。reflection-server 通过 `next_step_hint`（使用说明）+ `pending_reflection`（登记契约，含已写盘 artifact 路径）两种方式与 state-server 协作。完整命名约定 / 不变量 / 工具清单 / 契约见 [04-reflection-flow/06_call-sequence-contract.md](../04-reflection-flow/06_call-sequence-contract.md)。
 
 ---
 
-## 一、13 个 MCP 工具总览
+## 一、4 个 MCP 工具总览（含 corrections 子模块 1 个）
 
-按职责分 5 组：
+按 discriminator 分支汇总：
 
-| 组 | 工具 | 说明 |
-|---|---|---|
-| 规划 | `opc_reflect_plan` | 输入 step + context，返回 method 选择 + 历史纠正 + max_rounds |
-| 方法 | `opc_reflect_cove` | Chain-of-Verification：拆断言 → 验证问题 → 重写 |
-| 方法 | `opc_reflect_critique` | 派 critic sub-agent，列 objection |
-| 方法 | `opc_reflect_debate` | 派 2+ debater sub-agent，对立立场辩论 |
-| 方法 | `opc_reflect_tot` | Tree-of-Thoughts：多分支搜索 + 评估剪枝 |
-| 完成 | `opc_reflect_cove_complete` | 收 CoVe 结果，跑 meta-validator |
-| 完成 | `opc_reflect_critique_complete` | 收 objection，meta-validator + 路由 |
-| 完成 | `opc_reflect_debate_complete` | 收辩论结论 + dissent |
-| 完成 | `opc_reflect_tot_complete` | 收最佳路径 + 剪枝理由 |
-| 归档 | `opc_reflect_record_interventions` | pipeline 结束，派 distiller 提炼用户介入 |
-| 元 | `opc_reflect_on_demand` | 用户主动触发反思 |
-| 元 | `opc_reflect_explain` | 返回某次反思的 reasoning_trace |
-| 元 | `opc_reflect_query_stats` | 查方法健康度 + 反思开销 |
-| 元 | `opc_reflect_unlearn_method` | 临时禁用某反思方法 |
-| 纠正 | `opc_corrections_query` | 按 step / keywords 查纠正库 |
-| 纠正 | `opc_corrections_record` | 写入新纠正（distiller / 用户 / 反思器） |
-| 纠正 | `opc_corrections_unlearn` | 删除过期/错误纠正 |
-| 纠正 | `opc_corrections_reindex` | 全文索引重建 |
+| 工具 | discriminator | 分支 | 说明 |
+|---|---|---|---|
+| `opc_reflect_plan` | — | — | 输入 step + context，返回 method 选择 + 历史纠正 + max_rounds |
+| `opc_reflect_execute` | `method` | `cove` | Chain-of-Verification：拆断言 → 验证问题 → 重写 |
+|  |  | `critique` | 派 critic sub-agent，列 objection |
+|  |  | `debate` | 派 2+ debater sub-agent，对立立场辩论 |
+|  |  | `tot` | Tree-of-Thoughts：多分支搜索 + 评估剪枝 |
+| `opc_reflect_complete` | `method` | `cove` | 收 CoVe 结果，跑 meta-validator |
+|  |  | `critique` | 收 objection，meta-validator + 路由 |
+|  |  | `debate` | 收辩论结论 + dissent |
+|  |  | `tot` | 收最佳路径 + 剪枝理由 |
+| `opc_reflect_admin` | `action` | `record_interventions` | pipeline 结束，派 distiller 提炼用户介入 |
+|  |  | `on_demand` | 用户主动触发反思 |
+|  |  | `explain` | 返回某次反思的 reasoning_trace |
+|  |  | `query_stats` | 查方法健康度 + 反思开销 |
+|  |  | `unlearn_method` | 临时禁用某反思方法 |
+| `opc_corrections` | `action` | `query` | 按 step / keywords 查纠正库 |
+|  |  | `record` | 写入新纠正（distiller / 用户 / 反思器） |
+|  |  | `unlearn` | 删除过期/错误纠正 |
+|  |  | `reindex` | 全文索引重建 |
 
-（实际共 17 个，但「13 个工具」是按 reflection 主链路统计，corrections CRUD 算独立子模块；命名见各组完整列表。）
+> 历史名 → 新调用对照：`opc_reflect_cove/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_record_interventions/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections_query/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../../01-overview/07-tool-consolidation.md](../../01-overview/07-tool-consolidation.md)。
 
 ---
 
@@ -70,21 +70,21 @@ type ReflectionResponse = {
 | 工具 | 是否发 pending | 理由 |
 |---|---|---|
 | `opc_reflect_plan` | ❌ 否 | 仅返回方法 + spec，无 artifact 落盘 |
-| `opc_reflect_cove_complete` | ✅ 是 | 反思 artifact 必须登记 |
-| `opc_reflect_critique_complete` | ✅ 是 | 同上 |
-| `opc_reflect_debate_complete` | ✅ 是 | 同上 |
-| `opc_reflect_tot_complete` | ✅ 是 | 同上 |
-| `opc_reflect_record_interventions` | ❌ 否 | pipeline 已 complete，归档失败无伤大雅 |
-| `opc_reflect_on_demand` | ❌ 否 | 用户主动触发，无强依赖 |
-| `opc_reflect_explain` | ❌ 否 | 只读 |
-| `opc_reflect_query_stats` | ❌ 否 | 只读 |
-| `opc_reflect_unlearn_method` | ❌ 否 | CRUD |
-| `opc_corrections_*` | ❌ 否 | CRUD |
+| `opc_reflect_complete({method:"cove"})` | ✅ 是 | 反思 artifact 必须登记 |
+| `opc_reflect_complete({method:"critique"})` | ✅ 是 | 同上 |
+| `opc_reflect_complete({method:"debate"})` | ✅ 是 | 同上 |
+| `opc_reflect_complete({method:"tot"})` | ✅ 是 | 同上 |
+| `opc_reflect_admin({action:"record_interventions"})` | ❌ 否 | pipeline 已 complete，归档失败无伤大雅 |
+| `opc_reflect_admin({action:"on_demand"})` | ❌ 否 | 用户主动触发，无强依赖 |
+| `opc_reflect_admin({action:"explain"})` | ❌ 否 | 只读 |
+| `opc_reflect_admin({action:"query_stats"})` | ❌ 否 | 只读 |
+| `opc_reflect_admin({action:"unlearn_method"})` | ❌ 否 | CRUD |
+| `opc_corrections({action:"*"})` | ❌ 否 | CRUD |
 
 ### `next_step_hint` 示例
 
 ```typescript
-// opc_reflect_critique_complete 返回
+// opc_reflect_complete({method:"critique"}) 返回
 {
   verdict: "objections_remain",
   kept_objections: [{ id: "obj-1", text: "...", evidence_ref: "..." }],
@@ -216,11 +216,11 @@ Meta-validator 也是纯 TS，配每个 sub-agent 的健康度统计。
 
 | Sub-Agent | tools | 禁止 |
 |---|---|---|
-| critic | `opc_knowledge_get`, `opc_knowledge_search`, `opc_corrections_query`, `Read`, `Grep` | 任何 write / exec / network |
+| critic | `opc_knowledge_read({mode:"single"})`, `opc_knowledge_read({mode:"search"})`, `opc_corrections({action:"query"})`, `Read`, `Grep` | 任何 write / exec / network |
 | debater | 同 critic | 同上 |
 | ToT explorer | 同 critic | 同上 |
-| distiller (pipeline 结束) | 上述 + `opc_corrections_record` | 仍禁 exec / network |
-| meta-reflection synthesizer | `opc_reflect_query_stats`, `opc_corrections_query` (R/O) | 同上 |
+| distiller (pipeline 结束) | 上述 + `opc_corrections({action:"record"})` | 仍禁 exec / network |
+| meta-reflection synthesizer | `opc_reflect_admin({action:"query_stats"})`, `opc_corrections({action:"query"})` (R/O) | 同上 |
 
 **双保险**（C4 § 2.5 OPC server 端）：即使 kit 配错让某个 critic 的 `tools` 误开了写工具，OPC server 内部仍按 `dispatch_context.role` 拒绝写入。
 
@@ -236,7 +236,7 @@ state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent 
 |---|---|
 | sub-agent 超时 | 丢弃，降级到 secondary 方法；记入健康度 |
 | meta-validator reject | 整次反思作废，secondary 接管 |
-| 5 次连续 reject 同方法 | 临时 unlearn 该方法 24h |
+| 5 次连续 reject 同方法 | 临时 unlearn 该方法 24h（`opc_reflect_admin({action:"unlearn_method"})`） |
 | rounds 超限 | `verdict: rounds_exceeded` → `flow_next: ask_user`（不再"立即终止 secondary"） |
 | 反思 server 不可达 | state-server 降级到 validator-only + 强制 ask_user |
 | corrections 库读写错误 | 反思继续（不依赖 corrections），仅打 warning |
@@ -247,12 +247,12 @@ state-server 在 `opc_node_start` 派 task agent 时与此独立，反思 agent 
 
 ## 六·补 reflection-registry-guard 工程锁（与 state-server 的契约执行点）
 
-`pending_reflection` 由本 server 的 `opc_reflect_*_complete` 工具发出（同时写盘 artifact），由 state-server 的 `opc_flow_reflect` 工具登记。中间任何 state-server 写类工具被 registry-guard 拦截。
+`pending_reflection` 由本 server 的 `opc_reflect_complete({method})` 工具发出（同时写盘 artifact），由 state-server 的 `opc_flow_reflect` 工具登记。中间任何 state-server 写类工具被 registry-guard 拦截。
 
 ### `pending_reflection` 生命周期
 
 ```
-[创建] opc_reflect_*_complete 调用结束:
+[创建] opc_reflect_complete({method}) 调用结束:
        1. 写盘 artifact = opc-logs/reflection/<session_id>/<reflection_id>.json
        2. 校验 pending_reflections.length == 0（hard invariant）
           否则 reject (error: previous_pending_unregistered)
@@ -332,18 +332,18 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 }
 ```
 
-`opc_reflect_query_stats` 聚合维度：
+`opc_reflect_admin({action:"query_stats"})` 聚合维度：
 - 方法 × step 的 FP 率（meta-validator reject 比例）
 - 方法 × step 的「objection → evidence_diff」转化率（是否真的发现了问题）
 - 反思总开销（tokens / 时长）占 pipeline 比例
 - corrections 命中率（注入的 prior corrections 是否被采纳）
-- **过期反思告警**（`expiry_metrics`）：`expired_pending_count_24h` / `expired_resumed_count_24h` / `expired_discarded_count_24h` / `expired_skipped_count_24h` / `artifact_purged_7d_count`。完整 schema + 告警阈值见 [04-reflection-flow/06_call-sequence-contract.md 六·补 告警维度](../04-reflection-flow/06_call-sequence-contract.md#告警维度opc_reflect_query_stats-新增字段)
+- **过期反思告警**（`expiry_metrics`）：`expired_pending_count_24h` / `expired_resumed_count_24h` / `expired_discarded_count_24h` / `expired_skipped_count_24h` / `artifact_purged_7d_count`。完整 schema + 告警阈值见 [04-reflection-flow/06_call-sequence-contract.md 六·补 告警维度](../04-reflection-flow/06_call-sequence-contract.md#告警维度opc_reflect_adminactionquery_stats-新增字段)
 
 ---
 
 ## 八、可解释性
 
-`opc_reflect_explain({step, pipeline_id})` 返回：
+`opc_reflect_admin({action:"explain", step, pipeline_id})` 返回：
 
 ```json
 {
@@ -387,14 +387,14 @@ sequenceDiagram
     RS-->>C: { method: M4, agent_spec, next_step_hint }
 
     Note over C,MS: ③ Claude 按 next_step_hint 派 sub-agent
-    C->>RS: opc_reflect_critique(artifact, enhanced_prompt)
+    C->>RS: opc_reflect_execute({method:"critique", artifact, enhanced_prompt})
     RS-->>C: critic_spec(allowed_tools=read-only)
     C->>A: Task(critic_spec)
-    A->>MS: corrections_query (R/O)
+    A->>MS: opc_corrections({action:"query"}) (R/O)
     A-->>C: objections + reasoning_trace
 
     Note over C,MS: ④ reflection-server 判定结果 + 发 ack token（无 flow_next）
-    C->>RS: opc_reflect_critique_complete(objections)
+    C->>RS: opc_reflect_complete({method:"critique", objections})
     RS->>RS: meta-validator
     alt 严重 objections kept
         RS-->>C: { verdict:objections_remain, next_step_hint, pending_reflection }
@@ -420,7 +420,7 @@ sequenceDiagram
 
 | 子文档 | 内容 |
 |------|------|
-| 01_tool-specs.md | 13/17 个工具的完整参数 / 返回 schema |
+| 01_tool-specs.md | 4 个工具 + corrections facade 的完整参数 / 返回 schema |
 | 02_evidence-schema.md | P1–P8 evidence artifact 完整 schema + 例子 |
 | 03_validators.md | V1–V5 + 三兜底验证器的纯 TS 实现规范 |
 | 04_subagent-permissions.md | allowed_tools 白名单 + 反例 |

@@ -146,7 +146,7 @@ reflection-server 启动时加载该文件；`opc_reflect_plan` 在选 method �
 
 ## 四、Meta-Reflection 报告（pipeline 级总结）
 
-`opc_pipeline_complete` 触发 distiller 之外，同时跑一次 meta-reflection（[00_overview 四](00_overview.md#四meta-reflectionpipeline-级总结)），输出 `opc-logs/meta-reflection/<pipeline-id>.md`，结构：
+`opc_pipeline_lifecycle({action:"complete"})` 触发 distiller 之外，同时跑一次 meta-reflection（[00_overview 四](00_overview.md#四meta-reflectionpipeline-级总结)），输出 `opc-logs/meta-reflection/<pipeline-id>.md`，结构：
 
 ```markdown
 # Meta-Reflection: <pipeline-id>

@@ -16,9 +16,9 @@
 ## 二、触发与调用入口
 
 ```
-pipeline_complete → opc_reflect_record_interventions(pipeline_id)
+pipeline_complete → opc_reflect_admin({action:"record_interventions", pipeline_id})
   → reflection-server 内部 spawn distiller sub-agent (Task 工具)
-  → distiller 调 opc_corrections_query / opc_corrections_upsert
+  → distiller 调 opc_corrections({action:"query"}) / opc_corrections({action:"record"})
   → 返回 { new_count, merged_count, skipped_count, manifest_path }
   → reflection-server 写入 pipeline manifest 末尾「教训提炼摘要」段
 ```
@@ -29,12 +29,12 @@ pipeline_complete → opc_reflect_record_interventions(pipeline_id)
 
 | 工具 | 用途 |
 |---|---|
-| `opc_corrections_query` | 读 L2 现有条目（用于相似度匹配） |
-| `opc_corrections_upsert` | 写 L2（新建 / 合并） |
-| `opc_knowledge_get`（只读） | 读 pipeline 涉及的 unit/section 上下文 |
+| `opc_corrections({action:"query"})` | 读 L2 现有条目（用于相似度匹配） |
+| `opc_corrections({action:"record"})` | 写 L2（新建 / 合并） |
+| `opc_knowledge_read({mode:"single"\|"batch"})`（只读） | 读 pipeline 涉及的 unit/section 上下文 |
 | `opc_flow_query` | 读 L1（flow-state.json 的 user_interventions + reflection_log） |
 
-**不得包含**：任何 `_write` / `_delete` / `opc_pipeline_*` / `opc_flow_*` 写工具——distiller 只能往 corrections 里写，且通过 `opc_corrections_upsert` 走 server 校验。
+**不得包含**：任何 `_write` / `_delete` / `opc_pipeline_*` / `opc_flow_*` 写工具——distiller 只能往 corrections 里写，且通过 `opc_corrections({action:"record"})` 走 server 校验。
 
 ---
 
@@ -72,7 +72,7 @@ distiller spawn 时 reflection-server 通过 `dispatch_context` 注入：
 
 ## 四、输出 Schema
 
-distiller 在结束前调一次 `opc_corrections_upsert(batch=[...])`，batch 元素 schema：
+distiller 在结束前调一次 `opc_corrections({action:"record", batch:[...]})`，batch 元素 schema：
 
 ```json
 {
@@ -145,13 +145,13 @@ Step 1: 加载与归类
 Step 2: 显著性过滤（不要把噪音变成 corrections）
 对每条候选，命中任一即【保留】，否则【skip】并在 skip_reasons 写明：
 - user_text 长度 ≥ 8 字 / 8 词，且含具体名词或动作（非"嗯"/"好"/"继续"）
-- intervention 触发了 opc_flow_revise / opc_pipeline_replan / phase_reset
+- intervention 触发了 opc_flow_correct({action:"revise"}) / opc_pipeline_lifecycle({action:"replan"}) / opc_flow_correct({action:"phase_reset"})
 - 来自 rounds_exceeded（反思 N 轮仍未消解，必然显著）
 - 与已存在 L2 条目相似度 ≥ 阈值（合并候选，进 Step 3）
 
 Step 3: 相似度匹配（合并优先于新建）
 对每条保留的候选：
-3.1 调 opc_corrections_query({step: <候选 step>, keywords: <从 user_text 抽 3-5 个关键词>})
+3.1 调 opc_corrections({action:"query", step: <候选 step>, keywords: <从 user_text 抽 3-5 个关键词>})
 3.2 对返回的每个 L2 条目计算相似度：
     sim = 0.5 * keyword_overlap + 0.3 * lesson_text_jaccard + 0.2 * applies_when_overlap
 3.3 sim ≥ 0.72 → 合并：
@@ -171,7 +171,7 @@ Step 4: 预算控制
 4.3 被截断的写入 skipped_count
 
 Step 5: 提交
-5.1 调 opc_corrections_upsert(batch=[...])，单次提交，server 内部按条幂等处理
+5.1 调 opc_corrections({action:"record", batch:[...]})，单次提交，server 内部按条幂等处理
 5.2 拼 manifest_block markdown，结构：
     ### 教训提炼摘要 (distiller v1)
     - 新增 corrections: N 条
@@ -192,7 +192,7 @@ Step 5: 提交
 
 【降级策略】
 - 若 L1 为空（无 intervention、无 rounds_exceeded）：直接返回 stats 全 0、manifest_block = "本次 pipeline 无显著教训。"
-- 若 opc_corrections_query 多次失败：跳过相似度匹配，全走 "create"，并在返回中标 degraded: "no_query_available"
+- 若 opc_corrections({action:"query"}) 多次失败：跳过相似度匹配，全走 "create"，并在返回中标 degraded: "no_query_available"
 - 若运行时长接近预算上限 90%：提前进 Step 5，剩余候选写入 skipped
 ```
 
@@ -237,7 +237,7 @@ distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期
 |---|---|
 | Task spawn 失败（agent type not found） | reflection-server 重试 1 次；仍失败 → 写 `opc-logs/distiller/<pipeline-id>-spawn-error.json`，pipeline manifest 追加 `distiller_status: "spawn_failed"`，不阻塞 |
 | distiller 运行超 budget.max_runtime_sec | reflection-server 通过 Task 超时 kill；distiller 已提交的 partial batch 保留；manifest 标 `distiller_status: "timeout"` 并附 partial stats |
-| `opc_corrections_upsert` 失败（schema 校验） | distiller 收到 reject → 在自己返回里标 `errors: [...]`，已成功条目保留；reflection-server 不重跑 |
+| `opc_corrections({action:"record"})` 失败（schema 校验） | distiller 收到 reject → 在自己返回里标 `errors: [...]`，已成功条目保留；reflection-server 不重跑 |
 | distiller 返回 JSON 不合规 | reflection-server 标 `distiller_status: "malformed_output"`，把原始返回存证 `opc-logs/distiller/<pipeline-id>-raw.txt` |
 
 **可观测指标**（写入 `opc-logs/distiller/metrics.jsonl`，每次 distill 一行）：
@@ -267,8 +267,8 @@ distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期
 |---|---|---|
 | L1 | `.opc/sessions/<id>/flow-state.json#user_interventions[]` | **只读** |
 | L1 | `opc-logs/reflection/*.json`（rounds_exceeded artifact） | **只读** |
-| L2 | `.opc/corrections/<step>/<corr-id>.md` | **唯一写入者**（通过 `opc_corrections_upsert`） |
-| L3 | `~/.opc/global-corrections.jsonl` | **不写**（仅用户通过 `opc_corrections_promote` 显式提升） |
+| L2 | `.opc/corrections/<step>/<corr-id>.md` | **唯一写入者**（通过 `opc_corrections({action:"record"})`） |
+| L3 | `~/.opc/global-corrections.jsonl` | **不写**（仅用户通过 `opc_corrections({action:"promote"})` 显式提升） |
 
 ---
 

@@ -28,7 +28,7 @@ opc-reflection-server 把 5 种学术上验证过的反思方法封装成标准�
 ## 二、主题地图
 
 - [01 反思方法学](01-method-theory/00_overview.md) — 7 种学术方法 + 选择决策表 + 4 类失败模式 + primary/secondary 组合规则
-- [02 server 设计](02-server-design/00_overview.md) — 13 个工具 + evidence schema + validator + sub-agent 权限 + 可靠性 + 可观测性
+- [02 server 设计](02-server-design/00_overview.md) — 4 个工具（`plan` / `execute({method})` / `complete({method})` / `admin({action})`） + evidence schema + validator + sub-agent 权限 + 可靠性 + 可观测性
 - [03 corrections 存储](03-corrections-store/00_overview.md) — 三层存储 + 三层模型目录 + 4 个膨胀控制 + seed-corrections 冷启动 + schema 演化
 - [04 反思流程](04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户介入 + 用户自治 + meta-reflection + phase_reset 交互
 - [04·补 三 server 接缝矩阵](04-reflection-flow/07_three-server-seam-matrix.md) — **P1–P8 × 触发器/evidence/方法/ack/持久化/knowledge/降级 整合表**（取代原本散落在 4 篇文档的引用）
@@ -85,14 +85,14 @@ sequenceDiagram
     RS-->>C: { recommended_methods, prior_corrections, enhanced_prompts,<br/>theory_docs, max_rounds, next_step_hint }
 
     Note over C,U: ③ 执行反思方法（按 primary→secondary 顺序）
-    C->>RS: opc_reflect_critique(artifact, enhanced_prompt)
+    C->>RS: opc_reflect_execute({method:"critique", artifact, enhanced_prompt})
     RS-->>C: critic_spec (含 allowed_tools)
     C->>A: Task(critic_spec)
-    A->>MS: opc_corrections_query (只读)
+    A->>MS: opc_corrections({action:"query"}) (只读)
     A-->>C: { objections, reasoning_trace }
 
     Note over C,U: ④ reflection-server 发 ack token（无 flow_next）
-    C->>RS: opc_reflect_critique_complete(objections)
+    C->>RS: opc_reflect_complete({method:"critique", objections})
     RS->>RS: meta-validator (检查 objection 格式 + 映射)
     alt 严重 objections
         RS-->>C: { verdict:objections_remain, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
@@ -114,13 +114,13 @@ sequenceDiagram
     Note over C,U: ⑥ 用户介入（如触发 ask_user）
     C->>U: ask_user
     U-->>C: 纠正意见
-    C->>SS: opc_flow_revise / opc_pipeline_replan
+    C->>SS: opc_flow_correct({action:"revise"}) / opc_pipeline_lifecycle({action:"replan"})
     SS->>SS: 写 user_interventions[] 到 flow-state.json (L1)
 
     Note over C,U: ⑦ Pipeline 完成时归档
-    C->>SS: opc_pipeline_complete
-    SS-->>C: flow_next: opc_reflect_record_interventions
-    C->>RS: opc_reflect_record_interventions(pipeline_id)
+    C->>SS: opc_pipeline_lifecycle({action:"complete"})
+    SS-->>C: flow_next: opc_reflect_admin({action:"record_interventions"})
+    C->>RS: opc_reflect_admin({action:"record_interventions", pipeline_id})
     RS->>A: 派 distiller sub-agent
     A->>MS: 提炼 → 合并/新建 corrections entry
     A-->>RS: 完成
@@ -145,7 +145,7 @@ sequenceDiagram
 | 5 | 反思 sub-agent 权限白名单（只读） | 02-server-design agent-权限 |
 | 6 | 反思器自身失败处理（meta-validator + 健康度监控 + fallback） | 02-server-design 可靠性 |
 | 7 | 反思开销可观测（tokens / 延迟 / agent 数） | 02-server-design 可观测性 |
-| 8 | 反思可解释（reasoning_trace + opc_reflect_explain） | 02-server-design 可解释性 |
+| 8 | 反思可解释（reasoning_trace + `opc_reflect_admin({action:"explain"})`） | 02-server-design 可解释性 |
 | 9 | 用户纠正三层存储（L1 flow-state / L2 corrections / L3 global） | 03-corrections-store |
 | 10 | corrections 复用知识三层模型 + 4 个膨胀控制 | 03-corrections-store |
 | 11 | Seed corrections（冷启动） + schema 演化 | 03-corrections-store seed |
@@ -155,21 +155,23 @@ sequenceDiagram
 
 ## 七、与 opc-state-server 的接口契约
 
-state-server 调用 reflection-server 的所有入口（13 个工具汇总）：
+state-server 调用 reflection-server 的所有入口（4 个工具按 discriminator 分支汇总）：
 
 | 阶段 | state-server 触发 | reflection-server 响应 |
 |---|---|---|
 | evidence 通过 validator 后 | flow_next: opc_reflect_plan | 返回方法 + 历史纠正 + max_rounds |
-| 执行反思方法 | opc_reflect_cove / critique / debate | 返回 sub-agent spec |
-| 反思完成 | opc_reflect_*_complete | 返回路由 + meta-validator 结果 |
+| 执行反思方法 | opc_reflect_execute({method:"cove"\|"critique"\|"debate"\|"tot"}) | 返回 sub-agent spec |
+| 反思完成 | opc_reflect_complete({method:"<同上>"}) | 返回路由 + meta-validator 结果 |
 | 用户跳过 | opc_flow_skip_reflection | 记录 skip，可能触发降级建议 |
-| 用户主动反思 | opc_reflect_on_demand | 返回 on_demand_reflection_log |
-| pipeline 结束 | opc_reflect_record_interventions | 提炼归档 + 更新全局画像 |
-| 健康度查询 | opc_reflect_query_stats | 返回方法健康度 + 反思开销统计 |
-| 可解释性 | opc_reflect_explain | 返回 reasoning_trace |
-| 方法禁用 | opc_reflect_unlearn_method | 临时禁用某反思方法 |
-| 纠正管理 | opc_corrections_query / record / unlearn | corrections 库 CRUD |
-| 索引重建 | opc_corrections_reindex | 全文索引重建 |
+| 用户主动反思 | opc_reflect_admin({action:"on_demand"}) | 返回 on_demand_reflection_log |
+| pipeline 结束 | opc_reflect_admin({action:"record_interventions"}) | 提炼归档 + 更新全局画像 |
+| 健康度查询 | opc_reflect_admin({action:"query_stats"}) | 返回方法健康度 + 反思开销统计 |
+| 可解释性 | opc_reflect_admin({action:"explain"}) | 返回 reasoning_trace |
+| 方法禁用 | opc_reflect_admin({action:"unlearn_method"}) | 临时禁用某反思方法 |
+| 纠正管理 | opc_corrections({action:"query"\|"record"\|"unlearn"}) | corrections 库 CRUD |
+| 索引重建 | opc_corrections({action:"reindex"}) | 全文索引重建 |
+
+> 历史名 → 新调用对照：`opc_reflect_cove/critique/debate/tot` → `opc_reflect_execute({method:"<name>"})`；`opc_reflect_*_complete` → `opc_reflect_complete({method:"<name>"})`；`opc_reflect_record_interventions/on_demand/explain/query_stats/unlearn_method` → `opc_reflect_admin({action:"<name>"})`；`opc_corrections_query/record/unlearn/reindex` → `opc_corrections({action:"<name>"})`。详见 [../01-overview/07-tool-consolidation.md](../01-overview/07-tool-consolidation.md)。
 
 ---
 
