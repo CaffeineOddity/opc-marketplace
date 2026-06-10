@@ -1259,11 +1259,14 @@ describe("similarity engine", () => {
 
 describe("CorrectionsServer", () => {
   let root: string;
+  let globalRoot: string;
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "corr-"));
+    globalRoot = await mkdtemp(join(tmpdir(), "glb-"));
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
+    await rm(globalRoot, { recursive: true, force: true });
   });
 
   const newServer = (overrides?: { perSectionCap?: number }): CorrectionsServer =>
@@ -1275,6 +1278,7 @@ describe("CorrectionsServer", () => {
         return (): string => `uuid-${++n}`;
       })(),
       autoDecay: false,
+      globalCorrectionsRoot: globalRoot,
       ...(overrides?.perSectionCap !== undefined
         ? { perSectionCap: overrides.perSectionCap }
         : {}),
@@ -1770,6 +1774,59 @@ describe("CorrectionsServer", () => {
 
       const result = await srv.runDecayIfDue();
       expect(result).toBeNull(); // 12 hours < 7 days
+    });
+
+    it("promote copies L2 correction to L3 global-corrections.jsonl", async () => {
+      const srv = newServer();
+
+      // Create an L2 correction
+      const recordResp = await srv.crud({
+        action: "record",
+        batch: [
+          {
+            operation: "create",
+            correction: buildCorrection({
+              step: "node_selection",
+              unit: "ns",
+              section: "s-promote",
+              subsection: "ss1",
+              lesson: "avoid parallel writes to same file",
+              rationale: "causes data loss",
+              applies_when: { keywords: ["parallel", "write", "conflict"] },
+              source: "distiller",
+            }),
+          },
+        ],
+      });
+      const l2Id =
+        recordResp.action === "record" ? recordResp.written_ids[0] : "";
+      expect(l2Id).toBeTruthy();
+
+      // Promote to L3
+      const promoteResp = await srv.crud({
+        action: "promote",
+        correction_id: l2Id,
+        session_id: "sess-123",
+        source_project: "test-project",
+      });
+      expect(promoteResp.action).toBe("promote");
+      if (promoteResp.action === "promote") {
+        expect(promoteResp.l2_source_id).toBe(l2Id);
+        expect(promoteResp.promoted_id).toMatch(/^glb-/);
+      }
+
+      // Verify L3 file was written to the isolated global root
+      const { loadGlobalCorrections, globalCorrectionsCount } =
+        await import("./global-corrections-store.js");
+      const count = await globalCorrectionsCount(globalRoot);
+      expect(count).toBeGreaterThanOrEqual(1);
+
+      const globalEntries = await loadGlobalCorrections({ root: globalRoot });
+      const promoted = globalEntries.find((e) => e.l2_source_id === l2Id);
+      expect(promoted).toBeTruthy();
+      expect(promoted!.lesson).toBe("avoid parallel writes to same file");
+      expect(promoted!.keywords).toContain("parallel");
+      expect(promoted!.source_project).toBe("test-project");
     });
 
     it("reindex with scope:step only indexes matching corrections", async () => {

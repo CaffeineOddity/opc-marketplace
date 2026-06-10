@@ -119,6 +119,8 @@ export type {
   CorrectionsUpsertResponse,
   CorrectionsActionRequest,
   CorrectionsActionResponse,
+  PromoteRequest,
+  PromoteResponse,
   ReindexResponse,
   UnlearnResponse,
 } from "./corrections-server.js";
@@ -160,3 +162,11 @@ export { startReflectionServer } from "./mcp-server.js";
 export type { ReflectionMcpOptions } from "./mcp-server.js";
 
 export { loadSeedCorrections, seedCorrectionsCount } from "./seed-loader.js";
+
+export {
+  promoteToGlobal,
+  loadGlobalCorrections,
+  globalCorrectionsCount,
+  globalCorrectionsPath,
+} from "./global-corrections-store.js";
+export type { GlobalCorrection } from "./global-corrections-store.js";

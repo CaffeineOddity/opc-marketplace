@@ -19,6 +19,7 @@ import {
   type LinkedIntervention,
 } from "./corrections-store.js";
 import { loadSeedCorrections } from "./seed-loader.js";
+import { promoteToGlobal } from "./global-corrections-store.js";
 import { similarity, SIM_MERGE_THRESHOLD } from "./similarity.js";
 import type { StepId } from "./store.js";
 
@@ -29,6 +30,7 @@ export interface CorrectionsServerOptions {
   perSectionCap?: number;
   hotnessCap?: number;
   autoDecay?: boolean;
+  globalCorrectionsRoot?: string;
 }
 
 export class CorrectionsServerError extends Error {
@@ -75,11 +77,19 @@ export interface CorrectionsUpsertResponse {
 
 // ---- M17.f: unified `opc_corrections` facade (query/record/unlearn/reindex) ----
 
+export interface PromoteRequest {
+  action: "promote";
+  correction_id: string;
+  session_id: string;
+  source_project?: string;
+}
+
 export type CorrectionsActionRequest =
   | ({ action: "query" } & CorrectionsQueryRequest)
   | ({ action: "record" } & CorrectionsUpsertRequest)
   | { action: "unlearn"; correction_id: string; reason?: string }
-  | { action: "reindex"; scope?: "all" | { step: StepId } };
+  | { action: "reindex"; scope?: "all" | { step: StepId } }
+  | PromoteRequest;
 
 export interface UnlearnResponse {
   tombstoned_id: string;
@@ -92,11 +102,17 @@ export interface ReindexResponse {
   duration_ms: number;
 }
 
+export interface PromoteResponse {
+  promoted_id: string;
+  l2_source_id: string;
+}
+
 export type CorrectionsActionResponse =
   | ({ action: "query" } & CorrectionsQueryResponse)
   | ({ action: "record" } & CorrectionsUpsertResponse)
   | ({ action: "unlearn" } & UnlearnResponse)
-  | ({ action: "reindex" } & ReindexResponse);
+  | ({ action: "reindex" } & ReindexResponse)
+  | ({ action: "promote" } & PromoteResponse);
 
 const DEFAULT_PER_SECTION_CAP = 5;
 const DEFAULT_HOTNESS_CAP = 50;
@@ -118,6 +134,7 @@ export class CorrectionsServer {
   private readonly perSectionCap: number;
   private readonly hotnessCap: number;
   private readonly autoDecay: boolean;
+  private readonly globalCorrectionsRoot: string | undefined;
 
   constructor(opts: CorrectionsServerOptions) {
     this.root = opts.root;
@@ -126,6 +143,7 @@ export class CorrectionsServer {
     this.perSectionCap = opts.perSectionCap ?? DEFAULT_PER_SECTION_CAP;
     this.hotnessCap = opts.hotnessCap ?? DEFAULT_HOTNESS_CAP;
     this.autoDecay = opts.autoDecay ?? true;
+    this.globalCorrectionsRoot = opts.globalCorrectionsRoot;
   }
 
   async query(req: CorrectionsQueryRequest): Promise<CorrectionsQueryResponse> {
@@ -328,6 +346,24 @@ export class CorrectionsServer {
         void action;
         const resp = await this.reindex(params);
         return { action: "reindex", ...resp };
+      }
+      case "promote": {
+        const { correction_id, session_id, source_project } = req;
+        const { correction } = await loadCorrectionById(
+          this.root,
+          correction_id,
+        );
+        const entry = await promoteToGlobal(correction, {
+          session_id,
+          source_project,
+          root: this.globalCorrectionsRoot,
+          now: this.now,
+        });
+        return {
+          action: "promote",
+          promoted_id: entry.id,
+          l2_source_id: correction_id,
+        };
       }
       default: {
         const _exhaustive: never = req;
