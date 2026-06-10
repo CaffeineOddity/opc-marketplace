@@ -22,6 +22,7 @@ import {
   validateDag,
   validateExecutionOrder,
 } from "./topology.js";
+import { checkKitHealth, notLoadedAgents } from "./kit-health.js";
 
 export interface PipelineServerOptions {
   root: string;
@@ -42,6 +43,16 @@ export interface PipelineCreateRequest {
   execution_order?: ExecutionGroup[];
   tags?: string[];
   scenario?: string;
+  /**
+   * Spec §06-host-contract §2.7.5 (A4) hard gate: agents that the pipeline
+   * plan will Task-dispatch. When provided, opc_pipeline_create intersects
+   * with kits that are installed-but-not-loaded; if any required agent
+   * belongs to such a kit, the call is rejected with
+   * KIT_NOT_LOADED_PRE_FLIGHT instead of failing later inside Task spawn.
+   * Optional: callers that omit it get warning-only treatment via
+   * opc_flow_query.
+   */
+  required_agents?: string[];
 }
 
 export interface SubPipelineCreateSpec {
@@ -123,6 +134,30 @@ export class PipelineConflictError extends Error {
   }
 }
 
+/**
+ * Spec §06-host-contract §2.7.5 (A4) hard gate: opc_pipeline_create
+ * rejects when any required_agent belongs to a kit installed after
+ * session start (=> not loaded in the running Claude Code process).
+ * Surfaces the failure BEFORE Claude tries to Task-spawn the agent
+ * and hits the opaque "Agent type not found" error.
+ */
+export class KitNotLoadedPreFlightError extends Error {
+  readonly code = "KIT_NOT_LOADED_PRE_FLIGHT" as const;
+  readonly required_agents: string[];
+  readonly affected_kits: string[];
+  readonly remediation: string;
+  constructor(required_agents: string[], affected_kits: string[]) {
+    super(
+      `KIT_NOT_LOADED_PRE_FLIGHT: required agents [${required_agents.join(", ")}] belong to kit(s) [${affected_kits.join(", ")}] installed after the current session started. Exit current \`claude\` session and re-run \`claude\` in this directory.`,
+    );
+    this.name = "KitNotLoadedPreFlightError";
+    this.required_agents = required_agents;
+    this.affected_kits = affected_kits;
+    this.remediation =
+      "Exit current `claude` session and re-run `claude` in this directory.";
+  }
+}
+
 export class PipelineServer {
   readonly root: string;
   private readonly now: () => Date;
@@ -151,6 +186,25 @@ export class PipelineServer {
       throw new PipelineConflictError(
         `pending-question-guard: opc_pipeline_create blocked; resolve question_id=${flow.pending_user_question.question_id} via opc_flow_user_reply`,
       );
+    }
+    // Spec §06-host-contract §2.7.5 (A4) hard gate: reject when required
+    // agents come from kits installed after the current session started.
+    // Skipped silently when the caller does not declare required_agents.
+    if (req.required_agents && req.required_agents.length > 0) {
+      const health = await checkKitHealth({
+        root: this.root,
+        sessionStartedAt: flow.owner.started_at,
+      });
+      const notLoaded = notLoadedAgents(health);
+      if (notLoaded.size > 0) {
+        const blocked = req.required_agents.filter((a) => notLoaded.has(a));
+        if (blocked.length > 0) {
+          const kits = health.warnings
+            .filter((w) => w.affected_agents.some((a) => blocked.includes(a)))
+            .map((w) => w.kit);
+          throw new KitNotLoadedPreFlightError(blocked, Array.from(new Set(kits)));
+        }
+      }
     }
     const pipeline_id = `pl-${this.uuid()}`;
     const now = this.now();

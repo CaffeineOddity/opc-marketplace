@@ -8,6 +8,8 @@ import {
   FlowServer,
   PipelineServer,
   PipelineConflictError,
+  KitNotLoadedPreFlightError,
+  INSTALLED_KITS_FILENAME,
   computeNextSubPipeline,
   generateExecutionOrder,
   loadPipelinePlan,
@@ -16,6 +18,7 @@ import {
   validateDag,
   validateExecutionOrder,
 } from "./index.js";
+import { writeFile } from "node:fs/promises";
 
 let root: string;
 let counter = 0;
@@ -419,5 +422,126 @@ describe("PipelineServer.replan add_sub_pipeline", () => {
 
   it("PipelineConflictError class is exported", () => {
     expect(new PipelineConflictError("x").name).toBe("PipelineConflictError");
+  });
+});
+
+describe("PipelineServer.create A4 kit-loaded pre-flight gate", () => {
+  const baseReq = (session_id: string) => ({
+    session_id,
+    description: "feature x",
+    brief_content: "brief",
+    complexity: "medium" as const,
+    knowledge_unit: ["x"],
+    suggested_phases: ["01-discovery"],
+    phase_selection_rationale: "minimal",
+  });
+
+  async function writeKits(payload: unknown): Promise<void> {
+    await writeFile(join(root, INSTALLED_KITS_FILENAME), JSON.stringify(payload));
+  }
+
+  it("does NOT reject when required_agents is omitted (back-compat)", async () => {
+    const session_id = await freshSession();
+    await writeKits({
+      kits: [
+        { name: "fresh", agents: ["x"], installed_at: "2026-06-10T05:00:00Z" },
+      ],
+    });
+    const r = await pipe().create(baseReq(session_id));
+    expect(r.pipeline_id).toMatch(/^pl-/);
+  });
+
+  it("does NOT reject when required_agents do NOT intersect not-loaded kits", async () => {
+    const session_id = await freshSession();
+    await writeKits({
+      kits: [
+        { name: "fresh", agents: ["x"], installed_at: "2026-06-10T05:00:00Z" },
+      ],
+    });
+    const r = await pipe().create({
+      ...baseReq(session_id),
+      required_agents: ["other-agent"],
+    });
+    expect(r.pipeline_id).toMatch(/^pl-/);
+  });
+
+  it("does NOT reject when kit was installed BEFORE session start", async () => {
+    const session_id = await freshSession();
+    await writeKits({
+      kits: [
+        { name: "old", agents: ["x"], installed_at: "2026-06-09T00:00:00Z" },
+      ],
+    });
+    const r = await pipe().create({
+      ...baseReq(session_id),
+      required_agents: ["x"],
+    });
+    expect(r.pipeline_id).toMatch(/^pl-/);
+  });
+
+  it("REJECTS with KitNotLoadedPreFlightError when required_agent ∈ not-loaded kit", async () => {
+    const session_id = await freshSession();
+    await writeKits({
+      kits: [
+        {
+          name: "backend-pro",
+          agents: ["backend-engineer", "api-designer"],
+          installed_at: "2026-06-10T05:00:00Z",
+        },
+      ],
+    });
+    let caught: unknown = null;
+    try {
+      await pipe().create({
+        ...baseReq(session_id),
+        required_agents: ["backend-engineer"],
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(KitNotLoadedPreFlightError);
+    const e = caught as KitNotLoadedPreFlightError;
+    expect(e.code).toBe("KIT_NOT_LOADED_PRE_FLIGHT");
+    expect(e.required_agents).toEqual(["backend-engineer"]);
+    expect(e.affected_kits).toEqual(["backend-pro"]);
+    expect(e.remediation).toContain("Exit current `claude` session");
+  });
+
+  it("REJECTS reports only the intersection of required_agents and not-loaded kits", async () => {
+    const session_id = await freshSession();
+    await writeKits({
+      kits: [
+        { name: "k1", agents: ["a", "b"], installed_at: "2026-06-10T05:00:00Z" },
+        { name: "k2", agents: ["c"], installed_at: "2026-06-09T00:00:00Z" },
+      ],
+    });
+    try {
+      await pipe().create({
+        ...baseReq(session_id),
+        required_agents: ["a", "c", "z"],
+      });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(KitNotLoadedPreFlightError);
+      const e = err as KitNotLoadedPreFlightError;
+      expect(e.required_agents).toEqual(["a"]);
+      expect(e.affected_kits).toEqual(["k1"]);
+    }
+  });
+
+  it("does NOT reject when installed-kits.json is absent", async () => {
+    const session_id = await freshSession();
+    const r = await pipe().create({
+      ...baseReq(session_id),
+      required_agents: ["anything"],
+    });
+    expect(r.pipeline_id).toMatch(/^pl-/);
+  });
+
+  it("KitNotLoadedPreFlightError class is exported and shaped", () => {
+    const e = new KitNotLoadedPreFlightError(["x"], ["k"]);
+    expect(e.name).toBe("KitNotLoadedPreFlightError");
+    expect(e.code).toBe("KIT_NOT_LOADED_PRE_FLIGHT");
+    expect(e.message).toContain("KIT_NOT_LOADED_PRE_FLIGHT");
   });
 });

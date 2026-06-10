@@ -51,6 +51,7 @@ export type {
 export {
   PipelineServer,
   PipelineConflictError,
+  KitNotLoadedPreFlightError,
   aggregatePipelineStatus,
 } from "./pipeline-server.js";
 export type {
