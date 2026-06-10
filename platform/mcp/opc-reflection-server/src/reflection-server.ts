@@ -11,6 +11,7 @@ import {
   type ReflectionVerdict,
   type StepId,
 } from "./store.js";
+import { appendTelemetry, type TelemetryEntry } from "./telemetry.js";
 import { validateAll, type ValidatorContext, type ValidatorResult } from "./validators.js";
 
 export interface ReflectionServerOptions {
@@ -82,6 +83,18 @@ export interface ReflectCritiqueCompleteRequest {
    * legacy callers / unit tests that bypass the invariant.
    */
   current_pending_count?: number;
+  /**
+   * Optional telemetry fields (M18.a). When supplied, the values are emitted
+   * to opc-logs/reflection/&lt;session_id&gt;/telemetry.jsonl alongside the
+   * artifact so that opc_reflect_admin({action:"query_stats"}) can aggregate
+   * latency / token / fallback metrics without re-reading every artifact.
+   */
+  telemetry?: {
+    latency_ms?: number;
+    tokens_in?: number;
+    tokens_out?: number;
+    fallback_triggered?: boolean;
+  };
 }
 
 export interface ReflectCritiqueCompleteResponse {
@@ -296,6 +309,34 @@ export class ReflectionServer {
       created_at: now.toISOString(),
     };
     const artifact_path = await saveReflectionArtifact(this.root, artifact);
+
+    const objectionsRaised = req.objections.length;
+    const evidenceDiffPresent =
+      req.evidence_diff !== undefined &&
+      req.evidence_diff !== null &&
+      Object.keys(req.evidence_diff).length > 0;
+    const telemetryEntry: TelemetryEntry = {
+      ts: now.toISOString(),
+      session_id: req.session_id,
+      step: req.step_id,
+      method: req.method,
+      reflection_id,
+      round: req.round,
+      verdict,
+      objections_raised: objectionsRaised,
+      objections_kept: kept.length,
+      evidence_diff: evidenceDiffPresent,
+      ...(validatorResults
+        ? { validator_pass: validatorResults.every((r) => r.pass) }
+        : {}),
+      ...(req.telemetry?.latency_ms !== undefined ? { latency_ms: req.telemetry.latency_ms } : {}),
+      ...(req.telemetry?.tokens_in !== undefined ? { tokens_in: req.telemetry.tokens_in } : {}),
+      ...(req.telemetry?.tokens_out !== undefined ? { tokens_out: req.telemetry.tokens_out } : {}),
+      ...(req.telemetry?.fallback_triggered !== undefined
+        ? { fallback_triggered: req.telemetry.fallback_triggered }
+        : {}),
+    };
+    await appendTelemetry(this.root, telemetryEntry);
 
     const expires_at = new Date(now.getTime() + PENDING_TTL_MS).toISOString();
     const pending_reflection: PendingReflectionContract = {

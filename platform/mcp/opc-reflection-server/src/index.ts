@@ -44,6 +44,14 @@ export type {
 } from "./store.js";
 
 export {
+  TELEMETRY_FILENAME,
+  telemetryPath,
+  appendTelemetry,
+  readTelemetry,
+} from "./telemetry.js";
+export type { TelemetryEntry } from "./telemetry.js";
+
+export {
   validateAll,
   validateV1Schema,
   validateV2Referential,

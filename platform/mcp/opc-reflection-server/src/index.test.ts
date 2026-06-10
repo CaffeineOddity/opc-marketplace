@@ -13,11 +13,13 @@ import {
   listAllCorrections,
   listCorrectionsByStep,
   pickMethods,
+  readTelemetry,
   ReflectionServer,
   saveCorrection,
   SERVER_NAME,
   SIM_MERGE_THRESHOLD,
   similarity,
+  telemetryPath,
   validateAll,
   validateV1Schema,
   validateV2Referential,
@@ -372,6 +374,128 @@ describe("ReflectionServer", () => {
     );
     expect(resp.task_spec.dispatch_context.budget.max_new_corrections).toBe(8);
     expect(resp.task_spec.prompt).toContain("opc_flow_query");
+  });
+});
+
+describe("M18.a telemetry", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m18a-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  it("critiqueComplete appends a telemetry line and creates the file on first call", async () => {
+    const srv = newServer();
+    const resp = await srv.critiqueComplete({
+      session_id: "s-tel",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: ["ok"],
+      round: 1,
+      max_rounds: 3,
+      telemetry: { latency_ms: 1234, tokens_in: 800, tokens_out: 250 },
+    });
+    const path = telemetryPath(root, "s-tel");
+    const raw = await readFile(path, "utf8");
+    const lines = raw.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    const entry = JSON.parse(lines[0]) as Record<string, unknown>;
+    expect(entry.session_id).toBe("s-tel");
+    expect(entry.step).toBe("P5");
+    expect(entry.method).toBe("critique");
+    expect(entry.verdict).toBe("clean");
+    expect(entry.reflection_id).toBe(resp.pending_reflection.reflection_id);
+    expect(entry.latency_ms).toBe(1234);
+    expect(entry.tokens_in).toBe(800);
+    expect(entry.objections_raised).toBe(0);
+    expect(entry.objections_kept).toBe(0);
+    expect(entry.evidence_diff).toBe(false);
+  });
+
+  it("appends one telemetry line per critiqueComplete across multiple methods", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "s-multi",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    await srv.critiqueComplete({
+      session_id: "s-multi",
+      step_id: "P5",
+      method: "cove",
+      objections: [
+        { id: "o1", severity: "blocker", category: "logic", text: "missing X" },
+      ],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+      evidence_diff: { changed: ["a.md"] },
+    });
+    const entries = await readTelemetry(root, "s-multi");
+    expect(entries).toHaveLength(2);
+    expect(entries[0].method).toBe("critique");
+    expect(entries[0].verdict).toBe("clean");
+    expect(entries[1].method).toBe("cove");
+    expect(entries[1].verdict).toBe("objections_remain");
+    expect(entries[1].objections_raised).toBe(1);
+    expect(entries[1].objections_kept).toBe(1);
+    expect(entries[1].evidence_diff).toBe(true);
+  });
+
+  it("captures rounds_exceeded verdict in telemetry", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "s-exc",
+      step_id: "P3",
+      method: "debate",
+      objections: [],
+      reasoning_trace: [],
+      round: 4,
+      max_rounds: 3,
+    });
+    const entries = await readTelemetry(root, "s-exc");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].verdict).toBe("rounds_exceeded");
+    expect(entries[0].round).toBe(4);
+  });
+
+  it("readTelemetry returns [] when the session has no telemetry yet", async () => {
+    expect(await readTelemetry(root, "never-written")).toEqual([]);
+  });
+
+  it("readTelemetry skips malformed lines without throwing", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "s-bad",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    const path = telemetryPath(root, "s-bad");
+    await writeFile(path, `${await readFile(path, "utf8")}not-json-line\n`, "utf8");
+    const entries = await readTelemetry(root, "s-bad");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].session_id).toBe("s-bad");
   });
 });
 
