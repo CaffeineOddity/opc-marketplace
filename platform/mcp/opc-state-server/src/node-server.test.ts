@@ -757,3 +757,171 @@ describe("NodeServer.finish (M17.c discriminator facade)", () => {
     expect(tools.filter((t) => t === "opc_node_finish").length).toBe(2);
   });
 });
+
+describe("M18.f validator artifact writer (node_execution)", () => {
+  it("happy path writes opc-logs/validator/<session>/node_execution-1.json with all-pass results", async () => {
+    const { session_id, pipeline_id } = await seed();
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      node_definition: def({ name: "x", quality_gates: ["test_pass"] }),
+    });
+    await node().complete({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      evidence: { test_results: { passed: 3, failed: 0 } },
+    });
+    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const { readFile } = await import("node:fs/promises");
+    const raw = await readFile(path, "utf8");
+    const art = JSON.parse(raw) as {
+      step: string;
+      validator_results: Record<string, string>;
+      failure_reasons?: string[];
+      ran_by: string;
+      node?: string;
+    };
+    expect(art.step).toBe("node_execution");
+    expect(art.ran_by).toBe("state-manager");
+    expect(art.node).toBe("x");
+    expect(art.validator_results.l1).toBe("pass");
+    expect(art.validator_results.l2).toBe("pass");
+    expect(art.failure_reasons).toBeUndefined();
+  });
+
+  it("L1 failure: writes artifact with l1=fail + failure_reasons, still throws", async () => {
+    const { session_id, pipeline_id } = await seed();
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      node_definition: def({
+        name: "x",
+        output: [{ artifacts: ["src/x.ts"], knowledge: "k-x" }],
+      }),
+    });
+    await expect(
+      node().complete({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "05-implement",
+        node_name: "x",
+        knowledge_index_has: ["k-x"],
+      }),
+    ).rejects.toThrow(/L1: declared output\.artifact/);
+    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const { readFile } = await import("node:fs/promises");
+    const art = JSON.parse(await readFile(path, "utf8")) as {
+      validator_results: Record<string, string>;
+      failure_reasons: string[];
+    };
+    expect(art.validator_results.l1).toBe("fail");
+    expect(art.failure_reasons.some((r) => r.startsWith("L1:"))).toBe(true);
+  });
+
+  it("L2 failure: writes l1=pass + l2=fail and rejects (gates exist)", async () => {
+    const { session_id, pipeline_id } = await seed();
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "x",
+      node_definition: def({ name: "x", quality_gates: ["test_pass"] }),
+    });
+    await expect(
+      node().complete({
+        session_id,
+        pipeline_id,
+        sub_pipeline_id: "sub-1",
+        phase: "05-implement",
+        node_name: "x",
+        evidence: { test_results: { passed: 1, failed: 2 } },
+      }),
+    ).rejects.toThrow(/L2: test_pass/);
+    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const { readFile } = await import("node:fs/promises");
+    const art = JSON.parse(await readFile(path, "utf8")) as {
+      validator_results: Record<string, string>;
+      failure_reasons: string[];
+    };
+    expect(art.validator_results.l1).toBe("pass");
+    expect(art.validator_results.l2).toBe("fail");
+    expect(art.failure_reasons.some((r) => r.startsWith("L2:"))).toBe(true);
+  });
+
+  it("sequential numbering: two complete() calls produce -1 and -2 in same session", async () => {
+    const { session_id, pipeline_id } = await seed();
+    // Add a second node a; the seeded phase already has nothing — push two
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const ph = state.phases.find((p) => p.phase === "05-implement")!;
+    ph.nodes.push(
+      {
+        name: "a",
+        status: "ready",
+        agent: "coder",
+        blocked_by: [],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      },
+      {
+        name: "b",
+        status: "ready",
+        agent: "coder",
+        blocked_by: [],
+        input: [],
+        output: [],
+        error: null,
+        timeout_minutes: 30,
+        retry_count: 0,
+        max_retries: 3,
+      },
+    );
+    await saveStateJson(root, session_id, pipeline_id, state, new Date("2026-06-10T00:00:00Z"));
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "a",
+    });
+    await node().complete({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "a",
+    });
+    await node().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "b",
+    });
+    await node().complete({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "05-implement",
+      node_name: "b",
+    });
+    const { readdir } = await import("node:fs/promises");
+    const files = (await readdir(join(root, "opc-logs/validator", session_id))).sort();
+    expect(files).toContain("node_execution-1.json");
+    expect(files).toContain("node_execution-2.json");
+  });
+});

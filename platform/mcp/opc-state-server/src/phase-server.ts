@@ -22,6 +22,7 @@ import {
   type ResolvedGroup,
   type ResolvedPlan,
 } from "./node-resolver.js";
+import { writeValidatorArtifact, type ValidatorResults } from "./validator-log.js";
 
 export interface PhaseServerOptions {
   root: string;
@@ -310,6 +311,28 @@ export class PhaseServer {
     }
     const incompleteNodes = phase.nodes.filter((n) => n.status !== "completed");
     const allNodesDone = incompleteNodes.length === 0;
+
+    const phaseValidatorResults: ValidatorResults = {
+      l1: allNodesDone ? "pass" : "fail",
+    };
+    const phaseFailureReasons = allNodesDone
+      ? []
+      : [
+          `L1: phase ${req.phase} has ${incompleteNodes.length} incomplete node(s): ${incompleteNodes
+            .map((n) => `${n.name}(${n.status})`)
+            .join(",")}`,
+        ];
+    await writeValidatorArtifact({
+      root: this.root,
+      session_id: req.session_id,
+      step: "phase_completion",
+      pipeline_id: req.pipeline_id,
+      sub_pipeline_id: req.sub_pipeline_id,
+      phase: req.phase,
+      validator_results: phaseValidatorResults,
+      failure_reasons: phaseFailureReasons,
+      now: this.now,
+    });
 
     phase.status = "completed";
     if (req.confirm_commit_ref) phase.confirm_commit_ref = req.confirm_commit_ref;

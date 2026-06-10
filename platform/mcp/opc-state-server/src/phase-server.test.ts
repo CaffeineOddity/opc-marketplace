@@ -509,3 +509,73 @@ describe("PhaseServer.confirm", () => {
     expect(r.flow_next.tool).toBe("opc_phase_complete");
   });
 });
+
+describe("M18.f validator artifact writer (phase_completion)", () => {
+  it("happy path: complete() writes opc-logs/validator/<session>/phase_completion-1.json with l1=pass", async () => {
+    const { session_id, pipeline_id } = await seedSinglePipeline();
+    await phase().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    await phase().complete({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    const path = join(root, "opc-logs/validator", session_id, "phase_completion-1.json");
+    const { readFile } = await import("node:fs/promises");
+    const art = JSON.parse(await readFile(path, "utf8")) as {
+      step: string;
+      validator_results: Record<string, string>;
+      failure_reasons?: string[];
+      ran_by: string;
+    };
+    expect(art.step).toBe("phase_completion");
+    expect(art.ran_by).toBe("state-manager");
+    expect(art.validator_results.l1).toBe("pass");
+    expect(art.failure_reasons).toBeUndefined();
+  });
+
+  it("incomplete nodes: writes l1=fail with failure_reasons enumerating incomplete nodes", async () => {
+    const { session_id, pipeline_id } = await seedSinglePipeline();
+    await phase().start({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    // inject an incomplete node directly so phase.complete sees allNodesDone=false
+    const state = await loadStateJson(root, session_id, pipeline_id, "sub-1");
+    const ph = state.phases.find((p) => p.phase === "01-discovery")!;
+    ph.nodes.push({
+      name: "lingering",
+      status: "in_progress",
+      agent: "coder",
+      blocked_by: [],
+      input: [],
+      output: [],
+      error: null,
+      timeout_minutes: 30,
+      retry_count: 0,
+      max_retries: 3,
+    });
+    await saveStateJson(root, session_id, pipeline_id, state, new Date("2026-06-10T00:00:00Z"));
+    await phase().complete({
+      session_id,
+      pipeline_id,
+      sub_pipeline_id: "sub-1",
+      phase: "01-discovery",
+    });
+    const path = join(root, "opc-logs/validator", session_id, "phase_completion-1.json");
+    const { readFile } = await import("node:fs/promises");
+    const art = JSON.parse(await readFile(path, "utf8")) as {
+      validator_results: Record<string, string>;
+      failure_reasons: string[];
+    };
+    expect(art.validator_results.l1).toBe("fail");
+    expect(art.failure_reasons.some((r) => r.includes("lingering(in_progress)"))).toBe(true);
+  });
+});

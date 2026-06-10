@@ -214,3 +214,16 @@ export type {
   KitHealthResult,
   KitHealthArgs,
 } from "./kit-health.js";
+
+export {
+  writeValidatorArtifact,
+  validatorLogDir,
+  VALIDATOR_LOGS_DIR,
+} from "./validator-log.js";
+export type {
+  ValidatorArtifact,
+  ValidatorResults,
+  ValidatorOutcome,
+  ValidatorStep,
+  WriteValidatorArtifactInput,
+} from "./validator-log.js";

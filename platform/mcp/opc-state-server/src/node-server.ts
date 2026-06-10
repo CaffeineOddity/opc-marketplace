@@ -18,6 +18,7 @@ import {
   type ResolvedNodeStatus,
   type ResolvedPlan,
 } from "./node-resolver.js";
+import { writeValidatorArtifact, type ValidatorResults } from "./validator-log.js";
 
 export interface NodeServerOptions {
   root: string;
@@ -274,10 +275,7 @@ export class NodeServer {
       );
     }
 
-    validateL1(node, req);
-    if (node.quality_gates && node.quality_gates.length > 0) {
-      validateL2(node.quality_gates, req.evidence);
-    }
+    await runNodeValidatorsAndLog(this.root, req, node, this.now);
 
     node.status = "completed";
     const now = this.now();
@@ -605,6 +603,54 @@ function hydrateFromDefinition(node: NodeState, def: NodeDefinition): void {
   if (def.mode && !node.mode) node.mode = def.mode;
   if (typeof def.timeout_minutes === "number") node.timeout_minutes = def.timeout_minutes;
   if (typeof def.max_retries === "number") node.max_retries = def.max_retries;
+}
+
+async function runNodeValidatorsAndLog(
+  root: string,
+  req: NodeCompleteRequest,
+  node: NodeState,
+  now: () => Date,
+): Promise<void> {
+  const results: ValidatorResults = {};
+  const failures: string[] = [];
+  let l1Err: unknown;
+  let l2Err: unknown;
+
+  try {
+    validateL1(node, req);
+    results.l1 = "pass";
+  } catch (err) {
+    results.l1 = "fail";
+    if (err instanceof Error) failures.push(`L1: ${err.message}`);
+    l1Err = err;
+  }
+
+  if (node.quality_gates && node.quality_gates.length > 0) {
+    try {
+      validateL2(node.quality_gates, req.evidence);
+      results.l2 = "pass";
+    } catch (err) {
+      results.l2 = "fail";
+      if (err instanceof Error) failures.push(`L2: ${err.message}`);
+      l2Err = err;
+    }
+  }
+
+  await writeValidatorArtifact({
+    root,
+    session_id: req.session_id,
+    step: "node_execution",
+    pipeline_id: req.pipeline_id,
+    sub_pipeline_id: req.sub_pipeline_id,
+    phase: req.phase,
+    node: req.node_name,
+    validator_results: results,
+    failure_reasons: failures,
+    now,
+  });
+
+  if (l1Err) throw l1Err;
+  if (l2Err) throw l2Err;
 }
 
 function validateL1(node: NodeState, req: NodeCompleteRequest): void {
