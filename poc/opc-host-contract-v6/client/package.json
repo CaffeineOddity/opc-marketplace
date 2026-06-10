@@ -1,0 +1,13 @@
+{
+  "name": "opc-poc-host-contract-v6-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "harness.mjs",
+  "scripts": {
+    "start": "node harness.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  }
+}
