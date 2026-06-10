@@ -67,7 +67,7 @@
 1. **MCP 状态机驱动 + 文档方法论参考** —— flow tools 路由"做什么"，prompts/*.md 解释"为什么这么做"
 2. **意图触发，置信度兜底** —— 用户直接说话；低置信度时主动确认
 3. **MCP 服务器零 LLM 依赖** —— state-server / knowledge-server / reflection-server 都是纯 TypeScript 确定性逻辑；所有 LLM 工作（含反思 sub-agent）由 Claude Code（MCP Host）承担
-4. **流程可观测可恢复** —— flow-state.json 记录每一步的输入、输出、反思日志，crash 后 `opc_flow_query` 检测到 owner.pid 已死 → `opc_flow_recover` 续跑
+4. **流程可观测可恢复** —— flow-state.json 记录每一步的输入、输出、反思日志，crash 后 `opc_flow_query` 检测到 owner.pid 已死 → `opc_flow_lifecycle({action:"recover"})` 续跑
 5. **工具返回自包含 next** —— 每个工具返回 `flow_next` 字段告诉 Claude 下一步调什么，避免文档硬编码跳转
 6. **节点组装** —— 阶段自主选择节点，resolver 自动处理依赖和文件域冲突
 7. **子管线严格串行** —— 按 execution_order 依次执行，blocked_by 阻塞未就绪的 sub，无需并发写保护

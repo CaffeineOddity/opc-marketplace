@@ -7,7 +7,7 @@
 
 **输入**："你好，今天天气怎么样"
 
-> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名（如 `opc_flow_lifecycle({action:"start"})` 而非旧名 `opc_flow_start`）。旧名作为 deprecated alias 在 v2.2 前仍可调用，v2.3 起移除。
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名（如 `opc_flow_lifecycle({action:"start"})` 而非旧名 `opc_flow_lifecycle({action:"start"})`）。旧名作为 deprecated alias 在 v2.2 前仍可调用，v2.3 起移除。
 
 ```
 UserPromptSubmit hook 注入"先调 opc_flow_query"

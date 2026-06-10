@@ -77,7 +77,7 @@ opc_flow_query() 内部:
      └── kill(owner.pid, 0) 失败（进程已死）→ 标记 orphan，列入 suggested_actions
   ④ 当前进程若无活跃 session → 启动时按 current_session_id 新建目录
 
-opc_flow_recover(orphan_session_id) 内部:
+opc_flow_lifecycle({action:"recover"})(orphan_session_id) 内部:
   ① 校验 orphan_session_id 对应目录 owner.pid 已死
   ② 把该目录的 flow-state.json.owner 改成 current_session_id 的 owner
   ③ session_id 字段保持原值（便于历史追溯），仅 owner 更新
@@ -127,8 +127,8 @@ opc_flow_recover(orphan_session_id) 内部:
 - `server_pid` 与父 `claude -p` 子进程关联，证明 MCP server 由父 session 进程托管
 
 **基于该契约的设计**（不再是"假设"，是确定性依赖）：
-- task sub-agent（如 `backend-engineer`）直接调 `opc_knowledge_get_batch` / `opc_knowledge_write`
-- reflection sub-agent（如 `critic`）直接调 `opc_corrections_query` / `opc_knowledge_get`（只读子集）
+- task sub-agent（如 `backend-engineer`）直接调 `opc_knowledge_read({mode:"batch"})` / `opc_knowledge_write`
+- reflection sub-agent（如 `critic`）直接调 `opc_corrections({action:"query"})` / `opc_knowledge_read({mode:"single"})`（只读子集）
 - 三个 OPC server 可以在内存里维护 per-session 状态（如反思 registry、knowledge index debounce 队列），不必担心 sub-agent 走另一个 server 进程读到陈旧值
 
 **降级方案保留位置**：[02_subagent-fallback-plans.md](02_subagent-fallback-plans.md)（标记为"⚠️ 仅在未来 Claude Code 版本变更行为时启用"，不在 v1 实施）
@@ -157,11 +157,11 @@ allowed_tools ──┤
 
 **OPC server 端双保险**（保留，作为 kit 配置失误的兜底）：
 - `opc_knowledge_write` 检查调用方 `dispatch_context.role`，若是 `critic`/`debater`/`tot-explorer` 之一直接 reject
-- 实现细节：`dispatch_context` 由 OPC server 在 `opc_node_start` / `opc_reflect_critique` 时写入 `.opc/sessions/<id>/active-dispatches.json`，sub-agent 调写工具时 server 反查
+- 实现细节：`dispatch_context` 由 OPC server 在 `opc_node_start` / `opc_reflect_execute({method:"critique"})` 时写入 `.opc/sessions/<id>/active-dispatches.json`，sub-agent 调写工具时 server 反查
 
 **Kit 规范约束**（写进 [03_kit-agent-conventions.md](03_kit-agent-conventions.md)）：
 - 每个 kit 的 `agents/*.md` 必须显式声明 `tools`（不允许"全开"）
-- reflection sub-agent 角色（`critic` / `debater` / `tot-explorer` / `meta-synthesizer`）一律**不能**在 `tools` 里出现任何写类工具（`opc_knowledge_write` / `opc_knowledge_delete` 等）
+- reflection sub-agent 角色（`critic` / `debater` / `tot-explorer` / `meta-synthesizer`）一律**不能**在 `tools` 里出现任何写类工具（`opc_knowledge_write` / `opc_knowledge_admin({action:"delete"})` 等）
 - 注：上面字段名按 Claude Code 当前规范是 `tools`（不是早期文档里的 `allowed_tools`），kit 模板要对齐
 
 ### 2.5.1 C4-推论：kit 加载边界（session 启动 = 唯一加载时机）
@@ -259,7 +259,7 @@ opc-state-server 启动 HTTP/SSE 模式时:
        → 标记 orphan_candidate
   ④ opc_flow_query() 返回 orphan_candidate 列表给 Claude 决策
 
-opc_flow_recover(orphan_session_id, transport_proof) 内部:
+opc_flow_lifecycle({action:"recover"})(orphan_session_id, transport_proof) 内部:
   HTTP/SSE 模式:
     ① 校验调用方携带的 Mcp-Session-Id ≠ orphan 的 mcp_session_id
        （防止同 session 自我接管）
@@ -332,7 +332,7 @@ corrections / knowledge 全局写（如 L3 promote）:
 | **数据型** | `.opc/corrections/*.md`, `.opc/knowledge/**/*.md`, `.opc/sessions/<id>/**`, kit 内的 `phases/**/*.md` | ❌ 不需要（运行中即时读到） |
 
 **含义**：
-- distiller 把反思精华写入 `.opc/corrections/` —— 不需要重启，下一次 `opc_corrections_query` 就能读到（C3 已验证：sub-agent 与主进程共享 server，server 重读文件即可）
+- distiller 把反思精华写入 `.opc/corrections/` —— 不需要重启，下一次 `opc_corrections({action:"query"})` 就能读到（C3 已验证：sub-agent 与主进程共享 server，server 重读文件即可）
 - 用户手动改一个 phase 的 node body（如调整 `tdd-implementation.md` 文字）—— 不需要重启，下一次 `opc_node_start` 重新读文件
 - 用户新装一个 kit 引入新 agent 类型（如 `backend-engineer-v2`）—— **需要**重启
 - 用户新装的 kit 携带自己的 MCP server（如 `opc-distiller-server`）—— **需要**重启

@@ -7,7 +7,7 @@
 
 **输入**："不做了，取消"
 
-> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。`opc_flow_abort` 已合并到 `opc_flow_lifecycle({action:"abort"})`；`opc_pipeline_abort` 已合并到 `opc_pipeline_lifecycle({action:"abort"})`。
+> 工具名约定：本文档统一使用 [07-tool-consolidation](../../07-tool-consolidation/00_overview.md) 合并后的新工具名。`opc_flow_lifecycle({action:"abort"})` 已合并到 `opc_flow_lifecycle({action:"abort"})`；`opc_pipeline_lifecycle({action:"abort"})` 已合并到 `opc_pipeline_lifecycle({action:"abort"})`。
 
 ```
 Claude → opc_flow_query → 返回 active: true + 9 种 suggested_actions

@@ -18,7 +18,7 @@
 | [`opc_flow_user_reply`](#opc_flow_user_reply) | — | A3 闭环登记口：回灌用户对 ask_user 的答复，按 step_id 路由续上 |
 | [`opc_quick_dispatch`](#opc_quick_dispatch) | — | low 复杂度快速通道：返回 agent_hint + knowledge_context，流程自动 complete |
 
-> Deprecated 别名映射：`opc_intent_complete` → `opc_flow_step_complete({step:"intent_analysis"})`；`opc_task_analysis_complete` → `({step:"task_analysis"})`；`opc_decomposition_complete` → `({step:"task_decomposition"})`；`opc_brief_complete` → `({step:"brief_generation"})`。完整映射见 [07-tool-consolidation §2.1 state-server flow](../../07-tool-consolidation/00_overview.md#state-server-flow14--7)。
+> Deprecated 别名映射：`opc_flow_step_complete({step:"intent_analysis"})` → `opc_flow_step_complete({step:"intent_analysis"})`；`opc_flow_step_complete({step:"task_analysis"})` → `({step:"task_analysis"})`；`opc_flow_step_complete({step:"task_decomposition"})` → `({step:"task_decomposition"})`；`opc_flow_step_complete({step:"brief_generation"})` → `({step:"brief_generation"})`。完整映射见 [07-tool-consolidation §2.1 state-server flow](../../07-tool-consolidation/00_overview.md#state-server-flow14--7)。
 
 ---
 

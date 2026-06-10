@@ -26,8 +26,8 @@
 | 问题 | 影响 |
 |---|---|
 | 每个工具的 JSON schema + description 平均 ~300 token，54 工具 ≈ **16k token system prompt 占用** | 直接吃掉 Claude long context 预算 |
-| 工具名互相相似（`opc_reflect_cove` / `opc_reflect_critique` / `opc_reflect_debate` / `opc_reflect_tot`），Claude 选择时易混淆 | 错调成本高，反思链路里 5 步铁律中任意一步走错都要回滚 |
-| `opc_node_complete` / `opc_node_fail` 这种"成功/失败二选一"语义被拆成两个工具 | 不符合 finish-result 模式，调用者需要先判断结果再选工具 |
+| 工具名互相相似（`opc_reflect_execute({method:"cove"})` / `opc_reflect_execute({method:"critique"})` / `opc_reflect_execute({method:"debate"})` / `opc_reflect_execute({method:"tot"})`），Claude 选择时易混淆 | 错调成本高，反思链路里 5 步铁律中任意一步走错都要回滚 |
+| `opc_node_finish({status:"success"})` / `opc_node_finish({status:"failed"})` 这种"成功/失败二选一"语义被拆成两个工具 | 不符合 finish-result 模式，调用者需要先判断结果再选工具 |
 | corrections CRUD 4 个工具独立列出 | CRUD 类操作天然适合用 `action` 入参分流 |
 
 ### 1.3 目标
@@ -43,7 +43,7 @@
 ### 1.4 非目标
 
 - **不**改变任何工具的核心语义（input/output 字段不动，只是入口收敛）
-- **不**强行合并语义不同的工具（如 `opc_flow_start` 和 `opc_flow_abort` 是生命周期对立面，不合并）
+- **不**强行合并语义不同的工具（如 `opc_flow_lifecycle({action:"start"})` 和 `opc_flow_lifecycle({action:"abort"})` 是生命周期对立面，不合并）
 - **不**破坏 reflection-registry-guard 等工程契约的工具名锚点（保护清单里出现的工具名必须保持稳定，详见 4.3）
 
 ---
@@ -57,19 +57,19 @@
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
 | `opc_flow_query` | `opc_flow_query` | —（保留）|
-| `opc_flow_start` | `opc_flow_lifecycle` | `action: "start"` |
-| `opc_flow_abort` | `opc_flow_lifecycle` | `action: "abort"` |
-| `opc_flow_recover` | `opc_flow_lifecycle` | `action: "recover"` |
-| `opc_intent_complete` | `opc_flow_step_complete` | `step: "intent_analysis"` |
-| `opc_task_analysis_complete` | `opc_flow_step_complete` | `step: "task_analysis"` |
-| `opc_decomposition_complete` | `opc_flow_step_complete` | `step: "task_decomposition"` |
-| `opc_brief_complete` | `opc_flow_step_complete` | `step: "brief_generation"` |
+| `opc_flow_lifecycle({action:"start"})` | `opc_flow_lifecycle` | `action: "start"` |
+| `opc_flow_lifecycle({action:"abort"})` | `opc_flow_lifecycle` | `action: "abort"` |
+| `opc_flow_lifecycle({action:"recover"})` | `opc_flow_lifecycle` | `action: "recover"` |
+| `opc_flow_step_complete({step:"intent_analysis"})` | `opc_flow_step_complete` | `step: "intent_analysis"` |
+| `opc_flow_step_complete({step:"task_analysis"})` | `opc_flow_step_complete` | `step: "task_analysis"` |
+| `opc_flow_step_complete({step:"task_decomposition"})` | `opc_flow_step_complete` | `step: "task_decomposition"` |
+| `opc_flow_step_complete({step:"brief_generation"})` | `opc_flow_step_complete` | `step: "brief_generation"` |
 | `opc_flow_reflect` | `opc_flow_reflect` | —（保留，是反思登记口锚点，详见 4.3）|
 | `opc_flow_user_reply` | `opc_flow_user_reply` | —（保留，是 A3 闭环锚点）|
 | `opc_quick_dispatch` | `opc_quick_dispatch` | —（保留，low 通道独立语义）|
-| `opc_flow_revise` | `opc_flow_correct` | `action: "revise"` |
-| `opc_flow_restart` | `opc_flow_correct` | `action: "restart"` |
-| —（新增）| `opc_flow_correct` | `action: "phase_reset"`（吸收 `opc_phase_reset`，见 phase 节）|
+| `opc_flow_correct({action:"revise"})` | `opc_flow_correct` | `action: "revise"` |
+| `opc_flow_correct({action:"restart"})` | `opc_flow_correct` | `action: "restart"` |
+| —（新增）| `opc_flow_correct` | `action: "phase_reset"`（吸收 `opc_flow_correct({action:"phase_reset"})`，见 phase 节）|
 
 **新工具列表（7 个）**：
 1. `opc_flow_query`
@@ -86,11 +86,11 @@
 |---|---|---|
 | `opc_pipeline_create` | `opc_pipeline_create` | —（保留，写入语义独立）|
 | `opc_pipeline_status` | `opc_pipeline_status` | —（保留，只读独立）|
-| `opc_pipeline_recover` | `opc_flow_lifecycle` | 已被吸收（`action: "recover"` 内部级联）|
-| `opc_pipeline_complete` | `opc_pipeline_lifecycle` | `action: "complete"` |
-| `opc_pipeline_abort` | `opc_pipeline_lifecycle` | `action: "abort"` |
-| `opc_pipeline_replan` | `opc_pipeline_lifecycle` | `action: "replan"` |
-| `opc_pipeline_resume` | `opc_pipeline_lifecycle` | `action: "resume"`（多数场景由 state-manager 在 node 边界自动触发）|
+| `opc_flow_lifecycle({action:"recover"})` | `opc_flow_lifecycle` | 已被吸收（`action: "recover"` 内部级联）|
+| `opc_pipeline_lifecycle({action:"complete"})` | `opc_pipeline_lifecycle` | `action: "complete"` |
+| `opc_pipeline_lifecycle({action:"abort"})` | `opc_pipeline_lifecycle` | `action: "abort"` |
+| `opc_pipeline_lifecycle({action:"replan"})` | `opc_pipeline_lifecycle` | `action: "replan"` |
+| `opc_pipeline_lifecycle({action:"resume"})` | `opc_pipeline_lifecycle` | `action: "resume"`（多数场景由 state-manager 在 node 边界自动触发）|
 
 **新工具列表（3 个）**：
 1. `opc_pipeline_create`
@@ -105,7 +105,7 @@
 | `opc_phase_adjust` | **删除**（被反思循环替代，详见 `03-phase/04_phase-start.md:182` 说"大部分调整由反思循环自行完成"）| — |
 | `opc_phase_confirm` | `opc_phase_confirm` | —（保留，registry-guard 锚点）|
 | `opc_phase_complete` | `opc_phase_complete` | —（保留，registry-guard 锚点）|
-| `opc_phase_reset` | `opc_flow_correct` | 已被吸收（`action: "phase_reset"`）|
+| `opc_flow_correct({action:"phase_reset"})` | `opc_flow_correct` | 已被吸收（`action: "phase_reset"`）|
 
 **新工具列表（3 个）**：
 1. `opc_phase_start`
@@ -117,9 +117,9 @@
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
 | `opc_node_start` | `opc_node_start` | —（保留，registry-guard 锚点）|
-| `opc_node_complete` | `opc_node_finish` | `status: "success"` + `evidence` |
-| `opc_node_fail` | `opc_node_finish` | `status: "failed"` + `error` |
-| `opc_node_retry` | `opc_node_finish` | `status: "retry"` + `reset_retry_count?` |
+| `opc_node_finish({status:"success"})` | `opc_node_finish` | `status: "success"` + `evidence` |
+| `opc_node_finish({status:"failed"})` | `opc_node_finish` | `status: "failed"` + `error` |
+| `opc_node_finish({status:"retry"})` | `opc_node_finish` | `status: "retry"` + `reset_retry_count?` |
 
 **新工具列表（2 个）**：
 1. `opc_node_start`
@@ -130,14 +130,14 @@
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
 | `opc_knowledge_open` | `opc_knowledge_open` | —（保留，初始化语义独立）|
-| `opc_knowledge_get` | `opc_knowledge_read` | `mode: "single"` |
-| `opc_knowledge_get_batch` | `opc_knowledge_read` | `mode: "batch"` |
-| `opc_knowledge_list` | `opc_knowledge_read` | `mode: "list"` |
-| `opc_knowledge_search` | `opc_knowledge_read` | `mode: "search"` |
+| `opc_knowledge_read({mode:"single"})` | `opc_knowledge_read` | `mode: "single"` |
+| `opc_knowledge_read({mode:"batch"})` | `opc_knowledge_read` | `mode: "batch"` |
+| `opc_knowledge_read({mode:"list"})` | `opc_knowledge_read` | `mode: "list"` |
+| `opc_knowledge_read({mode:"search"})` | `opc_knowledge_read` | `mode: "search"` |
 | —（新增） | `opc_knowledge_read` | `mode: "diff"`（3-way diff 预演，详见 [knowledge-api § 2.10](../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md#210-版本冲突与-3-way-diff-and-merge-契约)）|
 | `opc_knowledge_write` | `opc_knowledge_write` | —（保留，含 `refs?: string[]` 参数支持 _refs 写入；新增 `base_version?: number` 触发 3-way diff-and-merge，返回 `merge_status`）|
-| `opc_knowledge_delete` | `opc_knowledge_admin` | `action: "delete"`（可传 `base_version`，不一致则 reject，不走 merge）|
-| `opc_knowledge_reindex` | `opc_knowledge_admin` | `action: "reindex"` |
+| `opc_knowledge_admin({action:"delete"})` | `opc_knowledge_admin` | `action: "delete"`（可传 `base_version`，不一致则 reject，不走 merge）|
+| `opc_knowledge_admin({action:"reindex"})` | `opc_knowledge_admin` | `action: "reindex"` |
 
 **新工具列表（5 个）**：
 1. `opc_knowledge_open`
@@ -151,19 +151,19 @@
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
 | `opc_reflect_plan` | `opc_reflect_plan` | —（保留）|
-| `opc_reflect_cove` | `opc_reflect_execute` | `method: "M3-cove"` |
-| `opc_reflect_critique` | `opc_reflect_execute` | `method: "M4-critique"` |
-| `opc_reflect_debate` | `opc_reflect_execute` | `method: "M5-debate"` |
-| `opc_reflect_tot` | `opc_reflect_execute` | `method: "M6-tot"` |
-| `opc_reflect_cove_complete` | `opc_reflect_complete` | `method: "M3-cove"` + `result` |
-| `opc_reflect_critique_complete` | `opc_reflect_complete` | `method: "M4-critique"` + `result` |
-| `opc_reflect_debate_complete` | `opc_reflect_complete` | `method: "M5-debate"` + `result` |
-| `opc_reflect_tot_complete` | `opc_reflect_complete` | `method: "M6-tot"` + `result` |
-| `opc_reflect_record_interventions` | `opc_reflect_admin` | `action: "record_interventions"` |
-| `opc_reflect_on_demand` | `opc_reflect_admin` | `action: "on_demand"` |
-| `opc_reflect_explain` | `opc_reflect_admin` | `action: "explain"` |
-| `opc_reflect_query_stats` | `opc_reflect_admin` | `action: "query_stats"` |
-| `opc_reflect_unlearn_method` | `opc_reflect_admin` | `action: "unlearn_method"` |
+| `opc_reflect_execute({method:"cove"})` | `opc_reflect_execute` | `method: "M3-cove"` |
+| `opc_reflect_execute({method:"critique"})` | `opc_reflect_execute` | `method: "M4-critique"` |
+| `opc_reflect_execute({method:"debate"})` | `opc_reflect_execute` | `method: "M5-debate"` |
+| `opc_reflect_execute({method:"tot"})` | `opc_reflect_execute` | `method: "M6-tot"` |
+| `opc_reflect_complete({method:"cove"})` | `opc_reflect_complete` | `method: "M3-cove"` + `result` |
+| `opc_reflect_complete({method:"critique"})` | `opc_reflect_complete` | `method: "M4-critique"` + `result` |
+| `opc_reflect_complete({method:"debate"})` | `opc_reflect_complete` | `method: "M5-debate"` + `result` |
+| `opc_reflect_complete({method:"tot"})` | `opc_reflect_complete` | `method: "M6-tot"` + `result` |
+| `opc_reflect_admin({action:"record_interventions"})` | `opc_reflect_admin` | `action: "record_interventions"` |
+| `opc_reflect_admin({action:"on_demand"})` | `opc_reflect_admin` | `action: "on_demand"` |
+| `opc_reflect_admin({action:"explain"})` | `opc_reflect_admin` | `action: "explain"` |
+| `opc_reflect_admin({action:"query_stats"})` | `opc_reflect_admin` | `action: "query_stats"` |
+| `opc_reflect_admin({action:"unlearn_method"})` | `opc_reflect_admin` | `action: "unlearn_method"` |
 
 **新工具列表（5 个）**：
 1. `opc_reflect_plan`
@@ -176,10 +176,10 @@
 
 | 旧工具 | 新工具 | discriminator |
 |---|---|---|
-| `opc_corrections_query` | `opc_corrections` | `action: "query"` |
-| `opc_corrections_record` | `opc_corrections` | `action: "record"` |
-| `opc_corrections_unlearn` | `opc_corrections` | `action: "unlearn"` |
-| `opc_corrections_reindex` | `opc_corrections` | `action: "reindex"` |
+| `opc_corrections({action:"query"})` | `opc_corrections` | `action: "query"` |
+| `opc_corrections({action:"record"})` | `opc_corrections` | `action: "record"` |
+| `opc_corrections({action:"unlearn"})` | `opc_corrections` | `action: "unlearn"` |
+| `opc_corrections({action:"reindex"})` | `opc_corrections` | `action: "reindex"` |
 
 **新工具列表（1 个）**：
 1. `opc_corrections`（query/record/unlearn/reindex）
@@ -374,7 +374,7 @@ opc_flow_reflect({reflection_id})       // 3
 | `opc_flow_query` | hook 注入文本里写死的工具名 |
 | `opc_flow_reflect` | reflection-registry-guard 的 `must_be_registered_by` 字段值；A3 闭环里 `pending_reflection.must_be_registered_by` |
 | `opc_flow_user_reply` | A3 闭环 `pending_user_question.must_be_resolved_by` 字段值 |
-| `opc_phase_confirm` / `opc_phase_complete` / `opc_node_start` / `opc_pipeline_complete` | reflection-registry-guard / pending-question-guard 的保护清单成员 |
+| `opc_phase_confirm` / `opc_phase_complete` / `opc_node_start` / `opc_pipeline_lifecycle({action:"complete"})` | reflection-registry-guard / pending-question-guard 的保护清单成员 |
 | `opc_quick_dispatch` | low 通道独立语义 |
 
 ### 4.2 不变 discriminator 值（这些枚举值不可改名）
@@ -392,30 +392,30 @@ opc_flow_reflect({reflection_id})       // 3
 | # | 旧工具 | 新工具 |
 |---|---|---|
 | 1 | `opc_flow_reflect` | `opc_flow_reflect`（不变）|
-| 2 | `opc_task_analysis_complete` | `opc_flow_step_complete({step: "task_analysis"})` |
-| 3 | `opc_decomposition_complete` | `opc_flow_step_complete({step: "task_decomposition"})` |
-| 4 | `opc_brief_complete` | `opc_flow_step_complete({step: "brief_generation"})` |
+| 2 | `opc_flow_step_complete({step:"task_analysis"})` | `opc_flow_step_complete({step: "task_analysis"})` |
+| 3 | `opc_flow_step_complete({step:"task_decomposition"})` | `opc_flow_step_complete({step: "task_decomposition"})` |
+| 4 | `opc_flow_step_complete({step:"brief_generation"})` | `opc_flow_step_complete({step: "brief_generation"})` |
 | 5 | `opc_pipeline_create` | `opc_pipeline_create`（不变）|
 | 6 | `opc_phase_confirm` | `opc_phase_confirm`（不变）|
 | 7 | `opc_node_start` | `opc_node_start`（不变）|
 | 8 | `opc_phase_complete` | `opc_phase_complete`（不变）|
-| 9 | `opc_pipeline_complete` | `opc_pipeline_lifecycle({action: "complete"})` |
+| 9 | `opc_pipeline_lifecycle({action:"complete"})` | `opc_pipeline_lifecycle({action: "complete"})` |
 
 **guard 实现的处理**：保护清单 enforce 改为按 **(工具名, discriminator 值)** 对的方式校验，例如 `opc_pipeline_lifecycle` 在 `action: "complete"` 时受保护，`action: "abort"` 时不受保护（豁免清单原本就含 abort）。
 
 ### 4.4 豁免清单更新
 
-原豁免清单（`opc_flow_revise` / `opc_flow_restart` / `opc_pipeline_replan` / `opc_phase_reset` / `opc_flow_abort` / `opc_node_complete` / `opc_node_fail`）映射为：
+原豁免清单（`opc_flow_correct({action:"revise"})` / `opc_flow_correct({action:"restart"})` / `opc_pipeline_lifecycle({action:"replan"})` / `opc_flow_correct({action:"phase_reset"})` / `opc_flow_lifecycle({action:"abort"})` / `opc_node_finish({status:"success"})` / `opc_node_finish({status:"failed"})`）映射为：
 
 | 旧 | 新 |
 |---|---|
-| `opc_flow_revise` | `opc_flow_correct({action: "revise"})` |
-| `opc_flow_restart` | `opc_flow_correct({action: "restart"})` |
-| `opc_phase_reset` | `opc_flow_correct({action: "phase_reset"})` |
-| `opc_pipeline_replan` | `opc_pipeline_lifecycle({action: "replan"})` |
-| `opc_flow_abort` | `opc_flow_lifecycle({action: "abort"})` |
-| `opc_node_complete` | `opc_node_finish({status: "success"})` |
-| `opc_node_fail` | `opc_node_finish({status: "failed"})` |
+| `opc_flow_correct({action:"revise"})` | `opc_flow_correct({action: "revise"})` |
+| `opc_flow_correct({action:"restart"})` | `opc_flow_correct({action: "restart"})` |
+| `opc_flow_correct({action:"phase_reset"})` | `opc_flow_correct({action: "phase_reset"})` |
+| `opc_pipeline_lifecycle({action:"replan"})` | `opc_pipeline_lifecycle({action: "replan"})` |
+| `opc_flow_lifecycle({action:"abort"})` | `opc_flow_lifecycle({action: "abort"})` |
+| `opc_node_finish({status:"success"})` | `opc_node_finish({status: "success"})` |
+| `opc_node_finish({status:"failed"})` | `opc_node_finish({status: "failed"})` |
 
 即：**整个 `opc_flow_correct` 工具全部豁免**；`opc_pipeline_lifecycle` 仅 `replan` / `abort` 豁免；`opc_node_finish` 全部豁免（sub-agent 回报通道）。
 

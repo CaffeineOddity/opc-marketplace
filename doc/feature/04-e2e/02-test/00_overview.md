@@ -200,8 +200,8 @@ flowchart TD
 
 | 版本 | 状态 | 行为 |
 |------|------|------|
-| v2.0 | 双名共存 | server 同时响应旧名（如 `opc_intent_complete`）和新名（如 `opc_flow_step_complete({step:"intent_analysis"})`），旧名不发 warning |
-| v2.1 | 双名共存 + warning | 调用旧名时，server 返回结果同时在 `_warnings: [{level:"deprecation", from:"opc_intent_complete", to:"opc_flow_step_complete({step:'intent_analysis'})"}]` 中提示 |
+| v2.0 | 双名共存 | server 同时响应旧名（如 `opc_flow_step_complete({step:"intent_analysis"})`）和新名（如 `opc_flow_step_complete({step:"intent_analysis"})`），旧名不发 warning |
+| v2.1 | 双名共存 + warning | 调用旧名时，server 返回结果同时在 `_warnings: [{level:"deprecation", from:"opc_flow_step_complete({step:"intent_analysis"})", to:"opc_flow_step_complete({step:'intent_analysis'})"}]` 中提示 |
 | v2.2 | 双名共存 + 强 warning | warning 升级到 `level:"error"`，client SDK / Claude 系统提示中突出显示；文档不再展示旧名 |
 | v2.3 | 移除旧名 | 仅响应新名；旧名调用直接 reject `{code:"UNKNOWN_TOOL", suggest:"<new name>"}` |
 

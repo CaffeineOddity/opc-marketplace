@@ -25,7 +25,7 @@
 
 > 历史名 `opc_phase_adjust` 已删除（节点调整改由反思循环内 Claude 自行重排，必要时走 `opc_pipeline_lifecycle({action:"replan"})` 细粒度修改）。
 >
-> 历史名 `opc_phase_reset` 已折叠为 `opc_flow_correct({action:"phase_reset"})`（流程层统一入口，state-server 内部仍调用 PhaseServer.reset）。
+> 历史名 `opc_flow_correct({action:"phase_reset"})` 已折叠为 `opc_flow_correct({action:"phase_reset"})`（流程层统一入口，state-server 内部仍调用 PhaseServer.reset）。
 
 各工具完整规范散落在：
 - `opc_phase_start` → [04_phase-start.md](04_phase-start.md)

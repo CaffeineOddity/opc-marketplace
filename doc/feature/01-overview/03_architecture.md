@@ -185,8 +185,8 @@ flowchart TD
     C1 -->|general_question / chat| F2C[Claude 调 opc_flow_step_complete({step:"intent_analysis"})<br/>返回 done: true<br/>+ 自动标记 status=completed]
     F2C --> NC[零 OPC 介入，直接回复]
     F2T --> C2[Claude 调 opc_knowledge_read({mode:"list"}) 后<br/>7 步分析 + 收集 task_analysis_evidence]
-    C2 --> opc_intent_complete[Claude 调 opc_flow_step_complete({step:"task_analysis"})<br/>按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
-    opc_intent_complete --> C2_SR_DEC{opc_flow_step_complete({step:"task_analysis"}) 路由判定}
+    C2 --> opc_flow_step_complete({step:"intent_analysis"})[Claude 调 opc_flow_step_complete({step:"task_analysis"})<br/>按 V1-V5 validator + meta-validator + complexity + modify_count 路由]
+    opc_flow_step_complete({step:"intent_analysis"}) --> C2_SR_DEC{opc_flow_step_complete({step:"task_analysis"}) 路由判定}
     C2_SR_DEC -->|validator pass + 无严重 objection| C2a
     C2_SR_DEC -->|validator fail 或 objection 严重| C2_SR_LOOP[反思循环<br/>Claude 调 opc_flow_reflect<br/>opc_flow_reflect 持久化 evidence_diff<br/>受 rounds-guard 约束]
     C2_SR_LOOP --> C2_SR_RECHECK{反思后 evidence 状态?}
@@ -204,8 +204,8 @@ flowchart TD
     DEC4 -->|用户确认| DEC5
     DEC5 --> B6[Claude 生成 brief markdown]
     DEC -->|否| B6
-    B6 --> opc_decomposition_complete[Claude 调 opc_flow_step_complete({step:"brief_generation"})<br/>返回 next: opc_pipeline_create 预填全部参数]
-    opc_decomposition_complete --> B7[Claude 调 opc_pipeline_create]
+    B6 --> opc_flow_step_complete({step:"task_decomposition"})[Claude 调 opc_flow_step_complete({step:"brief_generation"})<br/>返回 next: opc_pipeline_create 预填全部参数]
+    opc_flow_step_complete({step:"task_decomposition"}) --> B7[Claude 调 opc_pipeline_create]
     B7 --> B7B[opc_pipeline_create 返回 flow_next: opc_knowledge_open]
     B7B --> B7C[Claude 调 opc_knowledge_open]
     B7C --> G[opc_knowledge_open 返回 flow_next: opc_phase_start<br/>进入阶段执行循环]

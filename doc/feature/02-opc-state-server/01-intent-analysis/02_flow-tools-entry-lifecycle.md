@@ -152,7 +152,7 @@
 
 ### opc_flow_lifecycle
 
-**职责**：流程生命周期合并工具（start / abort / recover），通过 `action` discriminator 分流。原 `opc_flow_start` / `opc_flow_abort` / `opc_flow_recover` / `opc_pipeline_recover` 全部并入本工具。
+**职责**：流程生命周期合并工具（start / abort / recover），通过 `action` discriminator 分流。原 `opc_flow_lifecycle({action:"start"})` / `opc_flow_lifecycle({action:"abort"})` / `opc_flow_lifecycle({action:"recover"})` / `opc_flow_lifecycle({action:"recover"})` 全部并入本工具。
 
 **Schema**：
 
@@ -254,7 +254,7 @@ opc_flow_lifecycle({action: "recover"})
     }
 ```
 
-> **`opc_pipeline_recover` 已删除**：原 `opc_pipeline_recover` 的语义被 `action: "recover"` 内部级联吸收。Claude 只需调一次 `opc_flow_lifecycle({action: "recover"})` 即可同时恢复 flow + pipeline 状态。豁免清单同 [§4.4](../../07-tool-consolidation/00_overview.md#44-豁免清单更新)：`action: "abort"` 全豁免（用户中断通道），`action: "start"` / `"recover"` 走标准 guard。
+> **`opc_flow_lifecycle({action:"recover"})` 已删除**：原 `opc_flow_lifecycle({action:"recover"})` 的语义被 `action: "recover"` 内部级联吸收。Claude 只需调一次 `opc_flow_lifecycle({action: "recover"})` 即可同时恢复 flow + pipeline 状态。豁免清单同 [§4.4](../../07-tool-consolidation/00_overview.md#44-豁免清单更新)：`action: "abort"` 全豁免（用户中断通道），`action: "start"` / `"recover"` 走标准 guard。
 
 ---
 

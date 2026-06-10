@@ -163,7 +163,7 @@ flowchart TD
 
 ## 相关文档
 
-- [管线](../02-pipeline/00_overview.md) — 管线创建与生命周期、`opc_pipeline_replan` 细粒度规范
+- [管线](../02-pipeline/00_overview.md) — 管线创建与生命周期、`opc_pipeline_lifecycle({action:"replan"})` 细粒度规范
 - [阶段](../03-phase/00_overview.md) — 阶段执行与节点选择、节点选择反思
 - [节点](../04-node/00_overview.md) — 节点定义与执行、Agent 委派模式
 - [03-1 知识模型](../../03-opc-knowledge-server/01-knowledge-model/00_overview.md) — 知识结构与存储

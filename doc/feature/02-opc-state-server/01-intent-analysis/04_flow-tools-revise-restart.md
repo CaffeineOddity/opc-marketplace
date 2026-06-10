@@ -7,7 +7,7 @@
 
 ## 纠错类工具
 
-本篇覆盖 **1 个纠错合并工具 + 所有流程工具共享的前置校验逻辑**。原 `opc_flow_revise` / `opc_flow_restart` / `opc_phase_reset` 3 个工具按 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#state-server-flow14--7) 折叠为 **`opc_flow_correct`** 一个工具，通过 `action` discriminator 分流；豁免规则统一（[§4.4](../../07-tool-consolidation/00_overview.md#44-豁免清单更新)：整个 `opc_flow_correct` 工具全部豁免 reflection-registry-guard / pending-question-guard）。
+本篇覆盖 **1 个纠错合并工具 + 所有流程工具共享的前置校验逻辑**。原 `opc_flow_correct({action:"revise"})` / `opc_flow_correct({action:"restart"})` / `opc_flow_correct({action:"phase_reset"})` 3 个工具按 [07-tool-consolidation §2.1](../../07-tool-consolidation/00_overview.md#state-server-flow14--7) 折叠为 **`opc_flow_correct`** 一个工具，通过 `action` discriminator 分流；豁免规则统一（[§4.4](../../07-tool-consolidation/00_overview.md#44-豁免清单更新)：整个 `opc_flow_correct` 工具全部豁免 reflection-registry-guard / pending-question-guard）。
 
 完整工具速览见 [入口与生命周期篇 流程工具总览](02_flow-tools-entry-lifecycle.md#流程工具总览m17g-后-7-工具)。
 
@@ -16,7 +16,7 @@
 | [`opc_flow_correct`](#opc_flow_correct) | `action: "revise"\|"restart"\|"phase_reset"` | 用户主动纠错（局部修订 / 步骤重做 / 阶段回退），豁免所有 guard |
 | [工具调用前置校验](#工具调用前置校验) | — | owner.pid + current_step 校验，避免乱序 |
 
-> Deprecated 别名：`opc_flow_revise` → `opc_flow_correct({action:"revise"})`；`opc_flow_restart` → `({action:"restart"})`；`opc_phase_reset` → `({action:"phase_reset"})`。`opc_phase_adjust` **已删除**（详见 [07-tool-consolidation §2.1 state-server phase](../../07-tool-consolidation/00_overview.md#state-server-phase5--3)，被反思循环自我修正替代）。
+> Deprecated 别名：`opc_flow_correct({action:"revise"})` → `opc_flow_correct({action:"revise"})`；`opc_flow_correct({action:"restart"})` → `({action:"restart"})`；`opc_flow_correct({action:"phase_reset"})` → `({action:"phase_reset"})`。`opc_phase_adjust` **已删除**（详见 [07-tool-consolidation §2.1 state-server phase](../../07-tool-consolidation/00_overview.md#state-server-phase5--3)，被反思循环自我修正替代）。
 
 ---
 
