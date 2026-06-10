@@ -179,7 +179,7 @@ state-server 调用 reflection-server 的所有入口（4 个工具按 discrimin
 
 - 与 [02 opc-state-server](../02-opc-state-server/00_index.md) — state-server 不再有 confidence 字段，所有判断点接 reflection-server
 - 与 [03 opc-knowledge-server](../03-opc-knowledge-server/00_index.md) — 共享 memory-store 引擎
-- 与 [04 e2e](../04-e2e/00_index.md) — 新增 5 个反思相关测试用例（11-15）
+- 与 [04 e2e](../04-e2e/00_index.md) — 新增 4 个反思相关测试用例（11-14）
 
 ---
 
