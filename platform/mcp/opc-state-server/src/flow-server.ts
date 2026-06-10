@@ -801,8 +801,26 @@ export class FlowServer {
     state.current_step = "aborted";
     state.aborted_at = this.now().toISOString();
     state.abort_reason = req.reason ?? null;
+    state.owner.pid = 0;
     state.history.push(this.entry("abort", "opc_flow_lifecycle", req, null));
     await saveFlowState(this.root, state, this.now());
+
+    // Cascade to pipeline abort if a pipeline is active
+    if (state.pipeline_id) {
+      return {
+        state,
+        next: {
+          tool: "opc_pipeline_lifecycle",
+          args: {
+            action: "abort",
+            session_id: req.session_id,
+            pipeline_id: state.pipeline_id,
+            reason: "flow aborted by user; cascading to pipeline",
+          },
+        },
+      };
+    }
+
     return { state, next: this.computeNext(state) };
   }
 
