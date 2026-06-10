@@ -11,6 +11,10 @@ import {
   type ReflectionVerdict,
   type StepId,
 } from "./store.js";
+import {
+  aggregateTelemetry,
+  type QueryStatsResponse,
+} from "./query-stats.js";
 import { appendTelemetry, type TelemetryEntry } from "./telemetry.js";
 import { validateAll, type ValidatorContext, type ValidatorResult } from "./validators.js";
 
@@ -171,12 +175,13 @@ export type ReflectAdminRequest =
   | ({ action: "record_interventions" } & ReflectRecordInterventionsRequest)
   | { action: "on_demand"; session_id: string; reason?: string }
   | { action: "explain"; session_id: string; reflection_id: string }
-  | { action: "query_stats"; session_id: string; window?: string }
+  | { action: "query_stats"; session_id: string; window?: string; flow_state_path?: string }
   | { action: "unlearn_method"; session_id: string; method: ReflectionMethod; reason?: string };
 
 export type ReflectAdminResponse =
   | ({ action: "record_interventions" } & ReflectRecordInterventionsResponse)
-  | { action: "on_demand" | "explain" | "query_stats" | "unlearn_method"; not_implemented: true; reason: string };
+  | ({ action: "query_stats" } & QueryStatsResponse)
+  | { action: "on_demand" | "explain" | "unlearn_method"; not_implemented: true; reason: string };
 
 const READ_ONLY_TOOL_WHITELIST: readonly string[] = Object.freeze([
   "Read",
@@ -455,9 +460,17 @@ export class ReflectionServer {
         const resp = await this.recordInterventions(inner);
         return { action: "record_interventions", ...resp };
       }
+      case "query_stats": {
+        const stats = await aggregateTelemetry(this.root, {
+          session_id: req.session_id,
+          ...(req.window !== undefined ? { window: req.window } : {}),
+          ...(req.flow_state_path !== undefined ? { flow_state_path: req.flow_state_path } : {}),
+          now: this.now,
+        });
+        return { action: "query_stats", ...stats };
+      }
       case "on_demand":
       case "explain":
-      case "query_stats":
       case "unlearn_method":
         return {
           action: req.action,

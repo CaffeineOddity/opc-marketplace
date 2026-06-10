@@ -499,6 +499,195 @@ describe("M18.a telemetry", () => {
   });
 });
 
+describe("M18.b query_stats aggregation", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "rfsrv-m18b-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const newServer = (): ReflectionServer =>
+    new ReflectionServer({
+      root,
+      now: (): Date => new Date("2026-06-10T12:00:00Z"),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+
+  it("returns zeroed stats when no telemetry has been written", async () => {
+    const srv = newServer();
+    const resp = await srv.admin({ action: "query_stats", session_id: "s-empty" });
+    expect(resp.action).toBe("query_stats");
+    if (resp.action !== "query_stats") return;
+    expect(resp.runs_total).toBe(0);
+    expect(resp.per_method_step).toEqual([]);
+    expect(resp.totals.runs).toBe(0);
+    expect(resp.totals.objections_raised).toBe(0);
+    expect(resp.expiry_metrics.expired_pending_count_24h).toBe(0);
+    expect(resp.expiry_metrics.artifact_purged_7d_count).toBe(0);
+    expect(resp.expiry_metrics_source).toBe("unavailable_zeroed");
+  });
+
+  it("aggregates single-method runs with fp_rate and evidence_diff_conversion", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "s1",
+      step_id: "P5",
+      method: "critique",
+      objections: [
+        { id: "o1", severity: "blocker", category: "logic", text: "x" },
+        { id: "o2", severity: "minor", category: "style", text: "y", resolution: "dismissed" },
+      ],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+      evidence_diff: { changed: ["a.md"] },
+      telemetry: { latency_ms: 500, tokens_in: 100, tokens_out: 40 },
+    });
+    await srv.critiqueComplete({
+      session_id: "s1",
+      step_id: "P5",
+      method: "critique",
+      objections: [
+        { id: "o3", severity: "blocker", category: "logic", text: "z" },
+      ],
+      reasoning_trace: [],
+      round: 2,
+      max_rounds: 3,
+      telemetry: { latency_ms: 300, tokens_in: 80, tokens_out: 30 },
+    });
+
+    const resp = await srv.admin({ action: "query_stats", session_id: "s1" });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.runs_total).toBe(2);
+    expect(resp.per_method_step).toHaveLength(1);
+    const bucket = resp.per_method_step[0];
+    if (!bucket) throw new Error("expected one bucket");
+    expect(bucket.method).toBe("critique");
+    expect(bucket.step).toBe("P5");
+    expect(bucket.runs).toBe(2);
+    expect(bucket.objections_raised_total).toBe(3);
+    expect(bucket.objections_kept_total).toBe(2);
+    expect(bucket.fp_rate).toBeCloseTo(2 / 3, 4);
+    expect(bucket.evidence_diff_count).toBe(1);
+    expect(bucket.evidence_diff_conversion).toBeCloseTo(0.5, 4);
+    expect(bucket.total_latency_ms).toBe(800);
+    expect(bucket.total_tokens_in).toBe(180);
+    expect(bucket.total_tokens_out).toBe(70);
+    expect(bucket.rounds_exceeded_count).toBe(0);
+    expect(resp.totals.objections_raised).toBe(3);
+    expect(resp.totals.total_latency_ms).toBe(800);
+  });
+
+  it("partitions across (method, step) buckets and counts rounds_exceeded / fallback", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "s2",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    await srv.critiqueComplete({
+      session_id: "s2",
+      step_id: "P5",
+      method: "cove",
+      objections: [{ id: "o1", severity: "blocker", category: "v", text: "x" }],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    await srv.critiqueComplete({
+      session_id: "s2",
+      step_id: "P3",
+      method: "debate",
+      objections: [],
+      reasoning_trace: [],
+      round: 4,
+      max_rounds: 3,
+      telemetry: { fallback_triggered: true },
+    });
+
+    const resp = await srv.admin({ action: "query_stats", session_id: "s2" });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.runs_total).toBe(3);
+    expect(resp.per_method_step).toHaveLength(3);
+    const keys = resp.per_method_step.map((b) => `${b.step}::${b.method}`);
+    expect(keys).toEqual(["P3::debate", "P5::cove", "P5::critique"]);
+    const debate = resp.per_method_step.find((b) => b.method === "debate");
+    expect(debate?.rounds_exceeded_count).toBe(1);
+    expect(debate?.fallback_triggered_count).toBe(1);
+    expect(resp.totals.rounds_exceeded).toBe(1);
+    expect(resp.totals.fallback_triggered).toBe(1);
+  });
+
+  it("filters telemetry by `window` (e.g. 1h) using `now` provided to the server", async () => {
+    let clock = new Date("2026-06-10T12:00:00Z");
+    const srv = new ReflectionServer({
+      root,
+      now: (): Date => new Date(clock.getTime()),
+      uuid: ((): (() => string) => {
+        let n = 0;
+        return (): string => `uuid-${++n}`;
+      })(),
+    });
+    await srv.critiqueComplete({
+      session_id: "sw",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    clock = new Date("2026-06-10T15:00:00Z");
+    await srv.critiqueComplete({
+      session_id: "sw",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    clock = new Date("2026-06-10T15:30:00Z");
+    const resp = await srv.admin({ action: "query_stats", session_id: "sw", window: "1h" });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.window).toBe("1h");
+    expect(resp.window_started_at).toBe("2026-06-10T14:30:00.000Z");
+    expect(resp.runs_total).toBe(1);
+  });
+
+  it("returns zeroed expiry_metrics when flow_state_path is omitted (M18 stub)", async () => {
+    const srv = newServer();
+    await srv.critiqueComplete({
+      session_id: "se",
+      step_id: "P5",
+      method: "critique",
+      objections: [],
+      reasoning_trace: [],
+      round: 1,
+      max_rounds: 3,
+    });
+    const resp = await srv.admin({ action: "query_stats", session_id: "se" });
+    if (resp.action !== "query_stats") throw new Error("wrong action");
+    expect(resp.expiry_metrics).toEqual({
+      expired_pending_count_24h: 0,
+      expired_resumed_count_24h: 0,
+      expired_discarded_count_24h: 0,
+      expired_skipped_count_24h: 0,
+      artifact_purged_7d_count: 0,
+    });
+    expect(resp.expiry_metrics_source).toBe("unavailable_zeroed");
+  });
+});
+
 describe("ReflectionServer M17.e discriminator facades", () => {
   let root: string;
   beforeEach(async () => {
@@ -601,7 +790,6 @@ describe("ReflectionServer M17.e discriminator facades", () => {
     it.each([
       ["on_demand"],
       ["explain"],
-      ["query_stats"],
       ["unlearn_method"],
     ] as const)(
       "action=%s returns not_implemented:true (deferred to M18)",
@@ -615,7 +803,7 @@ describe("ReflectionServer M17.e discriminator facades", () => {
               : { action, session_id: "s1" };
         const resp = await srv.admin(req);
         expect(resp.action).toBe(action);
-        if (resp.action !== "record_interventions") {
+        if (resp.action !== "record_interventions" && resp.action !== "query_stats") {
           expect(resp.not_implemented).toBe(true);
           expect(resp.reason).toContain(action);
           expect(resp.reason).toContain("M18");

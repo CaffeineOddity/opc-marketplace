@@ -51,6 +51,15 @@ export {
 } from "./telemetry.js";
 export type { TelemetryEntry } from "./telemetry.js";
 
+export { aggregateTelemetry, parseWindow } from "./query-stats.js";
+export type {
+  QueryStatsRequest,
+  QueryStatsResponse,
+  QueryStatsTotals,
+  PerMethodStepStats,
+  ExpiryMetrics,
+} from "./query-stats.js";
+
 export {
   validateAll,
   validateV1Schema,
