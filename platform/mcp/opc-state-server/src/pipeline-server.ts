@@ -633,6 +633,11 @@ export class PipelineServer {
     plan.status = "completed";
     plan.last_active_at = now.toISOString();
     await savePipelinePlan(this.root, req.session_id, plan, now);
+
+    flow.status = "completed";
+    flow.current_step = "completed";
+    flow.completed_at = now.toISOString();
+    flow.owner.pid = 0;
     flow.history.push({
       step: "pipeline_complete",
       tool: "opc_pipeline_lifecycle",
