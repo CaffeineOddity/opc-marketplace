@@ -95,10 +95,14 @@
                        ←  flow_next: 继续反思 / 跳出 / ask_user      ← 登记完成 + 驱动下一步
 ```
 
+**适用方法**：以上 5 步铁律适用于全部 6 种反思方法——`cove` / `critique` / `debate` / `tot` / `reflexion` / `validator`。其中：
+- `cove` / `critique` / `debate` / `tot` / `reflexion` 走完整 5 步（含 `pending_reflection` 登记）
+- `validator` 用于 P6（node_execution）/ P7（phase_completion），**不产生 `pending_reflection`**（validator 在 `opc_reflect_*_complete` 内直接写 verdict 到 flow-state，不走登记队列）。详见 [02-server-design 三·补](../02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)
+
 **关键不变量**：
 - 步骤 [2][4] 由 reflection-server 完成，**不发 `flow_next`**
 - 步骤 [4] artifact 物理落盘**由 reflection-server 完成**，state-server 不参与写
-- 步骤 [4] 发出的 `pending_reflection` 必须在步骤 [5] 被 `opc_flow_reflect` 登记
+- 步骤 [4] 发出的 `pending_reflection` 必须在步骤 [5] 被 `opc_flow_reflect` 登记（validator 除外——不产生 pending_reflection）
 - 步骤 [5] 完成前，**任何受 registry-guard 保护的 state-server 写类工具都会被拒绝**
 - 任何 reflection-server 工具调用之后，下一个工具**必然是 state-server 的工具或 Task** —— 要么 `opc_flow_reflect` 登记，要么 Claude 通过 Task 派 sub-agent 跑反思方法
 
@@ -292,7 +296,7 @@ type NextStepHint = {
 **示例**：
 
 ```typescript
-// opc_reflect_complete({method:"critique"}) 返回
+// opc_reflect_complete({method:"critique"}) 返回（结构同 cove / debate / tot / reflexion；validator 无 pending_reflection）
 {
   verdict: "objections_remain",
   kept_objections: [{ id: "obj-1", text: "...", evidence_ref: "..." }],
