@@ -14,9 +14,7 @@ tools:
   - opc_knowledge_open
   - opc_knowledge_read
   - opc_knowledge_write
-  - opc_knowledge_list
-  - opc_knowledge_search
-  - opc_corrections_query
+  - opc_corrections
   - mcp__plugin_context7_context7__resolve-library-id
   - mcp__plugin_context7_context7__query-docs
 ---

@@ -10,9 +10,7 @@ tools:
   - WebSearch
   - opc_knowledge_open
   - opc_knowledge_read
-  - opc_knowledge_list
-  - opc_knowledge_search
-  - opc_corrections_query
+  - opc_corrections
 ---
 
 # startup-advisor
@@ -30,10 +28,10 @@ tools:
 本 agent 是 **reflection-role** — 严禁写工具：
 - 不能 `Write` / `Edit` / `NotebookEdit`
 - 不能 `opc_knowledge_write` / `opc_knowledge_admin`
-- 不能 `opc_corrections_upsert`
+- 不能 `opc_corrections`
 - 不能 `Bash`
 
-可用工具仅限只读：`Read`、`Grep`、`Glob`、`opc_knowledge_get*`、`opc_knowledge_list`、`opc_knowledge_search`、`opc_corrections_query`、`WebFetch`、`WebSearch`。
+可用工具仅限只读：`Read`、`Grep`、`Glob`、`opc_knowledge_read`。
 
 OPC server 会在 `dispatch_context.role` 检查中拦截任何越权写请求（双保险），但白名单仍是第一道防线。
 

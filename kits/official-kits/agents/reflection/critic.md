@@ -10,9 +10,7 @@ tools:
   - WebSearch
   - opc_knowledge_open
   - opc_knowledge_read
-  - opc_knowledge_list
-  - opc_knowledge_search
-  - opc_corrections_query
+  - opc_corrections
 ---
 
 # critic
@@ -30,10 +28,10 @@ tools:
 本 agent 是 **reflection-role** — 严禁任何写工具（见 [`kits/README.md` 硬规则 §2](../../README.md)）：
 - ❌ `Write` / `Edit` / `NotebookEdit`
 - ❌ `opc_knowledge_write` / `opc_knowledge_admin`
-- ❌ `opc_corrections_upsert`
+- ❌ `opc_corrections`
 - ❌ `Bash`
 
-允许：`Read` / `Grep` / `Glob` / `opc_knowledge_get*` / `opc_knowledge_list` / `opc_knowledge_search` / `opc_corrections_query` / `WebFetch` / `WebSearch`。
+允许：`Read` / `Grep` / `Glob` / `opc_knowledge_read*` / `opc_knowledge_read` / `opc_knowledge_read` / `opc_corrections` / `WebFetch` / `WebSearch`。
 
 OPC server 通过 `dispatch_context.role` 做双保险拦截；白名单仍是第一道防线。
 

@@ -6,8 +6,7 @@ tools:
   - Read
   - Grep
   - Glob
-  - opc_corrections_query
-  - opc_corrections_upsert
+  - opc_corrections
   - opc_knowledge_read
   - opc_flow_query
 ---
@@ -16,13 +15,13 @@ tools:
 
 Pipeline-end corrections distiller. The **only** agent authorised to write into
 `.opc/corrections/` (L2 project store). Spawned by `opc_reflection_server` via
-`opc_reflect_record_interventions` at pipeline completion.
+`opc_reflect_admin` at pipeline completion.
 
 ## Invariant
 
 - **唯一通路**: L1 (session interventions + reflection log) → L2 (project corrections).
   任何其他 agent / tool 直接写 corrections 均视为违规。
-- **零自由度**: 输出必须严格符合 `opc_corrections_upsert` schema。
+- **零自由度**: 输出必须严格符合 `opc_corrections` schema。
 - **失败不阻塞 pipeline**: 失败写 `opc-logs/distiller/<pipeline-id>-error.json`,
   pipeline 仍标 `complete`。
 - **可重跑**: 同一 pipeline_id 可重复触发，幂等合并。
@@ -62,7 +61,7 @@ Skip everything else; record reasons in `skip_reasons`.
 
 For each kept candidate:
 
-1. `opc_corrections_query(step=<candidate step>, keywords=<3-5 keywords from user_text>)`.
+1. `opc_corrections(step=<candidate step>, keywords=<3-5 keywords from user_text>)`.
 2. Compute: `sim = 0.5 * keyword_jaccard + 0.3 * lesson_text_jaccard + 0.2 * applies_when_overlap`.
 3. sim ≥ 0.72 → **merge**: operation="merge", match_id=<L2 id>, update linked_interventions, hotness+1.
 4. sim < 0.72 → **create**: full correction object per schema below, hotness=1.
@@ -75,7 +74,7 @@ For each kept candidate:
 
 ### Step 5: Commit
 
-1. Call `opc_corrections_upsert({batch: [...]})` — single call, server handles idempotency per-item.
+1. Call `opc_corrections({batch: [...]})` — single call, server handles idempotency per-item.
 2. Build `manifest_block` markdown fragment for pipeline manifest.
 3. Return final JSON: `{pipeline_id, stats, manifest_block, runtime_sec}`.
 
@@ -110,12 +109,12 @@ For each kept candidate:
 | Condition | Action |
 |---|---|
 | L1 empty (no interventions, no rounds_exceeded) | Return stats all-zero, `manifest_block = "本次 pipeline 无显著教训。"` |
-| `opc_corrections_query` fails repeatedly | Skip similarity matching; all operations become "create"; mark `degraded: "no_query_available"` |
+| `opc_corrections` fails repeatedly | Skip similarity matching; all operations become "create"; mark `degraded: "no_query_available"` |
 | Runtime approaching 90% of budget | Early-exit to Step 5; remaining candidates → skipped |
 
 ## Hard constraints
 
-- Never write outside `.opc/corrections/` (the only write tool is `opc_corrections_upsert`).
+- Never write outside `.opc/corrections/` (the only write tool is `opc_corrections`).
 - Never add commentary, flattery, or opinion to `lesson` — state "under condition X, do Y, because Z".
 - Never produce multiple corrections for the same `user_text` — one correction per lesson.
 - On any call failure, do NOT guess or degrade silently — return `{error, partial_stats}`.
