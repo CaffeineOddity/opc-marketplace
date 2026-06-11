@@ -96,5 +96,5 @@ Session 启动后用户首次发消息:
 ## 相关文档
 
 - [09_tools.md](09_tools.md) — 3 个管线级工具的完整规范（create / status / lifecycle）
-- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 13 个流程层工具
+- [../01-intent-analysis/02_flow-tools-entry-lifecycle.md](../01-intent-analysis/02_flow-tools-entry-lifecycle.md) — 7 个流程层工具
 - [../03-phase/00_overview.md](../03-phase/00_overview.md) — 阶段执行循环
