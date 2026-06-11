@@ -33,10 +33,10 @@ opc-marketplace/
 │   │   │   │   ├── flow-state-store.ts #   .opc/sessions/<id>/flow-state.json 读写
 │   │   │   │   └── owner-manager.ts    #   owner pid 接管 + 心跳 + 孤儿检测
 │   │   │   ├── tools/
-│   │   │   │   ├── flow.ts             #   13 个流程工具
-│   │   │   │   ├── pipeline.ts         #   pipeline_create, pipeline_status, pipeline_replan, ...
-│   │   │   │   ├── phase.ts            #   phase_start, phase_confirm, phase_complete, phase_reset
-│   │   │   │   └── node.ts             #   node_start, node_complete, node_fail
+│   │   │   │   ├── flow.ts             #   7 个流程工具
+│   │   │   │   ├── pipeline.ts         #   pipeline_create, pipeline_status, pipeline_lifecycle
+│   │   │   │   ├── phase.ts            #   phase_start, phase_confirm, phase_complete
+│   │   │   │   └── node.ts             #   node_start, node_finish
 │   │   │   └── engine/
 │   │   │       ├── state-manager.ts
 │   │   │       ├── phase-validator.ts
