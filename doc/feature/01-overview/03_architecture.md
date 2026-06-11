@@ -29,7 +29,7 @@
 │  opc-reflection-server (反思方法学 + 用户纠正归档)     │
 │  ├── methods/   5 种反思方法标准库（CoVe/Critique/Debate/Reflexion/ToT) │
 │  ├── validators/ V1-V5 deterministic validator + meta-validator │
-│  ├── tools/     17 个反思 / 纠正 / 元工具                │
+│  ├── tools/     5 个工具（plan / execute / complete / admin / corrections）│
 │  └── corrections/ L1→L2→L3 三层归档 + seed 冷启动        │
 │  纯 TypeScript，sub-agent 由 Host 派发，永不阻塞主流程    │
 ├──────────────────────────────────────────────────┤
