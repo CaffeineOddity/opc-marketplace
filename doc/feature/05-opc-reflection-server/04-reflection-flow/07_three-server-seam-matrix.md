@@ -154,7 +154,7 @@ distiller → opc-memory/corrections/ (L2)
 - [00_overview.md](00_overview.md) — per-step 反思链路总览
 - [06_call-sequence-contract.md](06_call-sequence-contract.md) — 单驱动者契约 + reflection-registry-guard 三层防御 + 命名 + 不变量
 - [../01-method-theory/00_overview.md](../01-method-theory/00_overview.md) — 5 种反思方法与 step → 方法决策表
-- [../02-server-design/00_overview.md](../02-server-design/00_overview.md) — 13 个工具签名 + evidence schema + sub-agent 权限
+- [../02-server-design/00_overview.md](../02-server-design/00_overview.md) — 5 个工具（plan / execute / complete / admin / corrections）+ evidence schema + sub-agent 权限
 - [../03-corrections-store/00_overview.md](../03-corrections-store/00_overview.md) — L1/L2/L3 三层归档
 - [../../02-opc-state-server/01-intent-analysis/03_flow-tools-step-routing.md](../../02-opc-state-server/01-intent-analysis/03_flow-tools-step-routing.md) — `opc_flow_reflect` 规范
 - [../../02-opc-state-server/01-intent-analysis/10_flow-state-schema.md](../../02-opc-state-server/01-intent-analysis/10_flow-state-schema.md) — `pending_reflections` / `reflection_log` 字段
