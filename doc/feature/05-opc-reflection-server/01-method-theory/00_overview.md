@@ -165,7 +165,7 @@ corrections 三层存储 + 三层模型 + 4 个膨胀控制详见 [03-correction
 
 ## 十一、相关文档
 
-- [02 server 设计](../02-server-design/00_overview.md) — 4 个工具（plan / execute / complete / admin）与 evidence schema 实现
+- [02 server 设计](../02-server-design/00_overview.md) — 5 个工具（plan / execute / complete / admin / corrections）与 evidence schema 实现
 - [03 corrections 存储](../03-corrections-store/00_overview.md) — Reflexion 教训记忆的存储引擎
 - [04 反思流程](../04-reflection-flow/00_overview.md) — 方法在 per-step 反思链路中的位置
 - [05 总览](../00_index.md) — 8 核心原则与端到端时序
