@@ -28,7 +28,7 @@ opc-reflection-server 把 5 种学术反思方法 + validator 兜底封装成标
 ## 二、主题地图
 
 - [01 反思方法学](01-method-theory/00_overview.md) — 7 种学术方法 + 选择决策表 + 4 类失败模式 + primary/secondary 组合规则
-- [02 server 设计](02-server-design/00_overview.md) — 4 个工具（`plan` / `execute({method})` / `complete({method})` / `admin({action})`） + evidence schema + validator + sub-agent 权限 + 可靠性 + 可观测性
+- [02 server 设计](02-server-design/00_overview.md) — 5 个工具（`plan` / `execute({method})` / `complete({method})` / `admin({action})` / `corrections({action})`）+ evidence schema + validator + sub-agent 权限 + 可靠性 + 可观测性
 - [03 corrections 存储](03-corrections-store/00_overview.md) — 三层存储 + 三层模型目录 + 4 个膨胀控制 + seed-corrections 冷启动 + schema 演化
 - [04 反思流程](04-reflection-flow/00_overview.md) — per-step 反思时序 + 用户介入 + 用户自治 + meta-reflection + phase_reset 交互
 - [04·补 三 server 接缝矩阵](04-reflection-flow/07_three-server-seam-matrix.md) — **P1–P8 × 触发器/evidence/方法/ack/持久化/knowledge/降级 整合表**（取代原本散落在 4 篇文档的引用）
