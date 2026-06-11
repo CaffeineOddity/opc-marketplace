@@ -41,15 +41,16 @@ importers:
 
   platform/mcp/opc-state-server:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
       '@opc/memory-store':
         specifier: workspace:*
         version: link:../../../shared/memory-store
       '@opc/tool-aliases':
         specifier: workspace:*
         version: link:../../../shared/tool-aliases
+    devDependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
 
   shared/memory-store: {}
 
