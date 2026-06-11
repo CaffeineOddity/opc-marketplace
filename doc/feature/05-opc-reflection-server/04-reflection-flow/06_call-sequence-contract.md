@@ -684,6 +684,6 @@ opc_phase_complete({...}) {
 ## 十一、相关文档
 
 - [00_overview.md](00_overview.md) — 反思流程总览（per-step 时序）
-- [../02-server-design/00_overview.md](../02-server-design/00_overview.md) — 13 个工具签名 + registry-guard 实现指针
+- [../02-server-design/00_overview.md](../02-server-design/00_overview.md) — 5 个工具（plan / execute / complete / admin / corrections）+ registry-guard 实现指针
 - [../../02-opc-state-server/01-intent-analysis/03_flow-tools-step-routing.md](../../02-opc-state-server/01-intent-analysis/03_flow-tools-step-routing.md) — `opc_flow_reflect` 完整规范
 - [../../02-opc-state-server/01-intent-analysis/10_flow-state-schema.md](../../02-opc-state-server/01-intent-analysis/10_flow-state-schema.md) — `pending_reflections` / `reflection_log` 字段
