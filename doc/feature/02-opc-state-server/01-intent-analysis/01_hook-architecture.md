@@ -121,7 +121,7 @@ platform/mcp/opc-state-server/
 │   ├── flow-state-store.ts         ←   .opc/sessions/<id>/flow-state.json 读写 + pid 校验
 │   └── owner-manager.ts            ←   owner pid 接管 + 心跳 + 孤儿检测
 └── tools/
-    ├── flow.ts                     ← 13 个流程工具
+    ├── flow.ts                     ← 7 个流程工具
     ├── pipeline.ts
     ├── phase.ts
     └── node.ts
