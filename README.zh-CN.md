@@ -8,10 +8,10 @@ OPC（Opinionated Pipeline Compiler）—— 基于状态机的管线编译器�
 
 | 插件 | 描述 |
 |------|------|
-| `opc-orchestrator` | 管线编排器，包含 UserPromptSubmit 钩子、`/opc-status` 命令和 3 个 MCP 服务器（状态、知识、反思） |
+| `opc` | 管线编排器，包含 UserPromptSubmit 钩子、`/opc-status` 命令和 3 个 MCP 服务器（状态、知识、反思） |
 | `opc/official-kits` | 27 个子智能体，覆盖完整产品生命周期：产品、设计、开发、测试、交付、增长 |
 
-### MCP 服务器（随 opc-orchestrator 安装）
+### MCP 服务器（随 opc 安装）
 
 | 服务器 | 工具 |
 |--------|------|
@@ -35,7 +35,7 @@ claude plugin marketplace add CaffeineOddity/opc-marketplace
 
 ```shell
 # 核心编排器（必需）
-claude plugin install opc-orchestrator
+claude plugin install opc
 
 # 官方智能体套件
 claude plugin install opc/official-kits
@@ -66,7 +66,7 @@ claude plugin marketplace list
 
 ```
 src/                 源代码
-  plugins/           插件源码（opc-orchestrator、official-kits）
+  plugins/           插件源码（opc、official-kits）
   mcp/               MCP server 源码（state、knowledge、reflection）
   shared/            内部 workspace 包（memory-store、tool-aliases）
 scripts/
@@ -95,7 +95,7 @@ pnpm build
 pnpm --filter @opc/state-server test
 pnpm --filter @opc/knowledge-server test
 pnpm --filter @opc/reflection-server test
-pnpm --filter @opc/orchestrator test
+pnpm --filter @opc/plugin test
 ```
 
 ## 许可证

@@ -15,13 +15,13 @@
       "keywords": ["agents", "product", "design", "dev", "qa", "reflection", "lifecycle"]
     },
     {
-      "name": "opc-orchestrator",
-      "source": "./dist/plugins/opc-orchestrator",
-      "description": "OPC orchestrator — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
+      "name": "opc",
+      "source": "./dist/plugins/opc",
+      "description": "OPC — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
       "version": "0.1.0",
       "author": { "name": "caffeine" },
       "category": "infrastructure",
-      "keywords": ["orchestrator", "mcp", "hook", "status", "cli"]
+      "keywords": ["opc", "mcp", "hook", "status", "cli"]
     }
   ]
 }

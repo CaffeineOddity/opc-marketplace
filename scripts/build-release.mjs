@@ -5,10 +5,10 @@
  * Outputs:
  *   dist/mcp/<name>/dist/<entry>.js     — esbuild bundle, shared deps inlined
  *   dist/mcp/<name>/<resources>/        — runtime resources (prompts, seed-corrections)
- *   dist/plugins/opc-orchestrator/      — plugin metadata + opc-status CLI bundle
+ *   dist/plugins/opc/      — plugin metadata + opc-status CLI bundle
  *   dist/plugins/official-kits/         — agent .md files (copied as-is)
  *
- * Paths in src/plugins/opc-orchestrator/.claude-plugin/.mcp.json
+ * Paths in src/plugins/opc/.claude-plugin/.mcp.json
  *   ${CLAUDE_PLUGIN_ROOT}/../../mcp/<name>/dist/<entry>.js
  * resolve under dist/ to dist/mcp/<name>/dist/<entry>.js — same layout, no rewrite needed.
  */
@@ -106,12 +106,12 @@ async function bundleMcp(server) {
   await writeFile(join(outDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
 }
 
-/** Build the opc-orchestrator plugin: metadata + opc-status CLI.
+/** Build the opc plugin: metadata + opc-status CLI.
  *  Scenarios are now bootstrapped by opc-state-server; this plugin only
  *  wires the hook + slash command. */
 async function buildOrchestratorPlugin() {
-  const srcPlugin = join(SRC, "plugins", "opc-orchestrator");
-  const outPlugin = join(DIST, "plugins", "opc-orchestrator");
+  const srcPlugin = join(SRC, "plugins", "opc");
+  const outPlugin = join(DIST, "plugins", "opc");
 
   // Plugin metadata (plugin.json + .mcp.json).
   await cp(join(srcPlugin, ".claude-plugin"), join(outPlugin, ".claude-plugin"), {
@@ -165,7 +165,7 @@ async function main() {
     console.log("ok");
   }
 
-  console.log("→ Building opc-orchestrator plugin");
+  console.log("→ Building opc plugin");
   await buildOrchestratorPlugin();
 
   console.log("→ Copying official-kits");

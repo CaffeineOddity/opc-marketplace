@@ -1,4 +1,4 @@
-# opc-orchestrator
+# opc
 
 Minimal Claude Code plugin that wires a `UserPromptSubmit` hook to nudge Claude
 toward calling `mcp__opc-state__opc_flow_query` before reasoning about any
@@ -6,21 +6,22 @@ request, plus a small library of scenario recipes Claude consults on demand.
 
 The plugin is intentionally tiny — all real logic lives in the three MCP
 servers (`opc-state-server`, `opc-knowledge-server`, `opc-reflection-server`).
-This package only:
+This package:
 
-1. Injects a one-line notice on qualifying user messages.
-2. Ships scenario recipes Claude can read for tool sequencing.
+1. Injects a one-line notice on qualifying user messages via `UserPromptSubmit` hook.
+2. Ships the `/opc-status` slash command and `opc-status` CLI.
+
+Scenarios now live in `.opc/scenarios/` (bootstrapped by opc-state-server on first run).
 
 ## Layout
 
 ```
-platform/opc-orchestrator/
-├── .claude-plugin/plugin.json   ← hook registration
+src/plugins/opc/
+├── .claude-plugin/plugin.json   ← hook registration + MCP config
 ├── bin/opc-hook.sh              ← the hook script (quiet default)
-├── scenarios/                   ← recipe markdown Claude reads on demand
-│   ├── add-feature.md
-│   └── fix-bug.md
-└── test/opc-hook.test.ts        ← vitest harness shelling out to the script
+├── commands/opc-status.md       ← /opc-status slash command
+├── src/opc-status/              ← opc-status CLI source (bundled at build time)
+└── test/                        ← vitest harness shelling out to the script
 ```
 
 ## Hook intensity

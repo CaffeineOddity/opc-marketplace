@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# platform/opc-orchestrator/bin/opc-hook.sh
+# src/plugins/opc/bin/opc-hook.sh
 #
 # OPC UserPromptSubmit hook (v1 quiet default per host-contract §2.6 / A2).
 #

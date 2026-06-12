@@ -8,10 +8,10 @@ OPC (Opinionated Pipeline Compiler) — state-machine-driven pipeline compiler w
 
 | Plugin | Description |
 |--------|-------------|
-| `opc-orchestrator` | Pipeline orchestrator with UserPromptSubmit hook, `/opc-status` command, and 3 MCP servers (state, knowledge, reflection) |
+| `opc` | Pipeline orchestrator with UserPromptSubmit hook, `/opc-status` command, and 3 MCP servers (state, knowledge, reflection) |
 | `opc/official-kits` | 27 sub-agents covering the full product lifecycle: product, design, dev, QA, ship, growth |
 
-### MCP Servers (bundled with opc-orchestrator)
+### MCP Servers (bundled with opc)
 
 | Server | Tools |
 |--------|-------|
@@ -35,7 +35,7 @@ claude plugin marketplace add CaffeineOddity/opc-marketplace
 
 ```shell
 # Core orchestrator (required)
-claude plugin install opc-orchestrator
+claude plugin install opc
 
 # Official agent kits
 claude plugin install opc/official-kits
@@ -66,7 +66,7 @@ claude plugin marketplace list
 
 ```
 src/                 source code
-  plugins/           plugin source (opc-orchestrator, official-kits)
+  plugins/           plugin source (opc, official-kits)
   mcp/               MCP server source (state, knowledge, reflection)
   shared/            internal workspace packages (memory-store, tool-aliases)
 scripts/
@@ -96,7 +96,7 @@ pnpm build
 pnpm --filter @opc/state-server test
 pnpm --filter @opc/knowledge-server test
 pnpm --filter @opc/reflection-server test
-pnpm --filter @opc/orchestrator test
+pnpm --filter @opc/plugin test
 ```
 
 ## License

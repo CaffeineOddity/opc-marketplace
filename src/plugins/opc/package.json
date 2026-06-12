@@ -1,5 +1,5 @@
 {
-  "name": "@opc/orchestrator",
+  "name": "@opc/plugin",
   "version": "0.0.0",
   "private": true,
   "type": "module",

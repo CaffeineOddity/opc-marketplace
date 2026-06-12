@@ -55,7 +55,7 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
 
-  src/plugins/opc-orchestrator:
+  src/plugins/opc:
     dependencies:
       '@opc/knowledge-server':
         specifier: workspace:*

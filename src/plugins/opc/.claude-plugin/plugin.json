@@ -1,7 +1,7 @@
 {
-  "name": "opc-orchestrator",
+  "name": "opc",
   "version": "0.1.0",
-  "description": "OPC orchestrator: UserPromptSubmit hook that nudges Claude to call opc_flow_query, plus the /opc-status slash command and opc-status CLI (read-only terminal health snapshot, M18.h).",
+  "description": "OPC: UserPromptSubmit hook that nudges Claude to call opc_flow_query, plus the /opc-status slash command and opc-status CLI (read-only terminal health snapshot, M18.h).",
   "depends": ["mcp"],
   "mcp": "./.mcp.json",
   "hooks": {
