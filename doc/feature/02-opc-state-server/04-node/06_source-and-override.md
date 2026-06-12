@@ -6,21 +6,29 @@
 
 | 来源 | 位置 | 说明 |
 |------|------|------|
-| 内置节点 | `phases/<phase>/nodes/` | 随 marketplace 分发 |
-| 项目节点 | `opc-nodes/` | 同名覆盖内置节点 |
+| 内置节点 | `.opc/phases/<phase>/nodes/` | state-server 首次启动时从 bundle 复制到项目 |
+| 项目自定义 | `.opc/phases/<phase>/nodes/` | 用户直接编辑、新增、删除节点 |
 
 ```
 my-project/
-└── opc-nodes/
-    ├── 04-implement-design/nodes/
-    │   └── api-design.md
-    └── 05-implement/nodes/
-        └── tdd-implementation.md
+└── .opc/
+    └── phases/
+        ├── 04-implement-design/
+        │   └── nodes/
+        │       └── api-design.md          ← 内置
+        ├── 05-implement/
+        │   └── nodes/
+        │       ├── backend-endpoint.md    ← 内置
+        │       ├── tdd-implementation.md  ← 用户自定义
+        │       └── deploy-to-k8s.md       ← 用户新增
+        └── 99-custom/                     ← 用户新增的 phase
+            └── nodes/
+                └── my-node.md
 ```
 
-优先级：`opc-nodes/` > `phases/`。
+所有节点均在 `.opc/phases/` 下，用户可自由编辑、新增、删除。
 
-`opc_phase_start` 扫描时同名节点以项目版本胜出；`opc_node_start` 中 `node_file_path` 字段返回实际生效的路径，供 Agent 引用。
+升级时 state-server 进行三方对比（内置旧版 vs 内置新版 vs 用户当前版），若内置升级了且用户也改过同一文件，生成 `<node>.conflict` 供用户合并。用户接受内置版则手动覆盖；用户偏好本地版则忽略 `.conflict`。优质改动可通过 MR 回流至上游 marketplace 仓库。
 
 ---
 

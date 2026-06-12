@@ -97,7 +97,7 @@ matching variants ("auth" vs existing "user-auth").
 
 ### 3.6 ⑥ Match scenario
 
-Scan `scenarios/`, pick 1–2 closest:
+Scan `.opc/scenarios/`, pick 1–2 closest:
 
 `add-feature` · `fix-bug` · `build-saas` · `build-mobile-app`
 · `redesign-product` · `performance-optimize` · `security-audit`

@@ -11,6 +11,8 @@ import {
 
 import { resolveAlias } from "@opc/tool-aliases";
 
+import { bootstrapBuiltins, formatUpgradeWarnings } from "./bootstrap.js";
+
 import { FlowServer, type CorrectRequest, type LifecycleRequest, type QuickDispatchRequest, type QueryRequest, type ReflectRequest, type StepCompleteRequest, type UserReplyRequest } from "./flow-server.js";
 import type { FlowStep, Intent } from "./flow-state.js";
 import type { PhaseConfirmNodeOverride, PhaseCompleteRequest, PhaseConfirmRequest, PhaseStartRequest } from "./phase-server.js";
@@ -298,6 +300,25 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
   const root = resolve(opts.root);
   mkdirSync(root, { recursive: true });
 
+  // Bootstrap built-in phases/ and scenarios/ into <root>/.opc/ on first run.
+  // Subsequent runs perform three-way conflict detection against the previous
+  // bundle snapshot. Warnings are surfaced through opc_flow_query responses.
+  let upgradeWarnings: string[] = [];
+  try {
+    const bootstrap = await bootstrapBuiltins(root);
+    upgradeWarnings = formatUpgradeWarnings(bootstrap);
+    if (upgradeWarnings.length > 0) {
+      for (const w of upgradeWarnings) {
+        process.stderr.write(`[opc-state-server] ${w}\n`);
+      }
+    }
+  } catch (err) {
+    // Bootstrap is best-effort — never block server startup.
+    process.stderr.write(
+      `[opc-state-server] bootstrap failed: ${(err as Error).message}\n`,
+    );
+  }
+
   const resolvedPid = resolveClaudePid({ transport, serverPid: () => process.pid });
   const claudePid: number = resolvedPid.pid;
 
@@ -306,6 +327,7 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
     transport,
     ppid: () => process.ppid,
     pid: () => claudePid,
+    upgradeWarnings,
   });
   const pipeline = new PipelineServer({ root });
   const phase = new PhaseServer({ root });

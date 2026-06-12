@@ -551,15 +551,16 @@ export class PhaseServer {
     if (phase_plan.order_validated !== true) {
       throw new PhaseValidationError("V0.8: phase_plan.order_validated must be true", { required_action: "set phase_plan.order_validated to true after verifying phase ordering satisfies all dependencies" });
     }
-    // V0.9: validate available phases exist as directories on disk.
-    // Only runs when phases/ or opc-nodes/ directories exist (skipped in
-    // ephemeral test environments where these dirs are absent).
-    if (existsSync(`${this.root}/phases`) || existsSync(`${this.root}/opc-nodes`)) {
-      const onDisk = scanPhaseDirectories(this.root);
+    // V0.9: validate available phases exist as directories under .opc/phases/.
+    // Bootstrap ensures the bundle's phases/ are mirrored into .opc/phases/
+    // on first run; users may add/edit/remove files directly in .opc/phases/.
+    const opcPhases = `${this.root}/.opc/phases`;
+    if (existsSync(opcPhases)) {
+      const onDisk = scanOpcPhaseDirectories(this.root);
       const missing = phase_plan.available.filter((p) => !onDisk.includes(p));
       if (missing.length > 0) {
         throw new PhaseValidationError(
-          `V0.9: phase(s) [${missing.join(",")}] not found in phases/ or opc-nodes/ directories`,
+          `V0.9: phase(s) [${missing.join(",")}] not found in .opc/phases/ directory`,
           { required_action: `remove unavailable phases [${missing.join(",")}] from phase_plan.available and phase_plan.selected. Available on disk: [${onDisk.join(", ") || "(none)"}]` },
         );
       }
@@ -614,24 +615,21 @@ function toNodeDefinition(
 }
 
 /**
- * Scan `phases/` and `opc-nodes/` directories under root for available
- * phase ids. Returns the union of subdirectory names found in either
- * location (project-level `opc-nodes/` can supplement built-in `phases/`).
+ * Scan `.opc/phases/` directory under root for available phase ids.
+ * Returns subdirectory names sorted alphabetically.
+ * All phases are user-editable under .opc/, so there is no need for a
+ * separate `opc-nodes/` overlay — users add/override nodes directly in
+ * `.opc/phases/<phase>/nodes/`.
  */
-export function scanPhaseDirectories(root: string): string[] {
-  const ids = new Set<string>();
-  for (const dir of ["phases", "opc-nodes"]) {
-    const base = `${root}/${dir}`;
-    if (!existsSync(base)) continue;
-    try {
-      for (const entry of readdirSync(base, { withFileTypes: true })) {
-        if (entry.isDirectory() && !entry.name.startsWith(".")) {
-          ids.add(entry.name);
-        }
-      }
-    } catch {
-      // Permission errors etc. — skip this directory.
-    }
+export function scanOpcPhaseDirectories(root: string): string[] {
+  const base = `${root}/.opc/phases`;
+  if (!existsSync(base)) return [];
+  try {
+    return readdirSync(base, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
   }
-  return [...ids].sort();
 }

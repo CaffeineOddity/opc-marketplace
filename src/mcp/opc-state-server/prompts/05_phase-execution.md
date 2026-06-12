@@ -32,7 +32,7 @@ Pure deterministic, no LLM. State-server:
 
 - Validates: `pipeline` exists, `sub_pipeline` exists, `prev phase
   completed`, `phase ∈ state.json.phase_plan.selected`.
-- Scans `phases/<phase>/nodes/*.md` + `opc-nodes/<phase>/nodes/*.md`.
+- Scans `.opc/phases/<phase>/nodes/*.md`.
 - Filters by tag intersection (`task_tags ∩ node.tags`).
 - Marks `recommended: true` for nodes matched by the scenario.
 - Sets `phase.status = in_progress`, updates `flow-state.json`

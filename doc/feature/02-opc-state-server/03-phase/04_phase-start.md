@@ -29,7 +29,7 @@ opc_phase_start → 扫描节点 → 匹配排序 → 收集 selection_evidence
 
 行为（纯确定性，零 LLM）:
   → 校验: pipeline 存在、sub 存在、prev phase completed、phase ∈ state.json.phase_plan.selected
-  → 扫描 phases/<phase>/nodes/*.md + opc-nodes/<phase>/nodes/*.md
+  → 扫描 .opc/phases/<phase>/nodes/*.md
   → 解析每个 node 的 frontmatter
   → tag 交集过滤（纯规则）
   → 标记 recommend 节点（来自 scenario）

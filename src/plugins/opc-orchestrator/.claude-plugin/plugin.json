@@ -17,5 +17,6 @@
       }
     ]
   },
-  "scenarios_dir": "scenarios"
+  "scenarios_dir": null,
+  "_scenarios_note": "scenarios now sourced from .opc/scenarios/, bootstrapped by opc-state-server on first run"
 }

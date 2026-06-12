@@ -1,6 +1,6 @@
 # 02 节点选择策略
 
-`opc_phase_start` 扫描 `phases/<phase>/nodes/` 和项目 `opc-nodes/`，返回**原始候选列表**（不做语义匹配）。Claude 拿到列表后自行完成匹配排序 + 收集 `selection_evidence`，由 reflection-server **P5 反思位点**的 V1-V5 validator + meta-validator 决定推进路径。
+`opc_phase_start` 扫描 `.opc/phases/<phase>/nodes/`（由 state-server 首次启动时从 bundle 复制），返回**原始候选列表**（不做语义匹配）。Claude 拿到列表后自行完成匹配排序 + 收集 `selection_evidence`，由 reflection-server **P5 反思位点**的 V1-V5 validator + meta-validator 决定推进路径。
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 state-server 职责（纯确定性）:
-  ① 扫描 phases/<phase>/nodes/*.md + opc-nodes/<phase>/nodes/*.md
+  ① 扫描 .opc/phases/<phase>/nodes/*.md
   ② 解析每个节点的 frontmatter（name, tags, description, agents, input, output, quality_gates）
   ③ tag 交集过滤 → 排除与任务 tags 无交集的节点（always_show: true 除外）
   ④ 标记 scenario 推荐的节点

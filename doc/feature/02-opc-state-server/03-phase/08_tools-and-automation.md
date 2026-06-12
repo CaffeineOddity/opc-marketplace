@@ -8,8 +8,8 @@
 
 | 来源 | 位置 | 说明 |
 |------|------|------|
-| 内置节点 | `phases/<phase>/nodes/` | 随 marketplace 分发 |
-| 项目节点 | `opc-nodes/` | 同目录结构，同名覆盖 |
+| 内置节点 | `.opc/phases/<phase>/nodes/` | state-server 启动时从 bundle 复制 |
+| 项目自定义 | `.opc/phases/<phase>/nodes/` | 用户直接编辑、新增、删除 |
 
 详细优先级与目录布局见 [../04-node/06_source-and-override.md](../04-node/06_source-and-override.md)。
 

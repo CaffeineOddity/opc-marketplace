@@ -50,6 +50,11 @@ export interface FlowServerOptions {
    * injectable for tests. Defaults to process.kill(pid, 0).
    */
   isAlive?: (pid: number) => boolean;
+  /**
+   * Bootstrap/upgrade warnings from built-in phase/scenario bootstrap.
+   * Populated by startStateServer; injected into opc_flow_query responses.
+   */
+  upgradeWarnings?: string[];
 }
 
 export class FlowGuardError extends Error {
@@ -99,6 +104,12 @@ export interface QueryResponse {
    */
   _warnings?: KitWarning[];
   suggested_actions?: Array<SuggestedAction | KitSuggestedAction>;
+  /**
+   * Non-fatal upgrade warnings from built-in resource bootstrap.
+   * Populated when built-in phases/scenarios had three-way conflicts
+   * with user modifications (.conflict files generated).
+   */
+  upgrade_warnings?: string[];
 }
 
 export type LifecycleRequest =
@@ -297,6 +308,7 @@ export class FlowServer {
   private readonly transport: TransportMode;
   private readonly ppid: () => number;
   private readonly isAlive: (pid: number) => boolean;
+  private readonly upgradeWarnings: string[];
 
   constructor(opts: FlowServerOptions) {
     this.root = opts.root;
@@ -319,6 +331,7 @@ export class FlowServer {
           return false;
         }
       });
+    this.upgradeWarnings = opts.upgradeWarnings ?? [];
   }
 
   async query(req: QueryRequest): Promise<QueryResponse> {
@@ -367,6 +380,7 @@ export class FlowServer {
       // Kit-health is best-effort; never let it block the query response.
     }
     if (aggregatedActions.length > 0) response.suggested_actions = aggregatedActions;
+    if (this.upgradeWarnings.length > 0) response.upgrade_warnings = this.upgradeWarnings;
     return response;
   }
 

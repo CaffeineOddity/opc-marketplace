@@ -84,6 +84,17 @@ async function bundleMcp(server) {
     await cp(srcRes, destRes, { recursive: true });
   }
 
+  // Copy built-in phases/ and scenarios/ — bootstrapped into .opc/ on first run.
+  for (const dir of ["phases", "scenarios"]) {
+    const srcDir2 = join(srcDir, dir);
+    const destDir2 = join(outDir, dir);
+    try {
+      await cp(srcDir2, destDir2, { recursive: true });
+    } catch {
+      // Directory may not exist; skip quietly.
+    }
+  }
+
   // Write a minimal package.json so node treats the bundle as ESM.
   const pkg = {
     name: `@opc/${server.name}-release`,
@@ -95,7 +106,9 @@ async function bundleMcp(server) {
   await writeFile(join(outDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
 }
 
-/** Build the opc-orchestrator plugin: metadata + opc-status CLI. */
+/** Build the opc-orchestrator plugin: metadata + opc-status CLI.
+ *  Scenarios are now bootstrapped by opc-state-server; this plugin only
+ *  wires the hook + slash command. */
 async function buildOrchestratorPlugin() {
   const srcPlugin = join(SRC, "plugins", "opc-orchestrator");
   const outPlugin = join(DIST, "plugins", "opc-orchestrator");
@@ -108,9 +121,8 @@ async function buildOrchestratorPlugin() {
   // Hook script + opc-status shim.
   await cp(join(srcPlugin, "bin"), join(outPlugin, "bin"), { recursive: true });
 
-  // Slash command + scenario markdown.
+  // Slash command.
   await cp(join(srcPlugin, "commands"), join(outPlugin, "commands"), { recursive: true });
-  await cp(join(srcPlugin, "scenarios"), join(outPlugin, "scenarios"), { recursive: true });
 
   // Bundle the opc-status CLI so bin/opc-status.mjs's `../dist/opc-status/cli.js` resolves.
   await esbuild.build({
