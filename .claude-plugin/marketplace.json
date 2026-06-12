@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "opc/official-kits",
-      "source": "./kits/official-kits",
+      "source": "./dist/plugins/official-kits",
       "description": "OPC official kits — 27 sub-agents across product, design, dev, infra, QA, and reflection categories for full pipeline lifecycle",
       "version": "0.1.0",
       "author": { "name": "caffeine" },
@@ -16,7 +16,7 @@
     },
     {
       "name": "opc-orchestrator",
-      "source": "./platform/opc-orchestrator",
+      "source": "./dist/plugins/opc-orchestrator",
       "description": "OPC orchestrator — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
       "version": "0.1.0",
       "author": { "name": "caffeine" },

@@ -4,6 +4,7 @@
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.json
 **/node_modules/
+/dist/              # build-release.mjs output
 **/dist/
 coverage/
 .tsbuildinfo

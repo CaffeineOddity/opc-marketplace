@@ -2,8 +2,16 @@
   "name": "opc-marketplace",
   "private": true,
   "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "build": "node scripts/build-release.mjs",
+    "clean": "rm -rf dist"
+  },
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "esbuild": "^0.25.0",
     "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

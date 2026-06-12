@@ -1,3 +1,4 @@
 packages:
-  - "shared/*"
-  - "platform/mcp/*"
+  - "src/shared/*"
+  - "src/mcp/*"
+  - "src/plugins/opc-orchestrator"

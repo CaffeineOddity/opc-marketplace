@@ -62,24 +62,40 @@ claude plugin marketplace list
 - Node.js >= 20
 - pnpm >= 10
 
+### 项目结构
+
+```
+src/                 源代码
+  plugins/           插件源码（opc-orchestrator、official-kits）
+  mcp/               MCP server 源码（state、knowledge、reflection）
+  shared/            内部 workspace 包（memory-store、tool-aliases）
+scripts/
+  build-release.mjs  将 src/ 打包到 dist/
+dist/                构建产物（gitignore，由 `pnpm build` 生成）
+  plugins/<name>/    插件元数据 + 打包后的 CLI
+  mcp/<name>/        零依赖的 MCP server bundle + 运行时资源
+.claude-plugin/
+  marketplace.json   指向 dist/plugins/* —— 用户安装的是构建产物
+```
+
 ### 构建
+
+一条命令即可把所有 MCP server、orchestrator CLI、kit markdown 打包进 `dist/`，
+并把 workspace 依赖与 `@modelcontextprotocol/sdk` 全部 inline。
+产出的 `dist/mcp/<name>/` 是自包含的，消费端不再需要 `pnpm install`。
 
 ```shell
 pnpm install
-pnpm run --filter @opc/memory-store build
-pnpm run --filter @opc/tool-aliases build
-pnpm run --filter @opc/state-server build
-pnpm run --filter @opc/knowledge-server build
-pnpm run --filter @opc/reflection-server build
+pnpm build
 ```
 
 ### 运行测试
 
 ```shell
-pnpm run --filter @opc/state-server test
-pnpm run --filter @opc/knowledge-server test
-pnpm run --filter @opc/reflection-server test
-pnpm run --filter opc-orchestrator-test test
+pnpm --filter @opc/state-server test
+pnpm --filter @opc/knowledge-server test
+pnpm --filter @opc/reflection-server test
+pnpm --filter @opc/orchestrator test
 ```
 
 ## 许可证
