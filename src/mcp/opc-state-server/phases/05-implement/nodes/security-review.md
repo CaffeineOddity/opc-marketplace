@@ -4,7 +4,7 @@ tags: [security, auth]
 description: 代码级安全审查（密码、token、注入、XSS）
 agents:
   primary: [security-engineer]
-  fallback: [security-auditor]
+  fallback: []
 input:
   - path: <unit>/<feature>/api
     type: knowledge

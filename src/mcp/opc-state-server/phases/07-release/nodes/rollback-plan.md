@@ -4,7 +4,7 @@ tags: [infra, configure]
 description: 回滚预案 / runbook / 故障演练
 agents:
   primary: [sre-engineer]
-  fallback: [devops-incident-responder, deployment-engineer]
+  fallback: [deployment-engineer]
 input:
   - path: <unit>/<feature>/deploy-pipeline
     type: knowledge

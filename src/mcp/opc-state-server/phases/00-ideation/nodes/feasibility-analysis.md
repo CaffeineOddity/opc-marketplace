@@ -4,7 +4,7 @@ tags: [add-feature, configure]
 description: 技术 / 商业 / 资源三维可行性评估
 agents:
   primary: [product-manager]
-  fallback: [tech-lead, business-analyst]
+  fallback: [business-analyst]
 input:
   - path: <unit>/<feature>/problem-statement
     type: knowledge

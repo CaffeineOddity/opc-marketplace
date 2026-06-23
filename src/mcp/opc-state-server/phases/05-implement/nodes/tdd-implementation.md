@@ -4,7 +4,7 @@ tags: [backend, database]
 description: TDD 驱动的后端功能实现（红-绿-重构）
 agents:
   primary: [backend-engineer]
-  fallback: [tdd-orchestrator]
+  fallback: []
 input:
   - path: <unit>/<feature>/api
     type: knowledge

@@ -4,7 +4,7 @@ tags: [security, auth]
 description: 系统级安全扫描（SAST / SCA / secrets / 渗透测试）
 agents:
   primary: [security-engineer]
-  fallback: [penetration-tester, security-auditor]
+  fallback: [penetration-tester]
 input:
   - path: <unit>/<feature>/architecture
     type: knowledge

@@ -4,7 +4,7 @@ tags: [add-feature, api]
 description: 产品需求文档（PRD）起草：goal / must / should / could + 验收线
 agents:
   primary: [product-manager]
-  fallback: [tech-lead]
+  fallback: []
 input:
   - path: <unit>/<feature>/user-research
     type: knowledge

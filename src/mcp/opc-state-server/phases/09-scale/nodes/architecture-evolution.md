@@ -4,7 +4,7 @@ tags: [backend, refactor]
 description: 架构演进方案（拆分 / 缓存 / 异步 / CQRS / 读写分离）
 agents:
   primary: [backend-architect]
-  fallback: [microservices-architect, cloud-architect]
+  fallback: [cloud-architect]
 input:
   - path: <unit>/<feature>/performance-profiling
     type: knowledge
