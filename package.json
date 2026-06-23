@@ -4,12 +4,15 @@
   "packageManager": "pnpm@10.26.1",
   "scripts": {
     "build": "node scripts/build-release.mjs",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "pnpm -r --filter '@opc/state-server' --filter '@opc/knowledge-server' --filter '@opc/reflection-server' test && vitest run --root src/plugins/opc",
+    "test:e2e": "vitest run --root src/plugins/opc"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
     "esbuild": "^0.25.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^2.1.9"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]
