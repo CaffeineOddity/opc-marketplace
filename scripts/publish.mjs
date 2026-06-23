@@ -61,6 +61,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const DIST = join(ROOT, "dist");
+const MANIFEST = join(ROOT, ".claude-plugin", "marketplace.json");
 const OPC_DIR = join(ROOT, ".opc");
 const COUNTER_FILE = join(OPC_DIR, "publish-local-counter");
 
@@ -115,7 +116,11 @@ function run(cmd, cmdArgs, opts2 = {}) {
     console.log(`  [dry-run] ${cmd} ${cmdArgs.join(" ")}`);
     return "";
   }
-  const r = spawnSync(cmd, cmdArgs, { stdio: opts2.silent ? "pipe" : "inherit", cwd: ROOT });
+  const r = spawnSync(cmd, cmdArgs, {
+    stdio: opts2.silent ? "pipe" : "inherit",
+    cwd: ROOT,
+    env: opts2.env ?? process.env,
+  });
   if (r.status !== 0) {
     throw new Error(`command failed (${cmd} ${cmdArgs.join(" ")}): exit ${r.status}`);
   }
@@ -225,26 +230,51 @@ function assertOnBranch(expected) {
 // Build
 // ---------------------------------------------------------------------------
 
-function buildDist() {
-  console.log("→ Building dist/ (pnpm build)");
+function buildDist(version) {
+  console.log(`→ Building dist/${version}/ (OPC_RELEASE_VERSION=${version} pnpm build)`);
   if (NO_BUILD) {
-    if (!existsSync(DIST)) {
-      throw new Error("--no-build given but dist/ does not exist. Run without it first.");
+    if (!existsSync(join(DIST, version, "mcp", "opc-state-server", "dist", "server.js"))) {
+      throw new Error(`--no-build given but dist/${version}/ does not exist. Run without it first.`);
     }
-    console.log("  (--no-build) using existing dist/");
+    console.log(`  (--no-build) using existing dist/${version}/`);
+    return;
+  }
+  if (DRY) {
+    console.log(`  [dry-run] OPC_RELEASE_VERSION=${version} pnpm build`);
+    console.log(`  [dry-run] (would verify dist/${version}/mcp/opc-state-server/dist/server.js exists)`);
     return;
   }
   try {
-    run("pnpm", ["build"]);
+    // Pass the version via env so build-release.mjs outputs under dist/<version>/.
+    run("pnpm", ["build"], { env: { ...process.env, OPC_RELEASE_VERSION: version } });
   } catch (e) {
     console.error("✗ build failed");
     console.error(e.message);
     process.exit(2);
   }
-  if (!existsSync(join(DIST, "mcp", "opc-state-server", "dist", "server.js"))) {
-    throw new Error("build finished but dist/mcp/opc-state-server/dist/server.js missing");
+  if (!existsSync(join(DIST, version, "mcp", "opc-state-server", "dist", "server.js"))) {
+    throw new Error(`build finished but dist/${version}/mcp/opc-state-server/dist/server.js missing`);
   }
-  console.log("✓ dist/ built");
+  console.log(`✓ dist/${version}/ built`);
+}
+
+/** Rewrite the root .claude-plugin/marketplace.json so its plugin `source`
+ *  paths point at dist/<version>/plugins/<name>. This is the "latest" pointer.
+ *  The version dir itself also carries a self-contained marketplace.json (written
+ *  by build-release.mjs) for tarball/path consumers. */
+function updateLatestPointer(version) {
+  if (DRY) {
+    console.log(`  [dry-run] rewrite ${MANIFEST} → _latest=${version}, sources → ./dist/${version}/plugins/*`);
+    return;
+  }
+  const m = JSON.parse(readFileSync(MANIFEST, "utf8"));
+  m._latest = version;
+  for (const p of m.plugins) {
+    const short = p.name === "opc" ? "opc" : "official-kits";
+    p.source = `./dist/${version}/plugins/${short}`;
+  }
+  writeFileSync(MANIFEST, JSON.stringify(m, null, 2) + "\n", "utf8");
+  console.log(`✓ root marketplace.json now points at dist/${version}/`);
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +314,7 @@ async function publishLocal(tag, n) {
   console.log("  #   /mcp                  → opc-state / opc-knowledge / opc-reflection listed");
   console.log('  #   send "帮我加个登录功能" → hook should inject the OPC nudge');
   console.log("");
-  console.log(`Local version marker: ${tag} (counter n=${n})`);
+  console.log(`Local version: ${tag}  (dir: dist/${tag}/, latest pointer: dist/${tag}/)`);
   console.log("  To re-publish after a code change: node scripts/publish.mjs local");
 }
 
@@ -340,7 +370,12 @@ async function publishBranch(tag, n) {
   console.log("    claude plugin install opc");
   console.log("    claude plugin install opc/official-kits");
   console.log("");
-  console.log(`Version tag: ${tag}  (branch: ${RELEASE_BRANCH})`);
+  console.log("Pinning an OLD version (release branch keeps only the latest dist/<ver>/,");
+  console.log("but every release is tagged):");
+  console.log(`    git clone --branch ${tag} https://github.com/${repo}.git /tmp/opc-${tag}`);
+  console.log(`    claude plugin marketplace add /tmp/opc-${tag}`);
+  console.log("");
+  console.log(`Version tag: ${tag}  (branch: ${RELEASE_BRANCH}, latest dir: dist/${tag}/)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,19 +395,20 @@ async function publishTarball(tag, n) {
     }
   }
 
-  // Build a self-contained staging dir: marketplace.json + dist/ (so a
-  // tarball-extracted tree is directly add-able as a path marketplace,
-  // and Claude Code can also fetch it via the asset URL).
+  // The version dir dist/<tag>/ is already a self-contained tree (marketplace.json
+  // + plugins/ + mcp/, written by build-release.mjs). Stage a copy so the
+  // tarball root, when extracted, IS the marketplace root.
+  const versionDir = join(DIST, tag);
   const stage = join(ROOT, ".opc", "publish-stage", tag);
   if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
-  mkdirSync(join(stage, ".claude-plugin"), { recursive: true });
+  mkdirSync(stage, { recursive: true });
 
-  console.log("→ Staging self-contained release tree");
+  console.log("→ Staging self-contained release tree (from dist/<version>/)");
   if (!DRY) {
-    cpSync(join(ROOT, ".claude-plugin", "marketplace.json"), join(stage, ".claude-plugin", "marketplace.json"));
-    cpSync(DIST, join(stage, "dist"), { recursive: true });
+    // Copy the version dir's *contents* into stage so stage = marketplace root.
+    cpSync(versionDir, stage, { recursive: true });
   } else {
-    console.log(`  [dry-run] copy .claude-plugin/marketplace.json + dist/ → ${stage}`);
+    console.log(`  [dry-run] copy ${versionDir}/ → ${stage}/`);
   }
 
   const tarName = `opc-marketplace-${tag}.tar.gz`;
@@ -445,9 +481,10 @@ async function publishTarball(tag, n) {
 
 (async () => {
   console.log(`publish mode: ${mode}${DRY ? "  (dry-run)" : ""}`);
-  buildDist();
   const { tag, n } = nextVersion(mode);
   console.log(`version: ${tag}`);
+  buildDist(tag);
+  updateLatestPointer(tag);
   try {
     if (mode === "local") await publishLocal(tag, n);
     else if (mode === "branch") await publishBranch(tag, n);

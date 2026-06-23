@@ -4,24 +4,44 @@
   "owner": {
     "name": "caffeine"
   },
+  "_latest": "v0.1.0-dev3",
+  "_latest_note": "publish.mjs sets _latest to the newest dist/<version> dir and rewrites each plugin's `source` to ./dist/<latest>/plugins/<name>. Until the first publish, _latest is null — run `node scripts/publish.mjs local`.",
   "plugins": [
     {
       "name": "opc/official-kits",
-      "source": "./dist/plugins/official-kits",
+      "source": "./dist/v0.1.0-dev3/plugins/official-kits",
       "description": "OPC official kits — 27 sub-agents across product, design, dev, infra, QA, and reflection categories for full pipeline lifecycle",
       "version": "0.1.0",
-      "author": { "name": "caffeine" },
+      "author": {
+        "name": "caffeine"
+      },
       "category": "orchestration",
-      "keywords": ["agents", "product", "design", "dev", "qa", "reflection", "lifecycle"]
+      "keywords": [
+        "agents",
+        "product",
+        "design",
+        "dev",
+        "qa",
+        "reflection",
+        "lifecycle"
+      ]
     },
     {
       "name": "opc",
-      "source": "./dist/plugins/opc",
+      "source": "./dist/v0.1.0-dev3/plugins/opc",
       "description": "OPC — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
       "version": "0.1.0",
-      "author": { "name": "caffeine" },
+      "author": {
+        "name": "caffeine"
+      },
       "category": "infrastructure",
-      "keywords": ["opc", "mcp", "hook", "status", "cli"]
+      "keywords": [
+        "opc",
+        "mcp",
+        "hook",
+        "status",
+        "cli"
+      ]
     }
   ]
 }

@@ -1,16 +1,25 @@
 #!/usr/bin/env node
 /**
- * build-release.mjs — produce dist/ release artifacts for the OPC marketplace.
+ * build-release.mjs — produce versioned dist/ release artifacts for the OPC marketplace.
  *
- * Outputs:
- *   dist/mcp/<name>/dist/<entry>.js     — esbuild bundle, shared deps inlined
- *   dist/mcp/<name>/<resources>/        — runtime resources (prompts, seed-corrections)
- *   dist/plugins/opc/      — plugin metadata + opc-status CLI bundle
- *   dist/plugins/official-kits/         — agent .md files (copied as-is)
+ * Version selection:
+ *   Reads OPC_RELEASE_VERSION (e.g. "v0.1.0-dev1"). When unset, defaults to "local".
+ *   Output goes to dist/<version>/ — never to bare dist/.
+ *
+ * Outputs (under dist/<version>/):
+ *   marketplace.json                  — self-contained manifest for this version
+ *   mcp/<name>/dist/<entry>.js        — esbuild bundle, shared deps inlined
+ *   mcp/<name>/<resources>/           — runtime resources (prompts, seed-corrections)
+ *   plugins/opc/                      — plugin metadata + opc-status CLI bundle
+ *   plugins/official-kits/            — agent .md files (copied as-is)
  *
  * Paths in src/plugins/opc/.claude-plugin/.mcp.json
  *   ${CLAUDE_PLUGIN_ROOT}/../../mcp/<name>/dist/<entry>.js
- * resolve under dist/ to dist/mcp/<name>/dist/<entry>.js — same layout, no rewrite needed.
+ * resolve under dist/<version>/ to dist/<version>/mcp/<name>/dist/<entry>.js —
+ * same layout, no rewrite needed.
+ *
+ * The root .claude-plugin/marketplace.json (the "latest" pointer) is NOT touched
+ * by this script — publish.mjs updates it after a successful build.
  */
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -21,7 +30,10 @@ import esbuild from "esbuild";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const SRC = join(ROOT, "src");
-const DIST = join(ROOT, "dist");
+const DIST_ROOT = join(ROOT, "dist");
+
+const VERSION = process.env.OPC_RELEASE_VERSION || "local";
+const DIST = join(DIST_ROOT, VERSION);
 
 /**
  * Resolve `@opc/<name>` workspace imports straight to their TypeScript source.
@@ -154,7 +166,7 @@ async function buildOfficialKits() {
 }
 
 async function main() {
-  console.log("→ Cleaning dist/");
+  console.log(`→ Cleaning dist/${VERSION}/`);
   await rm(DIST, { recursive: true, force: true });
   await mkdir(DIST, { recursive: true });
 
@@ -171,7 +183,52 @@ async function main() {
   console.log("→ Copying official-kits");
   await buildOfficialKits();
 
-  console.log("✓ Release built at dist/");
+  // Write a self-contained manifest at dist/<version>/.claude-plugin/marketplace.json.
+  // Its `source` paths are relative to the version dir, so a tarball of
+  // dist/<version>/ (or a clone of a release branch containing it) can be
+  // added directly as a path marketplace — `claude plugin marketplace add
+  // <path>` looks for .claude-plugin/marketplace.json at the path root.
+  const manifestDir = join(DIST, ".claude-plugin");
+  await mkdir(manifestDir, { recursive: true });
+  await writeFile(
+    join(manifestDir, "marketplace.json"),
+    JSON.stringify(versionedManifest(VERSION), null, 2) + "\n",
+    "utf8",
+  );
+
+  console.log(`✓ Release built at dist/${VERSION}/`);
+}
+
+/** Build the self-contained manifest for a version dir.
+ *  Paths are relative to dist/<version>/. */
+function versionedManifest(version) {
+  return {
+    name: "opc-marketplace",
+    description: `Caffeine's one-person company plugin marketplace — 27 agents, MCP servers, hooks covering the full product lifecycle (release ${version})`,
+    owner: { name: "caffeine" },
+    plugins: [
+      {
+        name: "opc/official-kits",
+        source: "./plugins/official-kits",
+        description:
+          "OPC official kits — 27 sub-agents across product, design, dev, infra, QA, and reflection categories for full pipeline lifecycle",
+        version: "0.1.0",
+        author: { name: "caffeine" },
+        category: "orchestration",
+        keywords: ["agents", "product", "design", "dev", "qa", "reflection", "lifecycle"],
+      },
+      {
+        name: "opc",
+        source: "./plugins/opc",
+        description:
+          "OPC — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
+        version: "0.1.0",
+        author: { name: "caffeine" },
+        category: "infrastructure",
+        keywords: ["opc", "mcp", "hook", "status", "cli"],
+      },
+    ],
+  };
 }
 
 main().catch((err) => {
