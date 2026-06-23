@@ -356,7 +356,8 @@ describe("walkthrough stage 7 — full chain + fixture freeze", () => {
       () => app.phase.complete({ session_id, pipeline_id, sub_pipeline_id, phase: "06-testing" }),
     );
     expect(finalPhase.next_phase).toBe(null);
-    expect(finalPhase.flow_next.tool).toBe("opc_pipeline_complete");
+    expect(finalPhase.flow_next.tool).toBe("opc_pipeline_lifecycle");
+    expect(finalPhase.flow_next.args?.action).toBe("complete");
 
     // ── Stage 7a: pipeline_status — pipeline + sub aggregated to completed ─
     const status = await app.recorder.record(

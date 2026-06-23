@@ -139,7 +139,7 @@ describe("walkthrough stage 4 — phase 04-implement-design", () => {
     expect(apiNodeStarted.status).toBe("in_progress");
     expect(apiNodeStarted.agent).toBe("backend-engineer");
     expect(apiNodeStarted.dispatch_instruction.subagent_type).toBe("backend-engineer");
-    expect(apiNodeStarted.flow_next.tool).toBe("opc_node_complete");
+    expect(apiNodeStarted.flow_next.tool).toBe("opc_node_finish");
 
     // Simulate the sub-agent writing knowledge.
     const apiWrite = await app.recorder.record(

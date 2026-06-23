@@ -215,7 +215,8 @@ describe("walkthrough stage 6 — phase 06-testing", () => {
     expect(phaseDone.status).toBe("completed");
     expect(phaseDone.next_phase).toBe(null);
     expect(phaseDone.auto_advance).toBe(false);
-    expect(phaseDone.flow_next.tool).toBe("opc_pipeline_complete");
+    expect(phaseDone.flow_next.tool).toBe("opc_pipeline_lifecycle");
+    expect(phaseDone.flow_next.args?.action).toBe("complete");
     expect(phaseDone.flow_next.args?.pipeline_id).toBe(pipeline_id);
 
     const calls = app.recorder.freeze();
