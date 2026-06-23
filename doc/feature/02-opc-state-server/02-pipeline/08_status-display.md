@@ -57,5 +57,5 @@
 
 - [04_state-json.md](04_state-json.md) — 状态字段定义
 - [09_tools.md](09_tools.md) — `opc_pipeline_status` 工具
-- [opc-status CLI](../../../../platform/opc-orchestrator/bin/opc-status.mjs) — 终端只读快照（同符号集，含 `--json` / `--session <id>` / `--root <path>`）
-- [opc-status slash 命令](../../../../platform/opc-orchestrator/commands/opc-status.md) — `/opc-status`（slash 桥接 CLI）
+- [opc-status CLI](../../../../src/plugins/opc/bin/opc-status.mjs) — 终端只读快照（同符号集，含 `--json` / `--session <id>` / `--root <path>`）
+- [opc-status slash 命令](../../../../src/plugins/opc/commands/opc-status.md) — `/opc-status`（slash 桥接 CLI）

@@ -1,7 +1,7 @@
 # M15 — E2E Scenario Coverage Audit
 
 > Cross-reference of `doc/feature/04-e2e/02-test/*.md` scenario specs against
-> the executable e2e tests in `platform/opc-orchestrator/test/e2e/`.
+> the executable e2e tests in `src/plugins/opc/test/e2e/`.
 > All 14 scenarios have at least one test asserting the contract described in
 > the scenario doc. Total: **19 test files / 31 tests passing**.
 
@@ -71,7 +71,7 @@ No impl gap — formula at `phase-server.ts:188` (`!isLastPhase && allNodesDone 
 ## How the suite is run
 
 ```bash
-pnpm vitest run platform/opc-orchestrator/test/e2e/
+pnpm vitest run src/plugins/opc/test/e2e/
 ```
 
 Fixture freeze (recorder JSON) is captured in `stage-7.test.ts` for the

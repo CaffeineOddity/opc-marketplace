@@ -1,29 +1,36 @@
-# kits/ REGRESSION
+# plugins/ REGRESSION
 
-This document is the v1 audit of `kits/`, run at M13.h after M13.a-g
-shipped the six business kits.
+> **v2 重写说明**：本文档原为 v1 `kits/`（6 个独立 kit）的 M13.h 审计。v2 将六 kit
+> 合并进单一 `opc/official-kits` 插件，agent 归入 6 个 category 目录（product/design/
+> dev/infra/qa/reflection），并新增 `opc-distiller`（共 27 个）。下面"§1 Inventory"按 v2
+> 重新列数；其余章节（命名唯一性、phase-node 交叉引用、frontmatter 契约）的核查方法不变，
+> 只是 `kits/<kit>/agents/` 路径换成 `official-kits/agents/<category>/`。
+>
+> §3.2 列出的 5 个 v1 fallback 缺口（tech-lead / tdd-orchestrator / security-auditor /
+> microservices-architect / devops-incident-responder）在 v2 仍是 **deferred** —— primary
+> 已覆盖，仅 fallback 降级，不阻塞发布。
 
 ## 1. Inventory
 
-| Kit | Agents (count) | MCP servers |
-|---|---|---|
-| `product-kit` | product-manager / ux-researcher / business-analyst / startup-advisor (**4**) | none |
-| `design-kit` | ui-designer / ux-designer / design-bridge (**3**) | pencil |
-| `dev-kit` | backend-engineer / frontend-developer / fullstack-engineer / security-engineer / database-administrator (**5**) | none |
-| `qa-kit` | test-automator / qa-expert / penetration-tester / critic / debater / tot-explorer / meta-synthesizer / cove-verifier (**8**) | none |
-| `ship-kit` | deployment-engineer / sre-engineer / devops-engineer (**3**) | none |
-| `growth-kit` | performance-engineer / backend-architect / cloud-architect (**3**) | none |
+| Category | Agents (count) |
+|---|---|
+| `product/` | product-manager / business-analyst / startup-advisor (**3**) |
+| `design/` | ux-researcher / ux-designer / ui-designer / design-bridge (**4**) |
+| `dev/` | backend-architect / backend-engineer / frontend-developer / fullstack-engineer / database-administrator / cloud-architect (**6**) |
+| `infra/` | devops-engineer / deployment-engineer / sre-engineer (**3**) |
+| `qa/` | test-automator / qa-expert / security-engineer / penetration-tester / performance-engineer (**5**) |
+| `reflection/` | critic / debater / tot-explorer / meta-synthesizer / cove-verifier / opc-distiller (**6**) |
 
-**Total: 26 agents across 6 kits.**
+**Total: 27 agents across 6 categories.** (v1 had 26 across 6 separate kits; v2 拆出
+infra/ 与 qa/ 的边界、把 ux-researcher 归入 design/，并新增 opc-distiller。)
 
-## 2. Agent name uniqueness (cross-kit)
+## 2. Agent name uniqueness (cross-category)
 
-✅ **PASS** — All 26 `name:` fields unique across all kits. No two kits
-ship the same agent name. Verified via:
+✅ **PASS** — All 27 `name:` fields unique across all categories. Verified via:
 
 ```bash
-for f in kits/*/agents/*.md; do grep "^name:" "$f" | head -1; done \
-  | sort -u | wc -l   # → 26
+for f in src/plugins/official-kits/agents/*/*.md; do grep "^name:" "$f" | head -1; done \
+  | sort -u | wc -l   # → 27
 ```
 
 ## 3. Phase-node ↔ kit-agent cross-reference
@@ -53,47 +60,60 @@ gap is acceptable because OPC's agent-availability check at
 `opc_node_start` only blocks if **all** primary+fallback are missing.
 Spot-checked: every node has ≥ 1 available agent.
 
-### 3.3 Agents in kits/ but not referenced by any node
+### 3.3 Agents in official-kits but not referenced by any node
 
 | Agent | Reason it's still useful |
 |---|---|
 | `critic` / `debater` / `tot-explorer` / `meta-synthesizer` / `cove-verifier` | Reflection-role agents — invoked by reflection-server (M3 / M4 / M5 / M6 / Meta), not by phase node frontmatter. Expected. |
+| `opc-distiller` | Serves corrections-store distillation — invoked by reflection-server, not phase nodes. Expected. |
 | `startup-advisor` | Reflection-role for product-side go/no-go — invoked by reflection-server in greenfield scenarios. Expected. |
-| `ux-designer` | Future-proofing for ux-flow specialization beyond ui-designer's overlap. Held for v1 as an explicit role even though ui-designer carries primary for ux-flow. |
+| `ux-designer` | Future-proofing for ux-flow specialization beyond ui-designer's overlap. Held as an explicit role even though ui-designer carries primary for ux-flow. |
 
 **All unreferenced agents are intentional.** None should be removed.
 
 ## 4. tools whitelist enforcement (C4)
 
-✅ **PASS** — All 26 agents declare explicit `tools:` lists. No
+✅ **PASS** — All 27 agents declare explicit `tools:` lists. No
 implicit "all", no missing field.
 
 ```bash
-for f in kits/*/agents/*.md; do
+for f in src/plugins/official-kits/agents/*/*.md; do
   grep -c "^tools:" "$f"
 done | sort -u    # → 1 (every file has exactly one)
 ```
 
-## 5. Reflection-role write-tool bans (kits/README.md §2)
+## 5. Reflection-role write-tool bans (plugins/README.md §Hard rules 2)
 
 Six reflection-role agents audited:
 
 | Agent | Banned tools present in `tools:`? |
 |---|---|
-| `critic` | ✅ None (Read/Grep/Glob/WebFetch/WebSearch + opc_knowledge_* read + opc_corrections_query) |
+| `critic` | ✅ None (Read/Grep/Glob/WebFetch/WebSearch + opc_knowledge_open + opc_knowledge_read + opc_corrections) |
 | `debater` | ✅ None |
 | `tot-explorer` | ✅ None |
 | `meta-synthesizer` | ✅ None |
 | `cove-verifier` | ✅ None |
 | `startup-advisor` | ✅ None |
 
-Banned set checked: `Write`, `Edit`, `NotebookEdit`, `Bash`,
-`opc_knowledge_write`, `opc_knowledge_admin`, `opc_corrections_upsert`.
+> **v2 工具名说明**：v2 工具合并后（54→24），knowledge 侧只剩 `opc_knowledge_open`
+> / `opc_knowledge_read` / `opc_knowledge_write` / `opc_knowledge_admin` 四个工具，
+> corrections 侧合并为单一 `opc_corrections`（discriminator 区分 query/migrate/endorse/
+> freeze/delete 等动作）。反思 agent 只白名单 `opc_corrections` 的 query 语义 ——
+> 由于工具是单一入口、靠 discriminator 分流，"只允许 query"的约束靠 reflection-server
+> 侧 `dispatch_context.role` 检查兜底（见下 Backstop）。v1 旧名 `opc_corrections_upsert`
+> / `opc_knowledge_admin` 在 v2 已不存在，但禁止意图一致：反思角色不得写入。
+>
+> 因此"反思角色禁写"在 v2 的精确表达是：reflection/ 下的 agent `tools:` 不得包含
+> `opc_knowledge_write` / `opc_knowledge_admin` / `Bash` / `Write` / `Edit`。审计通过。
+
+Banned set checked (v2): `Write`, `Edit`, `NotebookEdit`, `Bash`,
+`opc_knowledge_write`, `opc_knowledge_admin`.
 
 ```bash
 # YAML-scope check (not prose):
-awk '/^---$/{...}/^tools:/{in=1}...' kits/qa-kit/agents/*.md \
-  | grep -E "Write|Edit|...|opc_knowledge_admin"   # → empty
+for f in src/plugins/official-kits/agents/reflection/*.md; do
+  awk '/^---$/{c++; next} c==1{print}' "$f"
+done | grep -E "Write|Edit|NotebookEdit|Bash|opc_knowledge_write|opc_knowledge_admin"   # → empty
 ```
 
 **Backstop**: even if a future kit accidentally grants a write tool to
@@ -103,39 +123,38 @@ Whitelist is primary defense; OPC server check is backstop.
 
 ## 6. Frontmatter contract completeness
 
-All 26 agents have `name`, `description`, `tools`. All 26 `name:`
+All 27 agents have `name`, `description`, `tools`. All 27 `name:`
 fields equal `basename(file) - .md`. ✅ **PASS**.
 
-## 7. MCP server allocation
+## 7. External MCP server dependencies
 
-| Kit | MCP servers | Justification |
+v2 的 `opc/official-kits` 插件本身**不自带** `.mcp.json`（v1 六 kit 各自的 `.mcp.json`
+已移除）。部分 agent 的 `tools:` 白名单引用了外部 MCP server 工具，这些 server 需用户
+另行安装/启用 —— Claude Code 会聚合所有已加载插件的 MCP 注册，agent 白名单只控访问权：
+
+| Agent | External MCP tools referenced | Notes |
 |---|---|---|
-| `product-kit` | (none) | Knowledge ops + Web only; no specialized server needed for v1 |
-| `design-kit` | `pencil` | .pen files are encrypted; only pencil tools can read/write them |
-| `dev-kit` | `context7` | Library / framework docs — avoid stale training data |
-| `qa-kit` | (none) | Test runners go through Bash; pentest via Bash + WebFetch |
-| `ship-kit` | (none) | IaC / CI tools go through Bash + context7 (delegated to dev-kit context7 if needed) |
-| `growth-kit` | (none) | Profiling / capacity tools go through Bash + context7 |
+| design/ `ui-designer`, `ux-designer`, `design-bridge` | `mcp__pencil__*` | .pen 文件加密，仅 pencil 工具可读写 |
+| dev/ + infra/ + qa/ 多个工程 agent | `mcp__plugin_context7_context7__*` | 库/框架文档，避免训练数据过期 |
 
-**Note**: ship-kit and growth-kit agents reference `mcp__plugin_context7_context7__*` tools in their `tools:` whitelists.
-This works because Claude Code aggregates MCP server registrations across all loaded kits — a tool registered by dev-kit is callable by any agent that whitelists it. The agent's `tools:` field is the access-control list; the kit's `.mcp.json` is the server-registration list. The two are independent.
+未安装对应 server 时，这些工具对 agent 不可见 —— agent 应在 body 里给出降级路径
+（退回 `WebFetch` / `Bash`）。**发布前 TODO**：在 README 明示 pencil/context7 为可选依赖。
 
-## 8. Cross-kit boundary clarity
+## 8. Cross-category boundary clarity
 
-Every agent's "不做的事" section explicitly defers cross-kit territory:
+Every agent's "不做的事" section explicitly defers cross-category territory:
 
 | From → To | Boundary documented |
 |---|---|
-| product-kit → dev-kit | "不做技术选型 / 归 04-implement-design" |
-| product-kit → design-kit | "不做 UI / 归 03-design" |
-| design-kit → dev-kit | "不写代码 / 归 frontend-engineer" |
-| dev-kit → qa-kit (security) | "白盒视角 / 渗透归 penetration-tester" |
-| dev-kit → ship-kit | "不做 deploy / 归 ship-kit" |
-| qa-kit → dev-kit | "QA 是 gatekeeper 不是 fixer / 派回 dev-kit" |
-| ship-kit → dev-kit | "不写业务代码 / 归 dev-kit" |
-| ship-kit ↔ ship-kit | deployment "how to ship" / devops "how to build infra" / sre "how to keep stable" |
-| growth-kit → dev-kit | "不做实现 / 归 dev-kit" |
-| growth-kit → ship-kit | "不做扩容决策 / 归 cloud-architect + sre-engineer" |
+| product → dev | "不做技术选型 / 归 04-implement-design" |
+| product → design | "不做 UI / 归 03-design" |
+| design → dev | "不写代码 / 归 frontend-developer" |
+| dev → qa (security) | "白盒视角 / 渗透归 penetration-tester" |
+| dev → infra | "不做 deploy / 归 infra/" |
+| qa → dev | "QA 是 gatekeeper 不是 fixer / 派回 dev/" |
+| infra → dev | "不写业务代码 / 归 dev/" |
+| infra ↔ infra | deployment "how to ship" / devops "how to build infra" / sre "how to keep stable" |
+| qa (performance) → dev/cloud | "不做实现 / 归 dev/" |
 
 All boundaries explicit. No territory war zones.
 

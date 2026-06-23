@@ -22,7 +22,7 @@
 
 All 18 unique `tags:` combinations across 29 nodes draw exclusively
 from the canonical pool defined in
-[`platform/mcp/opc-state-server/prompts/02_task-analysis.md §3.2`](../platform/mcp/opc-state-server/prompts/02_task-analysis.md):
+[`prompts/02_task-analysis.md §3.2`](../prompts/02_task-analysis.md):
 
 | Category | Allowed tags |
 |---|---|
@@ -100,7 +100,7 @@ paths verified to exist (2026-06-10):
 | `doc/feature/02-opc-state-server/02-pipeline/04_state-json.md` | OK |
 | `doc/feature/02-opc-state-server/03-phase/01_nine-phases.md` | OK |
 | `doc/feature/02-opc-state-server/03-phase/02_node-selection.md` | OK |
-| `platform/mcp/opc-state-server/prompts/05_phase-execution.md` | OK |
+| `prompts/05_phase-execution.md` | OK |
 
 ## 5. Cross-phase artifact path consistency
 

@@ -32,9 +32,8 @@ my-project/                              # 用户工程目录（claude 执行目
 │   │           └── sub-3/
 │   └── .project-init
 │
-├── opc-nodes/                           # 覆盖内置节点（同 phases/ 目录结构）
-│   ├── 04-implement-design/nodes/api-design.md
-│   └── 05-implement/nodes/tdd-implementation.md
+├── opc-nodes/                           # [已废弃 v2] 覆盖内置节点（同 phases/ 目录结构）
+│   └── （v2 起：用户直接编辑 .opc/phases/<phase>/nodes/，无需独立 overlay 目录）
 │
 ├── opc-knowledge/                       # 项目知识库（git 跟踪）
 │   ├── .opc-knowledge.json              #   _refs（跨 unit 依赖）

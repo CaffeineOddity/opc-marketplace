@@ -78,4 +78,4 @@
 - `doc/feature/05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md` ✅
 - `doc/feature/01-overview/00_index.md` + `03_architecture.md` ✅
 - `doc/feature/04-e2e/01-walkthrough/*.md` + `04-e2e/02-test/*.md` ✅
-- `platform/mcp/opc-state-server/prompts/01_intent-analysis-overview.md` ✅
+- `src/mcp/opc-state-server/prompts/01_intent-analysis-overview.md` ✅

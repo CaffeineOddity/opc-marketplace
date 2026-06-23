@@ -7,7 +7,7 @@ Scenario 是按业务场景预定义的推荐节点组合，用于在节点选�
 ## 一、可用 Scenarios
 
 ```
-platform/opc-orchestrator/scenarios/
+src/mcp/opc-state-server/scenarios/
 ├── build-saas.md, build-mobile-app.md
 ├── add-feature.md, fix-bug.md
 ├── security-audit.md, redesign-product.md

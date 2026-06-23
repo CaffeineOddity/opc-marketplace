@@ -8,138 +8,50 @@
 ```
 opc-marketplace/
 │
-├── marketplace.json
-├── README.md
-├── CLAUDE.md
+├── .claude-plugin/marketplace.json      # 市场清单：opc + opc/official-kits 两个插件
+├── README.md / README.zh-CN.md
+├── package.json                          # pnpm workspace 根
+├── pnpm-workspace.yaml                   # packages: src/shared/*, src/mcp/*, src/plugins/opc
+├── tsconfig.base.json
+├── scripts/build-release.mjs             # 一条命令打包全部到 dist/
+├── doc/                                  # 设计文档（118 篇，按 MCP 边界组织）
 │
-├── platform/
+├── src/                                  # 源代码
 │   │
-│   ├── mcp/
-│   │   ├── opc-state-server/
-│   │   │   ├── server.ts
-│   │   │   ├── prompts/                # 方法论文档（MCP 在工具返回里引用路径，Claude 按需 Read）
-│   │   │   │   ├── 01_intent-analysis-overview.md          无流程时的意图判断
-│   │   │   │   ├── in-flow-decision.md         有活跃流程时的延续/纠正/补充判断
-│   │   │   │   ├── task-analysis.md
-│   │   │   │   ├── task-decomposition.md
-│   │   │   │   ├── brief-generation.md
-│   │   │   │   ├── phase-execution.md
-│   │   │   │   ├── recovery.md                 孤儿流程恢复策略
-│   │   │   │   ├── state-machine.md            每个 F 工具的 expected_steps 路由表
-│   │   │   │   ├── reflection-task-analysis.md
-│   │   │   │   └── reflection-node-selection.md
-│   │   │   ├── flow/                   # 流程状态机
-│   │   │   │   ├── flow-router.ts      #   按 confidence/intent/current_step 路由
-│   │   │   │   ├── flow-state-store.ts #   .opc/sessions/<id>/flow-state.json 读写
-│   │   │   │   └── owner-manager.ts    #   owner pid 接管 + 心跳 + 孤儿检测
-│   │   │   ├── tools/
-│   │   │   │   ├── flow.ts             #   7 个流程工具
-│   │   │   │   ├── pipeline.ts         #   pipeline_create, pipeline_status, pipeline_lifecycle
-│   │   │   │   ├── phase.ts            #   phase_start, phase_confirm, phase_complete
-│   │   │   │   └── node.ts             #   node_start, node_finish
-│   │   │   └── engine/
-│   │   │       ├── state-manager.ts
-│   │   │       ├── phase-validator.ts
-│   │   │       └── node-resolver.ts
-│   │   └── opc-knowledge-server/
-│   │       ├── server.ts
-│   │       └── tools/
-│   │           ├── open.ts
-│   │           ├── get.ts
-│   │           ├── write.ts
-│   │           ├── delete.ts
-│   │           ├── list.ts
-│   │           └── search.ts
+│   ├── mcp/                              # 三个零 LLM 依赖的 MCP server
+│   │   ├── opc-state-server/             # 流程状态机：意图→管线→9 阶段→节点（15 工具）
+│   │   │   ├── src/                      #   server.ts / flow-server / phase-server / node-server ...
+│   │   │   ├── prompts/                  #   方法论文档（MCP 在工具返回里引用路径，Claude 按需 Read）
+│   │   │   ├── phases/                   #   9 阶段定义：phase.md + nodes/*.md + templates/
+│   │   │   └── scenarios/                #   场景配方（add-feature.md / fix-bug.md / ...）
+│   │   ├── opc-knowledge-server/         # 项目知识库：unit→section→subsection（4 工具）
+│   │   └── opc-reflection-server/        # 反思方法学 + 纠正库：5 种方法 + 三层存储（5 工具）
 │   │
-│   └── opc-orchestrator/                    # 极简插件：hook + scenarios
-│       ├── .claude-plugin/plugin.json        #   UserPromptSubmit hook（指向 opc_flow_query）
-│       ├── bin/opc-hook.sh                   #   可选脚本（slash 命令过滤等工程逻辑）
-│       └── scenarios/                        #   场景配方（Claude 按需读取）
-│           ├── add-feature.md
-│           ├── fix-bug.md
-│           └── ...
+│   ├── plugins/                          # Claude Code 插件
+│   │   ├── opc/                          # 核心插件：hook + /opc-status + opc-status CLI
+│   │   │   ├── .claude-plugin/
+│   │   │   │   ├── plugin.json           #   UserPromptSubmit hook 配置（指向 opc_flow_query）
+│   │   │   │   └── .mcp.json             #   注册上面三个 MCP server
+│   │   │   ├── bin/opc-hook.sh           #   hook 脚本（quiet/loud/off 三档触发）
+│   │   │   ├── bin/opc-status.mjs        #   终端只读健康快照 CLI
+│   │   │   ├── commands/opc-status.md    #   /opc-status slash 命令
+│   │   │   └── test/e2e/                 #   7 stage + 16 scenario e2e
+│   │   └── official-kits/                # opc/official-kits 插件：27 个子 agent
+│   │       ├── .claude-plugin/plugin.json
+│   │       └── agents/                   #   product/ design/ dev/ infra/ qa/ reflection/
+│   │
+│   └── shared/                           # 内部 workspace 包
+│       ├── memory-store/                 #   原子文件写入 + frontmatter + 索引
+│       └── tool-aliases/                 #   工具名别名归一化
 │
-├── phases/                                       # 阶段 = 定义 + 节点 + 模板
-│   ├── 00-ideation/
-│   │   ├── phase.md + nodes.md
-│   │   ├── nodes/
-│   │   └── templates/
-│   ├── 01-validation/
-│   │   ├── phase.md + nodes.md
-│   │   ├── nodes/
-│   │   │   ├── user-persona.md
-│   │   │   └── prd-writing.md
-│   │   └── templates/
-│   │       ├── prd-template.md
-│   │       └── persona-template.md
-│   ├── 03-design/
-│   ├── 04-implement-design/
-│   ├── 05-implement/
-│   ├── 06-testing/
-│   ├── 07-release/
-│   ├── 08-growth/
-│   └── 09-scale/
-│
-├── kits/
-│   │
-│   ├── product-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── product-manager.md
-│   │   │   ├── market-analyst.md
-│   │   │   ├── startup-advisor.md
-│   │   │   └── ux-researcher.md
-│   │   ├── skills/
-│   │   │   ├── write-prd/
-│   │   │   ├── competitor-analysis/
-│   │   │   ├── market-sizing/
-│   │   │   ├── startup-brainstorm/
-│   │   │   └── pricing-strategy/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── design-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── ui-designer.md
-│   │   │   ├── ux-designer.md
-│   │   │   └── design-reviewer.md
-│   │   ├── skills/
-│   │   │   ├── generate-wireframe/
-│   │   │   ├── create-design-system/
-│   │   │   ├── generate-ui/
-│   │   │   ├── accessibility-audit/
-│   │   │   └── mobile-ux-review/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── dev-kit/
-│   │   ├── .claude-plugin/plugin.json
-│   │   ├── agents/
-│   │   │   ├── frontend-engineer.md
-│   │   │   ├── backend-engineer.md
-│   │   │   ├── database-engineer.md
-│   │   │   ├── security-engineer.md
-│   │   │   └── architect.md
-│   │   ├── skills/
-│   │   │   ├── scaffold-nextjs/
-│   │   │   ├── build-api/
-│   │   │   ├── auth-system/
-│   │   │   ├── code-review/
-│   │   │   └── security-audit/
-│   │   └── mcp/.mcp.json
-│   │
-│   ├── qa-kit/
-│   │   └── ...
-│   │
-│   ├── ship-kit/
-│   │   └── ...
-│   │
-│   └── growth-kit/
-│       └── ...
-│
-├── scripts/
-├── .github/workflows/
-└── .mcp.json
+└── dist/                                 # 构建产物（gitignored，由 pnpm build 生成，自包含）
+    ├── mcp/<name>/dist/<entry>.js        #   esbuild bundle，依赖全 inline
+    └── plugins/<name>/                   #   插件元数据 + 打包后 CLI / agents
 ```
+
+> **历史说明**：v1 曾采用 `platform/`（mcp + opc-orchestrator）+ 顶层 `phases/` + `kits/`（6 个独立 kit）
+> 三段式布局。v2 重构后改为 `src/{mcp,plugins,shared}/` workspace + 单一 `opc/official-kits` 插件，
+> phases/scenarios 收编进 `src/mcp/opc-state-server/`。上面的树反映当前实际布局。
 
 ---
 

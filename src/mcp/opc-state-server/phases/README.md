@@ -24,14 +24,15 @@ units) + `templates/` (knowledge-file skeletons).
 
 1. `opc_task_analysis_complete` selects a subset into
    `state.json.phase_plan.selected`.
-2. `opc_phase_start` scans `phases/<phase>/nodes/*.md` AND the
-   project-local `opc-nodes/<phase>/nodes/*.md` overrides.
+2. `opc_phase_start` scans `.opc/phases/<phase>/nodes/*.md`
+   (bootstrapped from this built-in `phases/` on first server start; users
+   edit directly there — no separate overlay dir in v2).
 3. Tag intersection filters surface `available_nodes[]`; scenario
    triggers mark `recommended: true` (no LLM ranking at this layer).
 4. Claude collects `selection_evidence` and submits via
    `opc_phase_confirm` — V1–V5 validators decide auto-confirm /
    quick-confirm / reflection-loop. See
-   [`platform/mcp/opc-state-server/prompts/05_phase-execution.md`](../platform/mcp/opc-state-server/prompts/05_phase-execution.md).
+   [`prompts/05_phase-execution.md`](../prompts/05_phase-execution.md).
 
 ## phase.md frontmatter contract
 

@@ -212,7 +212,7 @@ allowed_tools ──┤
 
 匹配规则：大小写不敏感 + 出现任一即触发 + active 流程时无视关键词强制注入。
 
-**实现位置**：`platform/opc-orchestrator/bin/opc-hook.sh`（详见 `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 高级形态`）。
+**实现位置**：`src/plugins/opc/bin/opc-hook.sh`（详见 `02-opc-state-server/01-intent-analysis/01_hook-architecture.md 高级形态`）。
 
 ### 2.7-pre C6：HTTP/SSE 模式 session 归属与孤儿恢复（A1）
 

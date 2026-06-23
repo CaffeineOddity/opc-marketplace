@@ -12,8 +12,8 @@ opc_phase_start("pipeline-20260606-001", "sub-1", "04-implement-design")
 ```
 
 扫描节点来源：
-- `phases/04-implement-design/nodes/` → [api-design, database-schema, scaffold]
-- 项目 `opc-nodes/` → 无覆盖
+- `.opc/phases/04-implement-design/nodes/` → [api-design, database-schema, scaffold]
+- v2 起无独立 overlay，用户直接在 `.opc/phases/<phase>/nodes/` 增删 → 无覆盖
 
 匹配：
 ```

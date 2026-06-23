@@ -41,7 +41,7 @@
   "session_id": "sess-abc-001",
   "step_instruction": "判断用户最近一条消息的意图。若是开发任务 → opc_flow_lifecycle({action:'start'})；若是项目问答 → opc_knowledge_read({mode:'search'})；若是闲聊/纯知识 → 直接回答。",
   "methodology": {
-    "docs": ["platform/mcp/opc-state-server/prompts/01_intent-analysis-overview.md"],
+    "docs": ["src/mcp/opc-state-server/prompts/01_intent-analysis-overview.md"],
     "ref": "三 意图分类 + 3.1 task 信号 + 3.2 project vs general 信号",
     "summary": "4 种意图：task/project_question/general_question/chat。动作动词+0.3、明确交付物+0.2、!task 前缀+1.0、疑问词-0.3"
   },
@@ -78,7 +78,7 @@
   },
   "step_instruction": "判断本次新消息是延续/纠正/补充/回退/废弃阶段/放弃/暂停/无关，选对应 suggested_action。多重意图按顺序处理（先 revise/restart，后推进）。",
   "methodology": {
-    "docs": ["platform/mcp/opc-state-server/prompts/in-flow-decision.md"],
+    "docs": ["src/mcp/opc-state-server/prompts/06_in-flow-decision.md"],
     "ref": "一 九种延续模式 + 二 各模式触发信号 + 四 多重意图处理",
     "summary": "延续/纠正/补充/回退/废弃阶段/放弃/暂停/无关/恢复"
   },
@@ -134,7 +134,7 @@
   "snapshot": {"current_step": "phase_execution", "...": "..."},
   "step_instruction": "上次 session crash 残留的流程。建议恢复或放弃。",
   "methodology": {
-    "docs": ["platform/mcp/opc-state-server/prompts/recovery.md"],
+    "docs": ["src/mcp/opc-state-server/prompts/07_recovery.md"],
     "ref": "二 恢复策略 + 三 超时检测",
     "summary": "in_progress + 超时 → 自动标记 failed；恢复后可调 node_retry 重跑"
   },

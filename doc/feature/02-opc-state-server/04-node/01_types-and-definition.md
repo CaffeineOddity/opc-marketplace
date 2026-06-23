@@ -13,8 +13,8 @@
 
 两类格式完全相同。
 
-- **控制节点**：`platform/mcp/opc-state-server/prompts/`，不可项目覆盖，由 flow tools 在工具返回里引用
-- **任务节点**：`phases/<phase>/nodes/`，可项目覆盖
+- **控制节点**：`src/mcp/opc-state-server/prompts/`，不可项目覆盖，由 flow tools 在工具返回里引用
+- **任务节点**：`.opc/phases/<phase>/nodes/`（首次启动从内置 `phases/` bootstrap），可项目编辑
 
 ---
 

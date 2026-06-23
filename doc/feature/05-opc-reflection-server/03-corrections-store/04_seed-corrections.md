@@ -15,7 +15,7 @@ Seed corrections 解决此问题——预置一组从社区与维护者经验中
 ### 2.1 存储位置
 
 ```
-platform/mcp/opc-reflection-server/seed-corrections/
+src/mcp/opc-reflection-server/seed-corrections/
   intent-analysis/           # P1 reflections
     task-vs-chat/
       ambiguous-question.md

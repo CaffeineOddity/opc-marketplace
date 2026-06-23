@@ -7,12 +7,12 @@
 
 ## 一、触发机制
 
-opc-orchestrator 插件通过 `UserPromptSubmit` hook 注入一行**事实查询**指令——hook 不做语义判断，只让 Claude 知道"先查流程状态再决策"。所有判断逻辑由 Claude 完成，所有事实查询由 `opc_flow_query` 工具完成（含 pid 存活校验）。
+opc 插件通过 `UserPromptSubmit` hook 注入一行**事实查询**指令——hook 不做语义判断，只让 Claude 知道"先查流程状态再决策"。所有判断逻辑由 Claude 完成，所有事实查询由 `opc_flow_query` 工具完成（含 pid 存活校验）。
 
 ```json
-// opc-orchestrator/.claude-plugin/plugin.json
+// src/plugins/opc/.claude-plugin/plugin.json
 {
-  "name": "opc-orchestrator",
+  "name": "opc",
   "depends": ["mcp"],
   "hooks": {
     "UserPromptSubmit": [
@@ -103,32 +103,32 @@ type FlowResponse = {
 ### 2.3 文档归属
 
 ```
-platform/mcp/opc-state-server/
-├── server.ts
+src/mcp/opc-state-server/
+├── src/
+│   └── server.ts / flow-server.ts / phase-server.ts / node-server.ts ...
 ├── prompts/                        ← 方法论文档（MCP 在返回里引用路径，Claude 按需 Read）
-│   ├── 01_intent-analysis-overview.md             无流程时的意图判断
-│   ├── in-flow-decision.md            有活跃流程时的延续/纠正/补充判断
-│   ├── task-analysis.md
-│   ├── task-decomposition.md
-│   ├── brief-generation.md
-│   ├── phase-execution.md
-│   ├── recovery.md                    孤儿流程恢复策略
-│   ├── state-machine.md               每个 F 工具的 expected_steps 路由表
-│   ├── reflection-task-analysis.md
-│   └── reflection-node-selection.md
-├── flow/                           ← 流程状态机
-│   ├── flow-router.ts              ←   路由决策（按 evidence + V1-V5 + meta-validator + intent + current_step 分支）
-│   ├── flow-state-store.ts         ←   .opc/sessions/<id>/flow-state.json 读写 + pid 校验
-│   └── owner-manager.ts            ←   owner pid 接管 + 心跳 + 孤儿检测
-└── tools/
-    ├── flow.ts                     ← 7 个流程工具
-    ├── pipeline.ts
-    ├── phase.ts
-    └── node.ts
+│   ├── 01_intent-analysis-overview.md   无流程时的意图判断
+│   ├── 06_in-flow-decision.md           有活跃流程时的延续/纠正/补充判断
+│   ├── 02_task-analysis.md
+│   ├── 03_task-decomposition.md
+│   ├── 04_brief-generation.md
+│   ├── 05_phase-execution.md
+│   ├── 07_recovery.md                   孤儿流程恢复策略
+│   ├── 10_state-machine.md              每个 F 工具的 expected_steps 路由表
+│   ├── 09_reflection-task-analysis.md
+│   └── 08_reflection-node-selection.md
+├── phases/                         ← 9 阶段定义（首次启动 bootstrap 进 .opc/phases/）
+├── scenarios/                      ← 场景配方
+└── src/                            ← 流程状态机实现（扁平结构）
+    ├── flow-server.ts              ←   flow 工具 + .opc/sessions/<id>/flow-state.json + pid 校验
+    ├── pipeline-server.ts          ←   pipeline_create / status / lifecycle
+    ├── phase-server.ts             ←   phase_start / confirm / complete
+    ├── node-server.ts              ←   node_start / finish + 节点选择
+    └── owner-manager / orphan-scanner / kit-health ...
 ```
 
 ```
-platform/opc-orchestrator/         ← 极简插件
+src/plugins/opc/                    ← 极简插件
 ├── .claude-plugin/plugin.json     ←   仅 UserPromptSubmit hook 配置
 ├── bin/opc-hook.sh                ←   hook 脚本（可选，简单场景直接用内联 echo）
 └── scenarios/                     ←   场景配方（add-feature.md / fix-bug.md / ...）
@@ -142,7 +142,7 @@ platform/opc-orchestrator/         ← 极简插件
 
 ```bash
 #!/bin/bash
-# platform/opc-orchestrator/bin/opc-hook.sh
+# src/plugins/opc/bin/opc-hook.sh
 # 极简版：仅做 slash 命令过滤 + 输出标准提示
 
 # 用户 message 以 / 开头视为 slash 命令，跳过注入（避免干扰 /opc-status 等）

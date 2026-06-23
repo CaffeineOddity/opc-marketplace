@@ -254,12 +254,12 @@ flowchart TD
 
 ### 节点来源
 
-节点按阶段组织在 `phases/<phase>/nodes/`，模板在 `phases/<phase>/templates/`。项目通过 `opc-nodes/` 覆盖。
+节点按阶段组织在 `.opc/phases/<phase>/nodes/`，模板在 `.opc/phases/<phase>/templates/`（首次启动时由 state-server 从内置资源 bootstrap 进 `.opc/`）。v2 起用户直接在该目录编辑/增删节点，无独立 overlay 目录（v1 的 `opc-nodes/` 已废弃）。
 
 | 来源 | 位置 | 维护者 | 说明 |
 |------|------|--------|------|
-| 内置节点 | `phases/<phase>/nodes/` | 插件开发者 | 随 marketplace 分发 |
-| 项目节点 | `opc-nodes/` | 项目用户 | 同目录结构，同名覆盖 |
+| 内置节点 | `src/mcp/opc-state-server/phases/<phase>/nodes/` | 插件开发者 | 随 marketplace 分发，bootstrap 进 `.opc/` |
+| 项目节点 | `.opc/phases/<phase>/nodes/` | 项目用户 | 直接编辑；升级时三路比对生成 `<file>.conflict` |
 
 ### 节点选择：evidence + V1-V5 validator + 反思
 

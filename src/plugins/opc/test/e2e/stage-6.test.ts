@@ -14,7 +14,7 @@
  * a non-existent next phase).
  *
  * The integration-test node's "no_mock_db" doctrine is enforced at the
- * agent prompt level (kits/qa-kit/agents/test-automator.md) rather than
+ * agent prompt level (src/plugins/official-kits/agents/qa/test-automator.md) rather than
  * the L2 gate layer; here we exercise the supported test_pass gate which
  * is what the state-server actually validates.
  */
@@ -164,7 +164,7 @@ describe("walkthrough stage 6 — phase 06-testing", () => {
             "- 集成测试: 24 passed / 0 failed\n" +
             "- E2E 测试: 注册→登录→受保护接口→登出 全绿\n" +
             "- 覆盖率: lines=82%, branches=74% (≥ PRD 70% 阈值)\n" +
-            "- 数据库: 真实 PostgreSQL 容器（no mocks per qa-kit doctrine）\n" +
+            "- 数据库: 真实 PostgreSQL 容器（no mocks per qa doctrine）\n" +
             "- 性能样本: p50=12ms, p95=38ms (login endpoint)",
         }),
     );

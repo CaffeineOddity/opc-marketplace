@@ -89,7 +89,7 @@ Claude 继续按原 flow_next 推进当前 node（安全审计自然在 06 阶�
 |------|------|
 | `/opc-status` | Claude 调 `opc_flow_query` + `opc_pipeline_status` 查看流程 + 管线状态 |
 | `/opc-phase` | 手动跳转/重试某个阶段 |
-| `/opc-nodes` | 查看当前阶段的节点选项 |
+| `/opc-nodes` | （v2 已移除）查看节点选项请用 `/opc-status` 或 `opc_phase_start` 返回的 `available_nodes[]` |
 | `/opc-resume` | Claude 调 `opc_flow_lifecycle({action:"recover"})` 手动触发流程恢复 |
 | `/opc-abort` | Claude 调 `opc_flow_lifecycle({action:"abort"})` 终止当前流程 |
 | `/opc-revise <field> <value>` | Claude 调 `opc_flow_correct({action:"revise"})` 修改累积参数 |

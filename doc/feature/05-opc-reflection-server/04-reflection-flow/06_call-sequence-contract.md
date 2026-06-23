@@ -262,7 +262,7 @@ type ReflectionStatsResponse = {
 }
 ```
 
-**告警阈值建议**（写进 platform/opc-orchestrator 默认配置）：
+**告警阈值建议**（写进 src/plugins/opc 默认配置）：
 
 | 指标 | 阈值 | 含义 |
 |---|---|---|
