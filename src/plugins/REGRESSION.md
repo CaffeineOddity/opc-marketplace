@@ -35,30 +35,28 @@ for f in src/plugins/official-kits/agents/*/*.md; do grep "^name:" "$f" | head -
 
 ## 3. Phase-node ↔ kit-agent cross-reference
 
+> **首个发布版说明**：§3.2 原列出的 5 个 v1 deferred fallback agent（tech-lead /
+> tdd-orchestrator / security-auditor / microservices-architect /
+> devops-incident-responder）已从 node frontmatter 移除（见 commit
+> `feat(phases): drop v1 deferred fallback agents`）。primary 全部 kit-resident，
+> 无节点失去 agent 覆盖。§3.2 表格保留作历史记录。
+
 ### 3.1 Agents referenced by `phases/*/nodes/*.md` `agents.primary[]` or `agents.fallback[]`
 
-24 distinct names referenced. All primaries resolved:
+All primaries and surviving fallbacks resolve to kit-resident agents. ✅ **PASS**.
 
-| Status | Count | Notes |
-|---|---|---|
-| ✅ Resolved in some kit | 19 |  |
-| ⚠️ Referenced but missing | 5 | See §3.2 |
+### 3.2 [历史] v1 deferred fallback agents — 已于首个发布版移除
 
-### 3.2 Missing agents (referenced in phases but absent from any kit)
+| Missing name | Was referenced by (fallback) | v1 plan | Release resolution |
+|---|---|---|---|
+| `tech-lead` | feasibility-analysis / prd-draft | Defer to v2 | fallback cleared (prd-draft → []; feasibility → [business-analyst]) |
+| `tdd-orchestrator` | tdd-implementation | Defer to v2 | fallback cleared → [] |
+| `security-auditor` | security-review / security-scan | Defer to v2 | fallback cleared (security-review → []; security-scan → [penetration-tester]) |
+| `microservices-architect` | architecture-evolution | Defer to v2 | fallback cleared → [cloud-architect] |
+| `devops-incident-responder` | rollback-plan | Defer to v2 | fallback cleared → [deployment-engineer] |
 
-| Missing name | Referenced by | Resolution |
-|---|---|---|
-| `tech-lead` | feasibility-analysis / prd-draft (fallback) | Defer to v2; product-manager covers feasibility coordination; for technical fallback dev-kit's fullstack-engineer reads the same knowledge inputs. |
-| `tdd-orchestrator` | tdd-implementation (fallback) | Defer to v2; backend-engineer + test-automator together cover the TDD orchestration role for v1. |
-| `security-auditor` | security-review (fallback) | Defer to v2; security-engineer covers white-box audit; penetration-tester covers black-box for v1. |
-| `microservices-architect` | architecture-evolution (fallback) | Defer to v2; backend-architect explicitly carries this role for v1 (documented in backend-architect.md). |
-| `devops-incident-responder` | slo-monitoring (fallback) | Defer to v2; sre-engineer + devops-engineer together cover incident response for v1. |
-
-**Action**: None for v1. All primaries are covered; fallbacks degrade
-gracefully to the broader role agents. Tracked for v2 expansion. The
-gap is acceptable because OPC's agent-availability check at
-`opc_node_start` only blocks if **all** primary+fallback are missing.
-Spot-checked: every node has ≥ 1 available agent.
+**Action (release)**: removed from frontmatter rather than implemented. Every node
+retains ≥ 1 kit-resident agent, so `opc_node_start`'s availability check still passes.
 
 ### 3.3 Agents in official-kits but not referenced by any node
 
