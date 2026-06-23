@@ -71,6 +71,7 @@ export type FlowNext =
   | { tool: "opc_flow_reflect" }
   | { tool: "opc_flow_user_reply" }
   | { tool: "opc_pipeline_create" }
+  | { tool: "opc_pipeline_lifecycle"; args: { action: "complete" | "abort" | "replan" | "resume"; pipeline_id: string; session_id?: string; reason?: string } }
   | { tool: "opc_phase_start" }
   | { tool: "completed" }
   | { tool: "aborted" };

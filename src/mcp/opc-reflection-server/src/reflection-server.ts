@@ -317,23 +317,25 @@ export class ReflectionServer {
       prior_corrections: req.prior_corrections ? [req.prior_corrections] : [],
       theory_docs: theoryDocsFor(primary, secondary),
       unlearned_methods: unlearnedMethods,
-      agent_spec: req.context
+      ...(req.context
         ? {
-            subagent_type: primary === "debate"
-              ? "debater"
-              : primary === "tot"
-                ? "tot-explorer"
-                : primary === "cove"
-                  ? "cove-verifier"
-                  : "critic",
-            allowed_tools: [
-              "Read", "Grep", "Glob", "WebFetch", "WebSearch",
-              "opc_knowledge_open", "opc_knowledge_read", "opc_corrections",
-            ],
-            input_contract: `step=${req.step_id}, method=${primary}, phase=${req.context.phase ?? "any"}`,
-            output_contract: "objections[] with at least one blocker for each gap found",
+            agent_spec: {
+              subagent_type: primary === "debate"
+                ? "debater"
+                : primary === "tot"
+                  ? "tot-explorer"
+                  : primary === "cove"
+                    ? "cove-verifier"
+                    : "critic",
+              allowed_tools: [
+                "Read", "Grep", "Glob", "WebFetch", "WebSearch",
+                "opc_knowledge_open", "opc_knowledge_read", "opc_corrections",
+              ],
+              input_contract: `step=${req.step_id}, method=${primary}, phase=${req.context.phase ?? "any"}`,
+              output_contract: "objections[] with at least one blocker for each gap found",
+            },
           }
-        : undefined,
+        : {}),
       intensity_suggestion: req.intensity
         ? {
             recommended: req.intensity,
@@ -394,8 +396,10 @@ export class ReflectionServer {
           severity: "blocker",
           category: "validator",
           text: v.results
-            .filter((r) => !r.pass)
-            .map((r) => `${r.validator}: ${r.reason}`)
+            .filter((r) => r.verdict !== "pass")
+            .map((r) =>
+              `${r.validator}: ${r.failures.map((f) => `${f.field} ${f.expected} got ${f.actual}`).join(", ")}`,
+            )
             .join("; "),
         };
         req.objections = [...req.objections, blockerFromValidator];
@@ -445,7 +449,7 @@ export class ReflectionServer {
       objections_kept: kept.length,
       evidence_diff: evidenceDiffPresent,
       ...(validatorResults
-        ? { validator_pass: validatorResults.every((r) => r.pass) }
+        ? { validator_pass: validatorResults.every((r) => r.verdict === "pass") }
         : {}),
       ...(req.telemetry?.latency_ms !== undefined ? { latency_ms: req.telemetry.latency_ms } : {}),
       ...(req.telemetry?.tokens_in !== undefined ? { tokens_in: req.telemetry.tokens_in } : {}),

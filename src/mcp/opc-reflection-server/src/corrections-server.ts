@@ -305,7 +305,7 @@ export class CorrectionsServer {
       linked_interventions: inc.linked_interventions ?? [],
       hotness: inc.hotness ?? 1,
       frozen: inc.frozen ?? false,
-      endorsed_by: inc.endorsed_by,
+      ...(inc.endorsed_by !== undefined ? { endorsed_by: inc.endorsed_by } : {}),
       schema_version: inc.schema_version ?? 2,
       created_at: now,
       updated_at: now,
@@ -500,7 +500,7 @@ export class CorrectionsServer {
     }
     return {
       migrated: candidates.length,
-      source_step: params.source_step,
+      ...(params.source_step !== undefined ? { source_step: params.source_step } : {}),
       target_step: params.target_step,
     };
   }
@@ -659,7 +659,7 @@ export function buildCorrection(
     linked_interventions: partial.linked_interventions ?? [],
     hotness: partial.hotness ?? 1,
     frozen: partial.frozen ?? false,
-    endorsed_by: partial.endorsed_by,
+    ...(partial.endorsed_by !== undefined ? { endorsed_by: partial.endorsed_by } : {}),
     schema_version: partial.schema_version ?? 2,
     related: partial.related ?? [],
     deprecated_by: partial.deprecated_by ?? null,
