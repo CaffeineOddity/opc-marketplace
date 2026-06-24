@@ -20,6 +20,8 @@ src/hud/package-lock.json
 
 # OPC state - personal session data, don't commit
 .opc/state/**/*
+.opc/publish-local-counter
+.opc/publish-stage/
 
 # Keep these (optional but recommended):
 # .opc/memory/          - project decisions, useful for team

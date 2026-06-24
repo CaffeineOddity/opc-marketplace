@@ -1,6 +1,6 @@
 # Publishing OPC
 
-`scripts/publish.mjs` builds `dist/` and publishes OPC in one of three modes.
+`scripts/publish.mjs` builds `dist/` and publishes OPC in one of four modes.
 Pick by what stage you're at:
 
 | Mode | When to use | Version shape | Side effects |
@@ -8,6 +8,7 @@ Pick by what stage you're at:
 | `local` | Install/verify on **this machine** before any real release. | `v0.1.0-dev1`, `-dev2`, … | registers a local marketplace; no git, no push |
 | `branch` | First real distribution — self-contained tree on a git branch. | `v0.1.0-1`, `-2`, … | force-pushes a `release` branch + tag |
 | `tarball` | Canonical release — GitHub Release with a versioned tarball asset. | `v0.1.0-1`, `-2`, … | git tag + GitHub Release (needs `gh auth login`) |
+| `uninstall` | Tear down to test the install/uninstall cycle repeatedly. | — | removes plugins + marketplace registration |
 
 > `dist/` is gitignored, so `claude plugin marketplace add <github-repo>` on the
 > default branch gets **no** built artifacts. `local` reads dist from disk;
@@ -44,6 +45,29 @@ node scripts/publish.mjs local [--scope user|project|local] [--no-build]
 - Bumps a local counter at `.opc/publish-local-counter`; version markers are
   `v0.1.0-dev{n}` and **never** pushed to git.
 - After it prints, install the plugins and verify (see "Verification" below).
+  Plugins are copied to `~/.claude/plugins/cache/` at install time, so **every
+  code change requires a fresh `publish.mjs local` + reinstall** to take effect:
+
+  ```shell
+  node scripts/publish.mjs local
+  claude plugin install opc
+  claude plugin install opc/official-kits
+  # restart Claude Code
+  ```
+
+### `uninstall` — tear down for re-testing
+
+```shell
+node scripts/publish.mjs uninstall [--marketplace opc-marketplace]
+```
+
+- Runs `claude plugin uninstall opc` and `claude plugin uninstall opc/official-kits`
+  (ignores "not installed" — safe to run when already removed).
+- Then `claude plugin marketplace remove <name>`.
+- No build, no version bump. Use it to test the install/uninstall cycle
+  repeatedly. **Restart Claude Code afterward** so the hook and MCP servers
+  actually unload.
+- Re-install with `local` mode (see above).
 
 ### `branch` — dist committed on a `release` branch
 

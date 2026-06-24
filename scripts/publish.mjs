@@ -21,6 +21,10 @@
  *            marketplace add <tarball-url>` installs from the asset.
  *            Requires `gh auth login`. Version tag: v0.1.0{n}.
  *
+ *   uninstall Remove opc + opc/official-kits plugins and the marketplace
+ *            registration. Use to test the install/uninstall cycle
+ *            repeatedly. No build, no version bump.
+ *
  * Options:
  *   --no-build        Skip the `pnpm build` step (use current dist/).
  *   --dry-run         Print what would happen; don't run side-effects.
@@ -72,9 +76,9 @@ if (args.length === 0 || args[0] === "-h" || args[0] === "--help") {
 }
 
 const mode = args[0];
-const VALID_MODES = new Set(["local", "branch", "tarball"]);
+const VALID_MODES = new Set(["local", "branch", "tarball", "uninstall"]);
 if (!VALID_MODES.has(mode)) {
-  console.error(`✗ unknown mode "${mode}". Valid: local | branch | tarball`);
+  console.error(`✗ unknown mode "${mode}". Valid: local | branch | tarball | uninstall`);
   process.exit(1);
 }
 
@@ -476,11 +480,84 @@ async function publishTarball(tag, n) {
 }
 
 // ---------------------------------------------------------------------------
+// Mode: uninstall  (remove opc + opc/official-kits plugins + the marketplace)
+// ---------------------------------------------------------------------------
+
+/** Remove a plugin via `claude plugin uninstall`, ignoring "not installed". */
+function uninstallPlugin(name) {
+  if (DRY) {
+    console.log(`  [dry-run] claude plugin uninstall ${name}`);
+    return;
+  }
+  const r = spawnSync("claude", ["plugin", "uninstall", name], {
+    stdio: "inherit",
+    cwd: ROOT,
+  });
+  // non-zero just means it wasn't installed — treat as success.
+  if (r.status !== 0) {
+    console.log(`  (${name} was not installed — skipped)`);
+  } else {
+    console.log(`  ✓ uninstalled ${name}`);
+  }
+}
+
+/** Remove the marketplace registration, ignoring "not found". */
+function uninstallMarketplace(name) {
+  if (DRY) {
+    console.log(`  [dry-run] claude plugin marketplace remove ${name}`);
+    return;
+  }
+  const r = spawnSync("claude", ["plugin", "marketplace", "remove", name], {
+    stdio: "inherit",
+    cwd: ROOT,
+  });
+  if (r.status !== 0) {
+    console.log(`  (marketplace ${name} was not registered — skipped)`);
+  } else {
+    console.log(`  ✓ removed marketplace ${name}`);
+  }
+}
+
+async function publishUninstall() {
+  console.log("→ Uninstalling OPC plugins");
+  uninstallPlugin("opc");
+  uninstallPlugin("opc/official-kits");
+
+  console.log("");
+  console.log(`→ Removing marketplace "${MARKETPLACE}"`);
+  uninstallMarketplace(MARKETPLACE);
+
+  console.log("");
+  console.log("✓ OPC fully uninstalled.");
+  console.log("");
+  console.log("To re-install after a fresh publish:");
+  console.log("");
+  console.log("  node scripts/publish.mjs local        # build + register");
+  console.log("  claude plugin install opc");
+  console.log("  claude plugin install opc/official-kits");
+  console.log("  # restart Claude Code");
+  console.log("");
+  console.log("Note: restart Claude Code so the hook/MCP servers actually unload.");
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
 (async () => {
   console.log(`publish mode: ${mode}${DRY ? "  (dry-run)" : ""}`);
+
+  // uninstall needs no build / version / latest-pointer update.
+  if (mode === "uninstall") {
+    try {
+      await publishUninstall();
+    } catch (e) {
+      console.error("✗ uninstall failed:", e.message);
+      process.exit(3);
+    }
+    return;
+  }
+
   const { tag, n } = nextVersion(mode);
   console.log(`version: ${tag}`);
   buildDist(tag);
