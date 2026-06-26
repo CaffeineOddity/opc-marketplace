@@ -164,6 +164,17 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
   process.stderr.write("opc-knowledge-server READY\n");
 }
 
+// When run directly as a bin (via the plugin's .mcp.json), start the server
+// against the project root (CLAUDE_PROJECT_DIR or cwd).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startKnowledgeServer({ root: process.env.CLAUDE_PROJECT_DIR ?? process.cwd() }).catch(
+    (err) => {
+      process.stderr.write(`opc-knowledge-server failed to start: ${err}\n`);
+      process.exit(1);
+    },
+  );
+}
+
 const _deprecationWarned = new Set<string>();
 function emitDeprecation(legacyName: string, canonical: string) {
   if (_deprecationWarned.has(legacyName)) return;

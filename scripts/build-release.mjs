@@ -8,15 +8,17 @@
  *
  * Outputs (under dist/<version>/):
  *   marketplace.json                  — self-contained manifest for this version
- *   mcp/<name>/dist/<entry>.js        — esbuild bundle, shared deps inlined
- *   mcp/<name>/<resources>/           — runtime resources (prompts, seed-corrections)
+ *   plugins/opc/mcp/<name>/dist/<entry>.js — esbuild bundle, shared deps inlined
+ *   plugins/opc/mcp/<name>/<resources>/    — runtime resources (prompts, seed-corrections)
  *   plugins/opc/                      — plugin metadata + opc-status CLI bundle
  *   plugins/official-kits/            — agent .md files (copied as-is)
  *
- * Paths in src/plugins/opc/.claude-plugin/.mcp.json
- *   ${CLAUDE_PLUGIN_ROOT}/../../mcp/<name>/dist/<entry>.js
- * resolve under dist/<version>/ to dist/<version>/mcp/<name>/dist/<entry>.js —
- * same layout, no rewrite needed.
+ * MCP servers live INSIDE the opc plugin dir (plugins/opc/mcp/<name>/) so the
+ * whole plugin is self-contained: `claude plugin install` copies only the
+ * plugin dir into its cache, so a sibling top-level dist/<version>/mcp/ tree
+ * would be left behind. Paths in src/plugins/opc/.claude-plugin/.mcp.json
+ *   ${CLAUDE_PLUGIN_ROOT}/mcp/<name>/dist/<entry>.js
+ * resolve under the installed plugin root to plugins/opc/mcp/<name>/dist/<entry>.js.
  *
  * The root .claude-plugin/marketplace.json (the "latest" pointer) is NOT touched
  * by this script — publish.mjs updates it after a successful build.
@@ -56,7 +58,9 @@ const workspaceResolver = {
   },
 };
 
-/** MCP servers to bundle. */
+/** MCP servers to bundle. Each is emitted under the opc plugin dir at
+ *  plugins/opc/mcp/<name>/ so the plugin is self-contained when copied
+ *  into the install cache (only the plugin dir is copied at install time). */
 const MCP_SERVERS = [
   { name: "opc-state-server", entry: "src/server.ts", out: "dist/server.js", resources: ["prompts"] },
   { name: "opc-knowledge-server", entry: "src/mcp-server.ts", out: "dist/mcp-server.js", resources: [] },
@@ -64,9 +68,9 @@ const MCP_SERVERS = [
 ];
 
 /** Run esbuild against an MCP server entry. */
-async function bundleMcp(server) {
+async function bundleMcp(server, mcpRoot) {
   const srcDir = join(SRC, "mcp", server.name);
-  const outDir = join(DIST, "mcp", server.name);
+  const outDir = join(mcpRoot, server.name);
   const entryPath = join(srcDir, server.entry);
   const outFile = join(outDir, server.out);
 
@@ -170,15 +174,16 @@ async function main() {
   await rm(DIST, { recursive: true, force: true });
   await mkdir(DIST, { recursive: true });
 
-  console.log("→ Bundling MCP servers");
-  for (const server of MCP_SERVERS) {
-    process.stdout.write(`  - ${server.name} ... `);
-    await bundleMcp(server);
-    console.log("ok");
-  }
-
   console.log("→ Building opc plugin");
   await buildOrchestratorPlugin();
+
+  console.log("→ Bundling MCP servers (into plugins/opc/mcp/)");
+  const mcpRoot = join(DIST, "plugins", "opc", "mcp");
+  for (const server of MCP_SERVERS) {
+    process.stdout.write(`  - ${server.name} ... `);
+    await bundleMcp(server, mcpRoot);
+    console.log("ok");
+  }
 
   console.log("→ Copying official-kits");
   await buildOfficialKits();

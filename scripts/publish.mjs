@@ -237,7 +237,7 @@ function assertOnBranch(expected) {
 function buildDist(version) {
   console.log(`→ Building dist/${version}/ (OPC_RELEASE_VERSION=${version} pnpm build)`);
   if (NO_BUILD) {
-    if (!existsSync(join(DIST, version, "mcp", "opc-state-server", "dist", "server.js"))) {
+    if (!existsSync(join(DIST, version, "plugins", "opc", "mcp", "opc-state-server", "dist", "server.js"))) {
       throw new Error(`--no-build given but dist/${version}/ does not exist. Run without it first.`);
     }
     console.log(`  (--no-build) using existing dist/${version}/`);
@@ -245,7 +245,7 @@ function buildDist(version) {
   }
   if (DRY) {
     console.log(`  [dry-run] OPC_RELEASE_VERSION=${version} pnpm build`);
-    console.log(`  [dry-run] (would verify dist/${version}/mcp/opc-state-server/dist/server.js exists)`);
+    console.log(`  [dry-run] (would verify dist/${version}/plugins/opc/mcp/opc-state-server/dist/server.js exists)`);
     return;
   }
   try {
@@ -256,8 +256,8 @@ function buildDist(version) {
     console.error(e.message);
     process.exit(2);
   }
-  if (!existsSync(join(DIST, version, "mcp", "opc-state-server", "dist", "server.js"))) {
-    throw new Error(`build finished but dist/${version}/mcp/opc-state-server/dist/server.js missing`);
+  if (!existsSync(join(DIST, version, "plugins", "opc", "mcp", "opc-state-server", "dist", "server.js"))) {
+    throw new Error(`build finished but dist/${version}/plugins/opc/mcp/opc-state-server/dist/server.js missing`);
   }
   console.log(`✓ dist/${version}/ built`);
 }

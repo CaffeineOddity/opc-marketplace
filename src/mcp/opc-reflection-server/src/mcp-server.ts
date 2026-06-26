@@ -202,6 +202,17 @@ export async function startReflectionServer(opts: ReflectionMcpOptions): Promise
   process.stderr.write("opc-reflection-server READY\n");
 }
 
+// When run directly as a bin (via the plugin's .mcp.json), start the server
+// against the project root (CLAUDE_PROJECT_DIR or cwd).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startReflectionServer({ root: process.env.CLAUDE_PROJECT_DIR ?? process.cwd() }).catch(
+    (err) => {
+      process.stderr.write(`opc-reflection-server failed to start: ${err}\n`);
+      process.exit(1);
+    },
+  );
+}
+
 const _deprecationWarned = new Set<string>();
 function emitDeprecation(legacyName: string, canonical: string) {
   if (_deprecationWarned.has(legacyName)) return;

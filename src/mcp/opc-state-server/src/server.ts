@@ -376,6 +376,18 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
   process.stderr.write("opc-state-server READY\n");
 }
 
+// When run directly as a bin (e.g. `node dist/server.js` via the plugin's
+// .mcp.json), start the server against the project root. The hook/CLI use
+// CLAUDE_PROJECT_DIR; fall back to cwd so the server is runnable standalone.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startStateServer({ root: process.env.CLAUDE_PROJECT_DIR ?? process.cwd() }).catch(
+    (err) => {
+      process.stderr.write(`opc-state-server failed to start: ${err}\n`);
+      process.exit(1);
+    },
+  );
+}
+
 const _deprecationWarned = new Set<string>();
 function emitDeprecation(legacyName: string, canonical: string) {
   if (_deprecationWarned.has(legacyName)) return;

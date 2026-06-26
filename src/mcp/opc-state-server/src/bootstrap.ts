@@ -66,8 +66,10 @@ export interface BootstrapResult {
 /**
  * Resolve the bundle's built-in phases/ + scenarios/ root.
  *
- * In a built bundle the file lives at `dist/mcp/opc-state-server/dist/server.js`
- * and the resources are at `dist/mcp/opc-state-server/{phases,scenarios}/`,
+ * In a built release the bundle lives at
+ * `plugins/opc/mcp/opc-state-server/dist/server.js` (MCP servers are bundled
+ * INSIDE the opc plugin dir so the plugin is self-contained at install time)
+ * and the resources are at `plugins/opc/mcp/opc-state-server/{phases,scenarios}/`,
  * so `import.meta.url + ../../<dir>` resolves correctly.
  *
  * In dev (tsx / unbundled), this same relative jump lands in the source tree
