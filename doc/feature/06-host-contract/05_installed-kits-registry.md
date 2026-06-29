@@ -18,7 +18,7 @@
 {
   "kits": [
     {
-      "name": "opc/official-kits",
+      "name": "opc-official-kits",
       "version": "0.1.0",
       "source": "marketplace",
       "agents": [
@@ -47,7 +47,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `name` | string | 是 | kit 全名（如 `opc/official-kits`） |
+| `name` | string | 是 | kit 全名（如 `opc-official-kits`） |
 | `version` | string | 是 | 安装时的版本号 |
 | `source` | string | 是 | `marketplace` / `local` / `url` |
 | `agents` | string[] | 是 | 该 kit 提供的 agent name 列表 |
@@ -194,7 +194,7 @@ opc-kit install
 opc-kit doctor
 
 # 输出示例：
-✓ opc/official-kits (v0.1.0) — all 27 agents present, 2 MCP servers configured
+✓ opc-official-kits (v0.1.0) — all 27 agents present, 2 MCP servers configured
 ⚠ opc/community-lint (v0.0.1) — 2 agents missing, run 'opc-kit repair opc/community-lint'
 
 # 修复单个 kit（重新写入缺失文件）

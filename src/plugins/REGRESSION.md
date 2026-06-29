@@ -1,7 +1,7 @@
 # plugins/ REGRESSION
 
 > **v2 重写说明**：本文档原为 v1 `kits/`（6 个独立 kit）的 M13.h 审计。v2 将六 kit
-> 合并进单一 `opc/official-kits` 插件，agent 归入 6 个 category 目录（product/design/
+> 合并进单一 `opc-official-kits` 插件，agent 归入 6 个 category 目录（product/design/
 > dev/infra/qa/reflection），并新增 `opc-distiller`（共 27 个）。下面"§1 Inventory"按 v2
 > 重新列数；其余章节（命名唯一性、phase-node 交叉引用、frontmatter 契约）的核查方法不变，
 > 只是 `kits/<kit>/agents/` 路径换成 `official-kits/agents/<category>/`。
@@ -126,7 +126,7 @@ fields equal `basename(file) - .md`. ✅ **PASS**.
 
 ## 7. External MCP server dependencies
 
-v2 的 `opc/official-kits` 插件本身**不自带** `.mcp.json`（v1 六 kit 各自的 `.mcp.json`
+v2 的 `opc-official-kits` 插件本身**不自带** `.mcp.json`（v1 六 kit 各自的 `.mcp.json`
 已移除）。部分 agent 的 `tools:` 白名单引用了外部 MCP server 工具，这些 server 需用户
 另行安装/启用 —— Claude Code 会聚合所有已加载插件的 MCP 注册，agent 白名单只控访问权：
 

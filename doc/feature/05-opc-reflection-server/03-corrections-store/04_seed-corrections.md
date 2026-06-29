@@ -137,10 +137,10 @@ opc-memory/corrections/.deleted-seeds.json
 
 ### 5.1 版本管理
 
-seed 库随 marketplace 的 `opc/official-kits` 插件分发。升级流程：
+seed 库随 marketplace 的 `opc-official-kits` 插件分发。升级流程：
 
 ```
-opc-kit update opc/official-kits --diff seed-corrections
+opc-kit update opc-official-kits --diff seed-corrections
     │
     ├── ① 拉取新版 seed-corrections/
     ├── ② diff 新旧 seed 目录：
@@ -153,7 +153,7 @@ opc-kit update opc/official-kits --diff seed-corrections
 ### 5.2 变更提示
 
 ```
-$ opc-kit update opc/official-kits --diff seed-corrections
+$ opc-kit update opc-official-kits --diff seed-corrections
 
 Seed corrections 变更：
   + intent-analysis/task-vs-chat/pure-question.md    (新增)

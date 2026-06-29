@@ -8,7 +8,7 @@
 ```
 opc-marketplace/
 │
-├── .claude-plugin/marketplace.json      # 市场清单：opc + opc/official-kits 两个插件
+├── .claude-plugin/marketplace.json      # 市场清单：opc + opc-official-kits 两个插件
 ├── README.md / README.zh-CN.md
 ├── package.json                          # pnpm workspace 根
 ├── pnpm-workspace.yaml                   # packages: src/shared/*, src/mcp/*, src/plugins/opc
@@ -36,7 +36,7 @@ opc-marketplace/
 │   │   │   ├── bin/opc-status.mjs        #   终端只读健康快照 CLI
 │   │   │   ├── commands/opc-status.md    #   /opc-status slash 命令
 │   │   │   └── test/e2e/                 #   7 stage + 16 scenario e2e
-│   │   └── official-kits/                # opc/official-kits 插件：27 个子 agent
+│   │   └── official-kits/                # opc-official-kits 插件：27 个子 agent
 │   │       ├── .claude-plugin/plugin.json
 │   │       └── agents/                   #   product/ design/ dev/ infra/ qa/ reflection/
 │   │
@@ -50,7 +50,7 @@ opc-marketplace/
 ```
 
 > **历史说明**：v1 曾采用 `platform/`（mcp + opc-orchestrator）+ 顶层 `phases/` + `kits/`（6 个独立 kit）
-> 三段式布局。v2 重构后改为 `src/{mcp,plugins,shared}/` workspace + 单一 `opc/official-kits` 插件，
+> 三段式布局。v2 重构后改为 `src/{mcp,plugins,shared}/` workspace + 单一 `opc-official-kits` 插件，
 > phases/scenarios 收编进 `src/mcp/opc-state-server/`。上面的树反映当前实际布局。
 
 ---

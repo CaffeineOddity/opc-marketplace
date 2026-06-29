@@ -9,7 +9,7 @@ OPC (Opinionated Pipeline Compiler) — state-machine-driven pipeline compiler w
 | Plugin | Description |
 |--------|-------------|
 | `opc` | Pipeline orchestrator with UserPromptSubmit hook, `/opc-status` command, and 3 MCP servers (state, knowledge, reflection) |
-| `opc/official-kits` | 27 sub-agents covering the full product lifecycle: product, design, dev, QA, ship, growth |
+| `opc-official-kits` | 27 sub-agents covering the full product lifecycle: product, design, dev, QA, ship, growth |
 
 ### MCP Servers (bundled with opc)
 
@@ -19,7 +19,7 @@ OPC (Opinionated Pipeline Compiler) — state-machine-driven pipeline compiler w
 | `opc-knowledge-server` | `opc_knowledge_open`, `opc_knowledge_read`, `opc_knowledge_write`, `opc_knowledge_delete`, `opc_knowledge_index` |
 | `opc-reflection-server` | `opc_reflect_plan`, `opc_reflect_execute`, `opc_reflect_complete`, `opc_reflect_admin`, `opc_corrections` |
 
-### Agents (27 in opc/official-kits)
+### Agents (27 in opc-official-kits)
 
 product-manager, business-analyst, startup-advisor, ux-researcher, ux-designer, ui-designer, design-bridge, backend-architect, backend-engineer, frontend-developer, fullstack-engineer, cloud-architect, database-administrator, devops-engineer, deployment-engineer, security-engineer, penetration-tester, sre-engineer, performance-engineer, test-automator, qa-expert, cove-verifier, critic, debater, tot-explorer, meta-synthesizer, opc-distiller
 
@@ -38,7 +38,7 @@ claude plugin marketplace add CaffeineOddity/opc-marketplace
 claude plugin install opc
 
 # Official agent kits
-claude plugin install opc/official-kits
+claude plugin install opc-official-kits
 ```
 
 ### 3. Restart Claude Code

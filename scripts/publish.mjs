@@ -21,7 +21,7 @@
  *            marketplace add <tarball-url>` installs from the asset.
  *            Requires `gh auth login`. Version tag: v0.1.0{n}.
  *
- *   uninstall Remove opc + opc/official-kits plugins and the marketplace
+ *   uninstall Remove opc + opc-official-kits plugins and the marketplace
  *            registration. Use to test the install/uninstall cycle
  *            repeatedly. No build, no version bump.
  *
@@ -312,7 +312,7 @@ async function publishLocal(tag, n) {
   console.log("Next: install the plugins and verify:");
   console.log("");
   console.log("  claude plugin install opc");
-  console.log("  claude plugin install opc/official-kits");
+  console.log("  claude plugin install opc-official-kits");
   console.log("  # restart Claude Code, then in a new project:");
   console.log("  #   /opc-status          → renders health snapshot (state-server up)");
   console.log("  #   /mcp                  → opc-state / opc-knowledge / opc-reflection listed");
@@ -372,7 +372,7 @@ async function publishBranch(tag, n) {
   console.log("");
   console.log("  then:");
   console.log("    claude plugin install opc");
-  console.log("    claude plugin install opc/official-kits");
+  console.log("    claude plugin install opc-official-kits");
   console.log("");
   console.log("Pinning an OLD version (release branch keeps only the latest dist/<ver>/,");
   console.log("but every release is tagged):");
@@ -473,14 +473,14 @@ async function publishTarball(tag, n) {
   console.log("");
   console.log(`  claude plugin marketplace add ${assetUrl}`);
   console.log("  claude plugin install opc");
-  console.log("  claude plugin install opc/official-kits");
+  console.log("  claude plugin install opc-official-kits");
   console.log("");
   console.log(`Version tag: ${tag}`);
   console.log(`Release:     https://github.com/${repo}/releases/tag/${tag}`);
 }
 
 // ---------------------------------------------------------------------------
-// Mode: uninstall  (remove opc + opc/official-kits plugins + the marketplace)
+// Mode: uninstall  (remove opc + opc-official-kits plugins + the marketplace)
 // ---------------------------------------------------------------------------
 
 /** Remove a plugin via `claude plugin uninstall`, ignoring "not installed". */
@@ -521,6 +521,8 @@ function uninstallMarketplace(name) {
 async function publishUninstall() {
   console.log("→ Uninstalling OPC plugins");
   uninstallPlugin("opc");
+  uninstallPlugin("opc-official-kits");
+  // Legacy installs (pre-rename) used the slash-namespaced id; clean those up too.
   uninstallPlugin("opc/official-kits");
 
   console.log("");
@@ -534,7 +536,7 @@ async function publishUninstall() {
   console.log("");
   console.log("  node scripts/publish.mjs local        # build + register");
   console.log("  claude plugin install opc");
-  console.log("  claude plugin install opc/official-kits");
+  console.log("  claude plugin install opc-official-kits");
   console.log("  # restart Claude Code");
   console.log("");
   console.log("Note: restart Claude Code so the hook/MCP servers actually unload.");

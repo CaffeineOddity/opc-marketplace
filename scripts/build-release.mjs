@@ -213,7 +213,7 @@ function versionedManifest(version) {
     owner: { name: "caffeine" },
     plugins: [
       {
-        name: "opc/official-kits",
+        name: "opc-official-kits",
         source: "./plugins/official-kits",
         description:
           "OPC official kits — 27 sub-agents across product, design, dev, infra, QA, and reflection categories for full pipeline lifecycle",

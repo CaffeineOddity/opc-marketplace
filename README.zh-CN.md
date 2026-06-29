@@ -9,7 +9,7 @@ OPC（Opinionated Pipeline Compiler）—— 基于状态机的管线编译器�
 | 插件 | 描述 |
 |------|------|
 | `opc` | 管线编排器，包含 UserPromptSubmit 钩子、`/opc-status` 命令和 3 个 MCP 服务器（状态、知识、反思） |
-| `opc/official-kits` | 27 个子智能体，覆盖完整产品生命周期：产品、设计、开发、测试、交付、增长 |
+| `opc-official-kits` | 27 个子智能体，覆盖完整产品生命周期：产品、设计、开发、测试、交付、增长 |
 
 ### MCP 服务器（随 opc 安装）
 
@@ -19,7 +19,7 @@ OPC（Opinionated Pipeline Compiler）—— 基于状态机的管线编译器�
 | `opc-knowledge-server` | `opc_knowledge_open`、`opc_knowledge_read`、`opc_knowledge_write`、`opc_knowledge_delete`、`opc_knowledge_index` |
 | `opc-reflection-server` | `opc_reflect_plan`、`opc_reflect_execute`、`opc_reflect_complete`、`opc_reflect_admin`、`opc_corrections` |
 
-### 智能体（opc/official-kits 中的 27 个）
+### 智能体（opc-official-kits 中的 27 个）
 
 product-manager、business-analyst、startup-advisor、ux-researcher、ux-designer、ui-designer、design-bridge、backend-architect、backend-engineer、frontend-developer、fullstack-engineer、cloud-architect、database-administrator、devops-engineer、deployment-engineer、security-engineer、penetration-tester、sre-engineer、performance-engineer、test-automator、qa-expert、cove-verifier、critic、debater、tot-explorer、meta-synthesizer、opc-distiller
 
@@ -38,7 +38,7 @@ claude plugin marketplace add CaffeineOddity/opc-marketplace
 claude plugin install opc
 
 # 官方智能体套件
-claude plugin install opc/official-kits
+claude plugin install opc-official-kits
 ```
 
 ### 3. 重启 Claude Code

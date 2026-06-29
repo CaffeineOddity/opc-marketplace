@@ -20,7 +20,7 @@ Pick by what stage you're at:
 # 1. Build + register locally, then install & verify (no git side effects):
 node scripts/publish.mjs local
 claude plugin install opc
-claude plugin install opc/official-kits
+claude plugin install opc-official-kits
 # restart Claude Code → /opc-status, /mcp, send a dev task
 
 # 2. Once verified, ship a release branch:
@@ -51,7 +51,7 @@ node scripts/publish.mjs local [--scope user|project|local] [--no-build]
   ```shell
   node scripts/publish.mjs local
   claude plugin install opc
-  claude plugin install opc/official-kits
+  claude plugin install opc-official-kits
   # restart Claude Code
   ```
 
@@ -61,7 +61,7 @@ node scripts/publish.mjs local [--scope user|project|local] [--no-build]
 node scripts/publish.mjs uninstall [--marketplace opc-marketplace]
 ```
 
-- Runs `claude plugin uninstall opc` and `claude plugin uninstall opc/official-kits`
+- Runs `claude plugin uninstall opc` and `claude plugin uninstall opc-official-kits`
   (ignores "not installed" — safe to run when already removed).
 - Then `claude plugin marketplace remove <name>`.
 - No build, no version bump. Use it to test the install/uninstall cycle
@@ -86,7 +86,7 @@ node scripts/publish.mjs branch [--branch release] [--repo owner/name] [--base 0
   ```shell
   claude plugin marketplace add CaffeineOddity/opc-marketplace
   claude plugin install opc
-  claude plugin install opc/official-kits
+  claude plugin install opc-official-kits
   ```
 
   If you'd rather keep `main` as default, use `tarball` mode instead.
@@ -107,7 +107,7 @@ node scripts/publish.mjs tarball [--repo owner/name] [--base 0.1.0]
   ```shell
   claude plugin marketplace add https://github.com/CaffeineOddity/opc-marketplace/releases/download/v0.1.0-1/opc-marketplace-v0.1.0-1.tar.gz
   claude plugin install opc
-  claude plugin install opc/official-kits
+  claude plugin install opc-official-kits
   ```
 
 ## Common options

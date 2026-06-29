@@ -8,16 +8,16 @@ by `scripts/build-release.mjs` and registered in `.claude-plugin/marketplace.jso
 | Plugin | Path | Contents |
 |---|---|---|
 | `opc` | `src/plugins/opc/` | Core orchestrator: `UserPromptSubmit` hook (`bin/opc-hook.sh`), `/opc-status` slash command, `opc-status` read-only CLI, `.mcp.json` registering the three state/knowledge/reflection MCP servers. The hook nudges Claude to call `opc_flow_query` before acting (quiet by default, loud/off configurable). |
-| `opc/official-kits` | `src/plugins/official-kits/` | 27 sub-agents covering the full product lifecycle, organized into 6 categories. |
+| `opc-official-kits` | `src/plugins/official-kits/` | 27 sub-agents covering the full product lifecycle, organized into 6 categories. |
 
 > v2 consolidation note: v1 shipped six separate plugins (`product-kit`, `design-kit`,
 > `dev-kit`, `qa-kit`, `ship-kit`, `growth-kit`) plus an `opc-kit install` CLI. v2
-> collapses them into a single `opc/official-kits` plugin and removes the install CLI —
+> collapses them into a single `opc-official-kits` plugin and removes the install CLI —
 > kits load at session start like any plugin, no per-kit install step.
 
 ## official-kits agent categories
 
-`opc/official-kits/.claude-plugin/plugin.json` declares `agents` as an array of the six
+`opc-official-kits/.claude-plugin/plugin.json` declares `agents` as an array of the six
 category directories:
 
 | Category | Agents | Phases primarily served |
