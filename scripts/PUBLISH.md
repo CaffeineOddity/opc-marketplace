@@ -5,11 +5,14 @@ Pick by what stage you're at:
 
 | Mode | When to use | Version shape | Side effects |
 |---|---|---|---|
-| `local` | Install/verify on **this machine** before any real release. | `v0.1.0-dev1`, `-dev2`, … | registers a local marketplace; no git, no push |
-| `branch` | First real distribution — self-contained tree on a git branch. | `v0.1.0-1`, `-2`, … | force-pushes a `release` branch + tag |
-| `tarball` | Canonical release — GitHub Release with a versioned tarball asset. | `v0.1.0-1`, `-2`, … | git tag + GitHub Release (needs `gh auth login`) |
+| `local` | Install/verify on **this machine** before any real release. | `v{version}-dev{build_number}` | registers a local marketplace; bumps `build_number`; no git, no push |
+| `branch` | First real distribution — self-contained tree on a git branch. | `v{version}` | force-pushes a `release` branch + tag |
+| `tarball` | Canonical release — GitHub Release with a versioned tarball asset. | `v{version}` | git tag + GitHub Release (needs `gh auth login`) |
 | `uninstall` | Tear down to test the install/uninstall cycle repeatedly. | — | removes plugins + marketplace registration |
 
+> Version shapes come from `scripts/version.json` (`{ version, build_number }`),
+> committed to git — the single source of truth. See "Version numbering" below.
+>
 > `dist/` is gitignored, so `claude plugin marketplace add <github-repo>` on the
 > default branch gets **no** built artifacts. `local` reads dist from disk;
 > `branch` and `tarball` are how you ship dist to consumers.
@@ -35,15 +38,18 @@ node scripts/publish.mjs tarball
 ### `local` — build + register from disk
 
 ```shell
-node scripts/publish.mjs local [--scope user|project|local] [--no-build]
+node scripts/publish.mjs local [--scope user|project|local] [--no-build] [--no-register] [--up <part>]
 ```
 
 - Runs `pnpm build` (unless `--no-build`), then
   `claude plugin marketplace add <repo-path> --scope <scope>`.
 - Removes any prior marketplace registration of the same name first, so it's
   safe to re-run after every code change.
-- Bumps a local counter at `.opc/publish-local-counter`; version markers are
-  `v0.1.0-dev{n}` and **never** pushed to git.
+- Bumps `build_number` in `scripts/version.json` (committed) after a successful
+  build. `--no-build` reuses the existing dist and does **not** bump (a bump
+  corresponds to a fresh build). `--no-register` builds + bumps + updates the
+  latest pointer but skips `claude plugin marketplace add` (used by
+  `redeploy.sh build`).
 - After it prints, install the plugins and verify (see "Verification" below).
   Plugins are copied to `~/.claude/plugins/cache/` at install time, so **every
   code change requires a fresh `publish.mjs local` + reinstall** to take effect:
@@ -72,7 +78,7 @@ node scripts/publish.mjs uninstall [--marketplace opc-marketplace]
 ### `branch` — dist committed on a `release` branch
 
 ```shell
-node scripts/publish.mjs branch [--branch release] [--repo owner/name] [--base 0.1.0]
+node scripts/publish.mjs branch [--branch release] [--repo owner/name] [--up <part>]
 ```
 
 - Requires a clean working tree (commit/stash first).
@@ -94,7 +100,7 @@ node scripts/publish.mjs branch [--branch release] [--repo owner/name] [--base 0
 ### `tarball` — GitHub Release asset
 
 ```shell
-node scripts/publish.mjs tarball [--repo owner/name] [--base 0.1.0]
+node scripts/publish.mjs tarball [--repo owner/name] [--up <part>]
 ```
 
 - Requires a clean working tree **and** `gh auth login`.
@@ -114,21 +120,36 @@ node scripts/publish.mjs tarball [--repo owner/name] [--base 0.1.0]
 
 | Option | Applies to | Meaning |
 |---|---|---|
-| `--no-build` | all | skip `pnpm build`, use current `dist/` |
+| `--no-build` | all | skip `pnpm build`, use current `dist/` (local mode: no `build_number` bump) |
+| `--no-register` | local | build + bump + update latest pointer, but skip `claude plugin marketplace add` |
+| `--up <part>` | all | bump `version` segment (`major`/`minor`/`patch`; lower segments reset to 0) and reset `build_number=0` before computing the tag |
 | `--dry-run` | all | print what would happen, run no side-effects |
 | `--marketplace <name>` | local | registered marketplace name (default `opc-marketplace`) |
 | `--scope <scope>` | local | install scope: `user` (default) / `project` / `local` |
 | `--repo <owner/name>` | branch, tarball | override auto-detected GitHub repo |
 | `--branch <name>` | branch | release branch name (default `release`) |
-| `--base <ver>` | all | base version (default `0.1.0`) |
 
 ## Version numbering
 
-- **local**: `v0.1.0-dev1`, `v0.1.0-dev2`, … — counter in
-  `.opc/publish-local-counter`; also respects any existing `-devN` git tags so
-  numbers never collide. Never pushed.
-- **branch / tarball**: `v0.1.0-1`, `v0.1.0-2`, … — `n` is
-  `1 + max(existing v0.1.0-N tag)`, scanned across local + remote tags.
+`scripts/version.json` (`{ version, build_number }`), committed to git, is the
+single source of truth. `scripts/version.mjs` owns all reads/writes.
+
+- **local (dev)**: `v{version}-dev{build_number+1}`. After a successful build,
+  `build_number` is written back as `build_number+1`. Never pushed as a git tag.
+  `--no-build` reuses the existing dist and does **not** bump.
+- **branch / tarball (release)**: `v{version}`. `build_number` is unchanged.
+- **`--up <part>`**: bumps `version` (lower segments reset to 0) and resets
+  `build_number=0`, before computing the tag. Works with any mode.
+- **collision guard**: if the computed tag already exists, the script errors
+  out — bump with `--up`.
+
+### Bumping the version
+
+```shell
+node scripts/publish.mjs local --up patch     # 0.1.0 → 0.1.1, build_number=0, then dev build (v0.1.1-dev1)
+node scripts/publish.mjs local --up minor     # 0.1.0 → 0.2.0, then dev build
+node scripts/publish.mjs tarball --up minor   # 0.1.0 → 0.2.0, then release (v0.2.0)
+```
 
 ## Verification checklist (after installing)
 

@@ -18,7 +18,7 @@ src/mcp/package-lock.json
 src/hud/node_modules/
 src/hud/package-lock.json
 
-# OPC — runtime state lives under .opc/. Ignore its contents by default, then
+# OPC runtime state lives under .opc/. Ignore its contents by default, then
 # re-include the team-shareable trees (knowledge, memory) so they can be
 # committed. /opc init writes the same pattern into each target project.
 #
@@ -33,7 +33,3 @@ src/hud/package-lock.json
 .opc/knowledge/.opc-knowledge.idx
 .opc/knowledge/.opc-knowledge.idx.broken
 .opc/knowledge/.opc-knowledge.json
-
-# Local-only OPC publish bookkeeping (never commit).
-.opc/publish-local-counter
-.opc/publish-stage/

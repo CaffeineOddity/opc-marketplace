@@ -8,26 +8,34 @@
  * Modes:
  *   local    Build dist/, then register the marketplace from the local repo
  *            path so `claude plugin install opc` works from disk. Fastest;
- *            ideal for install/verification before a real release. Version
- *            tag: v0.1.0-dev{n} (n auto-increments).
+ *            ideal for install/verification before a real release. Dev tag:
+ *            v{version}-dev{build_number} (build_number bumped after success).
  *
  *   branch   Build dist/, force-commit dist/ onto a dedicated `release`
  *            branch, push it. `claude plugin marketplace add
  *            CaffeineOddity/opc-marketplace` (pointed at the release branch)
- *            then clones a self-contained tree. Version tag: v0.1.0{n}.
+ *            then clones a self-contained tree. Release tag: v{version}.
  *
  *   tarball  Build dist/, pack dist/ + manifest into a versioned tarball,
- *            attach it to a GitHub Release (tag v0.1.0{n}). `claude plugin
+ *            attach it to a GitHub Release (tag v{version}). `claude plugin
  *            marketplace add <tarball-url>` installs from the asset.
- *            Requires `gh auth login`. Version tag: v0.1.0{n}.
+ *            Requires `gh auth login`. Release tag: v{version}.
  *
  *   uninstall Remove opc + opc-official-kits plugins and the marketplace
  *            registration. Use to test the install/uninstall cycle
  *            repeatedly. No build, no version bump.
  *
  * Options:
- *   --no-build        Skip the `pnpm build` step (use current dist/).
+ *   --no-build        Skip the `pnpm build` step (use current dist/). For
+ *                     `local` mode this also skips the build_number bump — a
+ *                     bump corresponds to a fresh build.
+ *   --no-register     `local` mode only: build + bump + update the latest
+ *                     pointer, but skip `claude plugin marketplace add`.
+ *                     Used by redeploy.sh `build` to avoid touching claude.
  *   --dry-run         Print what would happen; don't run side-effects.
+ *   --up <part>       Bump the version segment (major|minor|patch; lower
+ *                     segments reset to 0) and reset build_number to 0 BEFORE
+ *                     computing the tag. Works with any mode.
  *   --marketplace <name>  Marketplace name as registered locally (default:
  *                     opc-marketplace). Used by `local` mode.
  *   --scope <scope>   Install scope for `local` mode: user|project|local
@@ -35,15 +43,16 @@
  *   --repo <owner/name>   GitHub repo for `branch`/`tarball` (default read
  *                     from git remote origin).
  *   --branch <name>   Release branch name for `branch` mode (default: release).
- *   --base <ver>      Base version (default: 0.1.0). Mode suffix differs:
- *                     local → -dev{n}; branch/tarball → {n}.
  *
- * Version numbering:
- *   - local:     v0.1.0-dev1, v0.1.0-dev2, ... (never pushed; local only)
- *   - branch:    v0.1.0-1, v0.1.0-2, ...        (tag on release branch)
- *   - tarball:   v0.1.0-1, v0.1.0-2, ...        (git tag + GitHub Release)
- *   n is 1 + the highest existing n of that mode's shape, scanned across git
- *   tags (and, for `local`, a counter file at .opc/publish-local-counter).
+ * Version numbering — `scripts/version.json` ({ version, build_number }) is the
+ * single source of truth (committed to git):
+ *   - local (dev):     v{version}-dev{build_number+1}; build_number is written
+ *                      back as build_number+1 after a successful build. Never
+ *                      pushed as a git tag.
+ *   - branch/tarball:  v{version} (release; build_number unchanged).
+ *   - --up <part>:     bumps `version`, resets build_number to 0.
+ *   - collision guard: if the computed tag already exists, error out (bump
+ *                      with `--up`).
  *
  * Exit codes: 0 success; 1 usage/env error; 2 build failed; 3 publish failed.
  */
@@ -61,13 +70,16 @@ import {
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readVersion, writeVersion, bumpBase, computeTag, tagExists } from "./version.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const DIST = join(ROOT, "dist");
 const MANIFEST = join(ROOT, ".claude-plugin", "marketplace.json");
-const OPC_DIR = join(ROOT, ".opc");
-const COUNTER_FILE = join(OPC_DIR, "publish-local-counter");
+// Tarball staging lives under dist/.stage/ (dist/ is gitignored) so no stray
+// top-level bookkeeping dir is created. Version state lives in
+// scripts/version.json (committed) — see version.mjs.
+const STAGE_DIR = join(DIST, ".stage");
 
 const args = process.argv.slice(2);
 if (args.length === 0 || args[0] === "-h" || args[0] === "--help") {
@@ -85,10 +97,15 @@ if (!VALID_MODES.has(mode)) {
 const opts = parseOpts(args.slice(1));
 const DRY = opts["dry-run"] === true;
 const NO_BUILD = opts["no-build"] === true;
+const NO_REGISTER = opts["no-register"] === true;
 const MARKETPLACE = opts["marketplace"] ?? "opc-marketplace";
 const SCOPE = opts["scope"] ?? "user";
 const RELEASE_BRANCH = opts["branch"] ?? "release";
-const BASE = opts["base"] ?? "0.1.0";
+const UP = opts["up"]; // major | minor | patch | undefined
+if (UP !== undefined && !["major", "minor", "patch"].includes(UP)) {
+  console.error(`✗ --up must be one of major|minor|patch (got "${UP}")`);
+  process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,7 +117,7 @@ function parseOpts(rest) {
     const a = rest[i];
     if (a.startsWith("--")) {
       const key = a.slice(2);
-      if (key === "dry-run" || key === "no-build") {
+      if (key === "dry-run" || key === "no-build" || key === "no-register") {
         o[key] = true;
       } else {
         o[key] = rest[++i];
@@ -151,66 +168,21 @@ function detectRepo() {
   }
 }
 
-/** List existing git tags (local + remote refs). */
-function existingTags() {
-  const set = new Set();
-  try {
-    set.add(runCapture("git", ["tag", "-l"]));
-  } catch {
-    /* ignore */
-  }
-  try {
-    // remote tag refs look like: <sha>\trefs/tags/<name>; strip deref (^{}) too
-    const remote = runCapture("git", ["ls-remote", "--tags", "origin"]);
-    for (const line of remote.split("\n")) {
-      const m = line.match(/refs\/tags\/([^^]+)$/);
-      if (m) set.add(m[1]);
-    }
-  } catch {
-    /* no remote — local-only is fine */
-  }
-  return [...set].filter(Boolean);
-}
-
 /**
- * Compute next version number for the given mode.
- *   local:   v{BASE}-dev{n}    — n from counter file (or highest -dev tag +1)
- *   branch:  v{BASE}-{n}       — n from highest v{BASE}-{n} tag +1
- *   tarball: v{BASE}-{n}       — n from highest v{BASE}-{n} tag +1
+ * Resolve the release tag (and, for local dev builds, the build_number to write
+ * back). scripts/version.json is the single source of truth (see version.mjs).
+ *   --up <part> bumps `version` (lower segments reset) + resets build_number=0
+ *   BEFORE computing the tag. Returns { tag, nextBuild, state }.
  */
-function nextVersion(mode) {
-  const tags = existingTags();
-  if (mode === "local") {
-    let n = 0;
-    if (existsSync(COUNTER_FILE)) {
-      n = parseInt(readFileSync(COUNTER_FILE, "utf8").trim(), 10) || 0;
-    }
-    // also honor any -dev tags so we never collide
-    for (const t of tags) {
-      const m = t.match(new RegExp(`^v${escapeReg(BASE)}-dev(\\d+)$`));
-      if (m) n = Math.max(n, parseInt(m[1], 10));
-    }
-    n += 1;
-    return { tag: `v${BASE}-dev${n}`, n };
+function resolveVersion() {
+  let state = readVersion();
+  if (UP) {
+    state = { version: bumpBase(state.version, UP), build_number: 0 };
+    writeVersion(state, DRY);
+    console.log(`→ bumped base ${UP}: version → ${state.version}, build_number reset to 0`);
   }
-  // branch / tarball share the v{BASE}-{n} shape
-  let n = 0;
-  for (const t of tags) {
-    const m = t.match(new RegExp(`^v${escapeReg(BASE)}-(\\d+)$`));
-    if (m) n = Math.max(n, parseInt(m[1], 10));
-  }
-  n += 1;
-  return { tag: `v${BASE}-${n}`, n };
-}
-
-function escapeReg(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function bumpLocalCounter(n) {
-  if (DRY) return;
-  if (!existsSync(OPC_DIR)) mkdirSync(OPC_DIR, { recursive: true });
-  writeFileSync(COUNTER_FILE, String(n), "utf8");
+  const { tag, nextBuild } = computeTag(mode, state, NO_BUILD);
+  return { tag, nextBuild, state };
 }
 
 function assertCleanTree() {
@@ -285,7 +257,12 @@ function updateLatestPointer(version) {
 // Mode: local
 // ---------------------------------------------------------------------------
 
-async function publishLocal(tag, n) {
+async function publishLocal(tag) {
+  if (NO_REGISTER) {
+    console.log(`→ --no-register: skipping marketplace registration (build + pointer only)`);
+    console.log(`✓ dist/${tag}/ built, latest pointer updated. No claude changes.`);
+    return;
+  }
   const scopeFlag = SCOPE ? ["--scope", SCOPE] : [];
   console.log(`→ Registering marketplace "${MARKETPLACE}" from local path (scope=${SCOPE})`);
 
@@ -305,7 +282,6 @@ async function publishLocal(tag, n) {
     console.log(`  [dry-run] claude plugin marketplace add ${ROOT} --scope ${SCOPE}`);
   }
 
-  bumpLocalCounter(n);
   console.log("");
   console.log("✓ Local marketplace registered.");
   console.log("");
@@ -326,7 +302,7 @@ async function publishLocal(tag, n) {
 // Mode: branch  (commit dist/ onto a `release` branch, push)
 // ---------------------------------------------------------------------------
 
-async function publishBranch(tag, n) {
+async function publishBranch(tag) {
   const repo = opts["repo"] ?? detectRepo();
   if (!repo) throw new Error("could not detect GitHub repo from git remote. Pass --repo owner/name");
   const startBranch = runCapture("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
@@ -386,7 +362,7 @@ async function publishBranch(tag, n) {
 // Mode: tarball  (pack dist/, GitHub Release asset)
 // ---------------------------------------------------------------------------
 
-async function publishTarball(tag, n) {
+async function publishTarball(tag) {
   const repo = opts["repo"] ?? detectRepo();
   if (!repo) throw new Error("could not detect GitHub repo from git remote. Pass --repo owner/name");
   assertCleanTree();
@@ -403,7 +379,7 @@ async function publishTarball(tag, n) {
   // + plugins/ + mcp/, written by build-release.mjs). Stage a copy so the
   // tarball root, when extracted, IS the marketplace root.
   const versionDir = join(DIST, tag);
-  const stage = join(ROOT, ".opc", "publish-stage", tag);
+  const stage = join(STAGE_DIR, tag);
   if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
 
@@ -416,7 +392,7 @@ async function publishTarball(tag, n) {
   }
 
   const tarName = `opc-marketplace-${tag}.tar.gz`;
-  const tarPath = join(ROOT, ".opc", "publish-stage", tarName);
+  const tarPath = join(STAGE_DIR, tarName);
   console.log(`→ Packing ${tarName}`);
   if (!DRY) {
     // tar from stage's parent so the archive root is the tag dir.
@@ -483,63 +459,75 @@ async function publishTarball(tag, n) {
 // Mode: uninstall  (remove opc + opc-official-kits plugins + the marketplace)
 // ---------------------------------------------------------------------------
 
-/** Remove a plugin via `claude plugin uninstall`, ignoring "not installed". */
+/** Remove a plugin via `claude plugin uninstall`. Silent unless it was actually
+ *  installed and got removed — "not installed" is the common case on a fresh
+ *  machine, so we don't print anything for it (the claude CLI would otherwise
+ *  emit a red ✘ line that reads like a failure). Returns true if removed. */
 function uninstallPlugin(name) {
   if (DRY) {
     console.log(`  [dry-run] claude plugin uninstall ${name}`);
-    return;
+    return false;
   }
+  // pipe (not inherit) so claude's own ✘ "not found" output stays quiet.
   const r = spawnSync("claude", ["plugin", "uninstall", name], {
-    stdio: "inherit",
+    stdio: "pipe",
     cwd: ROOT,
   });
-  // non-zero just means it wasn't installed — treat as success.
-  if (r.status !== 0) {
-    console.log(`  (${name} was not installed — skipped)`);
-  } else {
+  if (r.status === 0) {
     console.log(`  ✓ uninstalled ${name}`);
+    return true;
   }
+  // non-zero ⇒ wasn't installed — silent (no noisy ✘, no "skipped" line).
+  return false;
 }
 
-/** Remove the marketplace registration, ignoring "not found". */
+/** Remove the marketplace registration. Silent unless it was actually
+ *  registered and got removed — same reasoning as uninstallPlugin().
+ *  Returns true if removed. */
 function uninstallMarketplace(name) {
   if (DRY) {
     console.log(`  [dry-run] claude plugin marketplace remove ${name}`);
-    return;
+    return false;
   }
   const r = spawnSync("claude", ["plugin", "marketplace", "remove", name], {
-    stdio: "inherit",
+    stdio: "pipe",
     cwd: ROOT,
   });
-  if (r.status !== 0) {
-    console.log(`  (marketplace ${name} was not registered — skipped)`);
-  } else {
+  if (r.status === 0) {
     console.log(`  ✓ removed marketplace ${name}`);
+    return true;
   }
+  // non-zero ⇒ wasn't registered — silent.
+  return false;
 }
 
 async function publishUninstall() {
   console.log("→ Uninstalling OPC plugins");
-  uninstallPlugin("opc");
-  uninstallPlugin("opc-official-kits");
+  let removedAny = false;
+  removedAny = uninstallPlugin("opc") || removedAny;
+  removedAny = uninstallPlugin("opc-official-kits") || removedAny;
   // Legacy installs (pre-rename) used the slash-namespaced id; clean those up too.
-  uninstallPlugin("opc/official-kits");
+  removedAny = uninstallPlugin("opc/official-kits") || removedAny;
 
   console.log("");
   console.log(`→ Removing marketplace "${MARKETPLACE}"`);
-  uninstallMarketplace(MARKETPLACE);
+  removedAny = uninstallMarketplace(MARKETPLACE) || removedAny;
 
   console.log("");
-  console.log("✓ OPC fully uninstalled.");
-  console.log("");
-  console.log("To re-install after a fresh publish:");
-  console.log("");
-  console.log("  node scripts/publish.mjs local        # build + register");
-  console.log("  claude plugin install opc");
-  console.log("  claude plugin install opc-official-kits");
-  console.log("  # restart Claude Code");
-  console.log("");
-  console.log("Note: restart Claude Code so the hook/MCP servers actually unload.");
+  if (removedAny) {
+    console.log("✓ OPC fully uninstalled.");
+    console.log("");
+    console.log("To re-install after a fresh publish:");
+    console.log("");
+    console.log("  node scripts/publish.mjs local        # build + register");
+    console.log("  claude plugin install opc");
+    console.log("  claude plugin install opc-official-kits");
+    console.log("  # restart Claude Code");
+    console.log("");
+    console.log("Note: restart Claude Code so the hook/MCP servers actually unload.");
+  } else {
+    console.log("✓ Nothing to uninstall (OPC was not installed).");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -560,14 +548,24 @@ async function publishUninstall() {
     return;
   }
 
-  const { tag, n } = nextVersion(mode);
+  const { tag, nextBuild, state } = resolveVersion();
+  if (tagExists(tag)) {
+    console.error(`✗ tag ${tag} already exists — bump version.json first: --up <major|minor|patch>`);
+    process.exit(1);
+  }
   console.log(`version: ${tag}`);
   buildDist(tag);
   updateLatestPointer(tag);
+  // A build_number bump corresponds to a fresh local build. --no-build (and
+  // release modes) do not bump — re-registering an existing dist must not
+  // consume a number.
+  if (mode === "local" && !NO_BUILD && nextBuild !== null) {
+    writeVersion({ version: state.version, build_number: nextBuild }, DRY);
+  }
   try {
-    if (mode === "local") await publishLocal(tag, n);
-    else if (mode === "branch") await publishBranch(tag, n);
-    else if (mode === "tarball") await publishTarball(tag, n);
+    if (mode === "local") await publishLocal(tag);
+    else if (mode === "branch") await publishBranch(tag);
+    else if (mode === "tarball") await publishTarball(tag);
   } catch (e) {
     console.error("✗ publish failed:", e.message);
     process.exit(3);

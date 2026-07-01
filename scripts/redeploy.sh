@@ -3,9 +3,9 @@
 #
 # Each step is independently runnable. Pick one:
 #
-#   bash scripts/redeploy.sh build        # build → dist/v0.1.0-devN/  (matches install's versioning)
+#   bash scripts/redeploy.sh build        # build → dist/v{version}-devN/  (publish.mjs local --no-register)
 #   bash scripts/redeploy.sh uninstall    # remove plugins + marketplace registration
-#   bash scripts/redeploy.sh install      # register marketplace + install both plugins
+#   bash scripts/redeploy.sh install      # register marketplace + install both plugins (no rebuild)
 #   bash scripts/redeploy.sh flow         # uninstall → build → install  (full clean redeploy)
 #
 # `install` registers the marketplace from the local repo path and installs
@@ -27,41 +27,18 @@ ok()   { printf "  \033[32m✓\033[0m %s\n" "$*"; }
 die()  { printf "  \033[31m✗\033[0m %s\n" "$*" >&2; exit 1; }
 
 # --- subcommands --------------------------------------------------------------
-# `build` runs the release build directly (via build-release.mjs) so the
-# versioned dir matches what `install` produces — no orphan dist/local/ dir.
-# We mirror publish.mjs's local-version counter so devN keeps climbing.
-next_dev_version() {
-  local counter=0
-  if [[ -f .opc/publish-local-counter ]]; then
-    counter="$(cat .opc/publish-local-counter | tr -d '[:space:]')"
-    counter="${counter:-0}"
-  fi
-  # also honor any existing v0.1.0-devN git tags so numbers never collide
-  local max_tag=0 t
-  while read -r t; do
-    if [[ "$t" =~ ^v0\.1\.0-dev([0-9]+)$ ]]; then
-      (( BASH_REMATCH[1] > max_tag )) && max_tag="${BASH_REMATCH[1]}"
-    fi
-  done < <(git tag -l 'v0.1.0-dev*' 2>/dev/null)
-  local n=$(( counter > max_tag ? counter : max_tag ))
-  n=$(( n + 1 ))
-  echo "v0.1.0-dev${n}"
-}
-
-bump_local_counter() {
-  local n="$1"
-  mkdir -p .opc
-  echo "$n" > .opc/publish-local-counter
-}
+# Version logic lives in scripts/version.json ({ version, build_number }) — the
+# single source of truth, owned by publish.mjs (see scripts/version.mjs). This
+# script does NOT duplicate any version math; it delegates to publish.mjs:
+#   build   → publish.mjs local --no-register   (build + bump once + pointer, no claude)
+#   install → publish.mjs local --no-build       (reuse dist, register, NO bump)
+# `flow` therefore bumps build_number exactly once (in build), fixing the old
+# double-bump bug.
 
 do_build() {
-  local tag
-  tag="$(next_dev_version)"
-  local n="${tag##v0.1.0-dev}"
-  step "Building dist/${tag}/ (OPC_RELEASE_VERSION=${tag})"
-  OPC_RELEASE_VERSION="$tag" pnpm build
-  bump_local_counter "$n"
-  ok "build done → dist/${tag}/"
+  step "Building + bumping (publish.mjs local --no-register)"
+  node scripts/publish.mjs local --no-register
+  ok "build done"
 }
 
 do_uninstall() {
@@ -73,9 +50,10 @@ do_uninstall() {
 }
 
 do_install() {
-  step "Registering local marketplace"
-  # `local` runs pnpm build then registers the marketplace from the repo path.
-  node scripts/publish.mjs local
+  step "Registering local marketplace (reuse existing dist, no bump)"
+  # --no-build: reuse the dist built by `build`; publish.mjs does NOT bump
+  # build_number (a bump corresponds to a fresh build).
+  node scripts/publish.mjs local --no-build
   ok "marketplace registered"
 
   step "Installing plugins"
