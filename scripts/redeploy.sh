@@ -8,7 +8,11 @@
 #   build       dev build: build dist/ + bump build_number (publish.mjs local --no-register)
 #   uninstall   remove opc + opc-official-kits plugins + marketplace registration
 #   install     register marketplace + install both plugins (reuses existing dist, no rebuild)
-#   flow        uninstall → build → install  (full clean redeploy; bumps build_number once)
+#   flow        uninstall → build → install  (full clean dev redeploy; bumps build_number once)
+#               Supports --up / --release (build/flow only):
+#               `flow --up <part> --release` bumps the version, then publishes a
+#               release tarball (tag=v{version}, no build_number bump) — skips the
+#               local install step, since the tarball is for consumers.
 #
 # Flags (build / flow only):
 #   --up <major|minor|patch>   bump the version segment (lower segments reset,
@@ -27,7 +31,8 @@
 #   # Bump patch + dev build: 0.1.0 → 0.1.1, then v0.1.1-dev1
 #   bash scripts/redeploy.sh build --up patch
 #
-#   # Cut a real release (bump minor first, then publish tarball v0.2.0):
+#   # Cut a real release (bump minor first, then publish tarball v0.2.0;
+#   # skips local install since the tarball is for consumers):
 #   bash scripts/redeploy.sh flow --up minor --release
 #
 #   # Re-publish the current version as a release (no version bump):
