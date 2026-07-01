@@ -1008,7 +1008,7 @@ describe("M18.g reflectionUnavailable degradation", () => {
       step_id: "intent_analysis",
       reason: "MCP transport ECONNRESET",
       validator_summary: { v1: "ok", v2: "ok", v3: "skip" },
-      context_artifacts: ["opc-logs/validator/.../node_execution-1.json"],
+      context_artifacts: [".opc/logs/validator/.../node_execution-1.json"],
     });
     expect(r.degraded).toBe(true);
     expect(r.question_id).toMatch(/^uq-rs-unavailable-/);

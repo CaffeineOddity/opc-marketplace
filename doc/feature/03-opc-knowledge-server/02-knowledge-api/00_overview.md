@@ -18,7 +18,7 @@ sequenceDiagram
     actor C as Claude
     participant F as flow-router<br/>(state-server)
     participant KS as knowledge-server
-    participant FS as opc-knowledge/
+    participant FS as .opc/knowledge/
 
     Note over C,FS: ① 流程启动
     C->>F: opc_flow_query()

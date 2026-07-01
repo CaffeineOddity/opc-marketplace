@@ -7,6 +7,8 @@ export {
 export type {
   SnapshotOptions,
   SessionSnapshot,
+  EmptySnapshot,
+  NoSessionsResult,
   PipelineSnapshot,
   SubPipelineSnapshot,
   PhaseSnapshot,
@@ -15,6 +17,6 @@ export type {
   ExpiryMetrics,
 } from "./snapshot.js";
 
-export { renderSnapshot } from "./render.js";
+export { renderSnapshot, renderEmpty } from "./render.js";
 export { parseArgs, run, HELP } from "./cli.js";
 export type { ParsedArgs, RunIO } from "./cli.js";

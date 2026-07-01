@@ -103,9 +103,9 @@ describe("scenario 12 — reflection rounds_exceeded (A3 closure)", () => {
     const r1 = "rfl-P2-r1-test12";
     const r2 = "rfl-P2-r2-test12";
     const r3 = "rfl-P2-r3-test12";
-    const r1_path = "opc-logs/reflection/test/rfl-P2-r1-test12.json";
-    const r2_path = "opc-logs/reflection/test/rfl-P2-r2-test12.json";
-    const r3_path = "opc-logs/reflection/test/rfl-P2-r3-test12.json";
+    const r1_path = ".opc/logs/reflection/test/rfl-P2-r1-test12.json";
+    const r2_path = ".opc/logs/reflection/test/rfl-P2-r2-test12.json";
+    const r3_path = ".opc/logs/reflection/test/rfl-P2-r3-test12.json";
 
     await app.recorder.record(
       "opc-state-server",

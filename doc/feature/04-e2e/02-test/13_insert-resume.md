@@ -95,7 +95,7 @@
                     · 等价 opc_pipeline_lifecycle({action:"resume", sub_pipeline_id:"sub-2"})
               4. resume 内部:
                  a. 一致性探测: 读 sub-2 在 paused 时各 phase 的 confirm_commit_ref，
-                    `git show <ref>:opc-knowledge/<path>` vs 当前 .md → dirty_paths
+                    `git show <ref>:.opc/knowledge/<path>` vs 当前 .md → dirty_paths
                  b. 假设无 L3 用户手工编辑 → dirty_paths == []
                  c. sub-2.status → "in_progress"
                  d. 清 paused_at（落入 history.paused_events = [{paused_at, resumed_at, dirty_paths}]）
@@ -128,7 +128,7 @@
          auto_resumed: {
            resumed_sub_pipeline_id: "sub-2",
            resume_pointer: {phase:"05-implement", node:"security-review"},
-           dirty_paths: ["opc-knowledge/units/auth/session.md"],
+           dirty_paths: [".opc/knowledge/units/auth/session.md"],
            consistency: "drift_detected",
            message: "resume 不主动覆盖；续跑 node 中 opc_knowledge_write 命中 base_version 冲突时走 3-way diff-and-merge"
          },

@@ -97,7 +97,7 @@ opc_flow_step_complete({step:"intent_analysis"}) 经 reflection-server P1 V1-V5 
 }
 
 Claude → opc_knowledge_read({mode:"list"})()
-  → readdir 遍历 opc-knowledge/ → 无 unit 子目录
+  → readdir 遍历 .opc/knowledge/ → 无 unit 子目录
   → 返回: units: []
 ```
 
@@ -153,7 +153,7 @@ opc_flow_step_complete({step:"task_analysis"}) 判定:
   → complexity = medium → 不走 quick_dispatch
   → modify_unit_count = 1（6 个 subsection 全在 user-auth unit 下，按 unit 去重）
   → 路由 brief_generation
-  → 同步写入 flow-state.accumulated.analysis_evidence_ref = "opc-logs/reflection/<pid>/P2.jsonl#L<n>"
+  → 同步写入 flow-state.accumulated.analysis_evidence_ref = ".opc/logs/reflection/<pid>/P2.jsonl#L<n>"
     + accumulated.analysis_result.phase_selection_rationale
 
 返回:

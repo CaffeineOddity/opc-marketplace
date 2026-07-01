@@ -249,7 +249,7 @@ type ReflectionResponse = {
   },
   pending_reflection: {
     reflection_id: "rfl-P5-r1-01HXY8",
-    artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r1-01HXY8.json",
+    artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r1-01HXY8.json",
     expires_at: "2026-06-11T10:30:00Z",
     must_be_registered_by: "opc_flow_reflect"
   }
@@ -320,7 +320,7 @@ type ReflectionResponse = {
   next_step_hint: { /* ... */ },
   pending_reflection: {
     reflection_id: "rfl-P5-r1-01HXY8",
-    artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r1-01HXY8.json",
+    artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r1-01HXY8.json",
     expires_at: "2026-06-11T10:30:00Z",
     must_be_registered_by: "opc_flow_reflect"
   }

@@ -42,6 +42,23 @@ import { fileURLToPath } from "node:url";
 const SCOPED_DIRS = ["phases", "scenarios"] as const;
 type ScopedDir = (typeof SCOPED_DIRS)[number];
 
+/**
+ * Marker file written by `/opc init`. Its presence under `<root>/.opc/` is the
+ * opt-in signal that this project wants OPC scaffolding + bootstrap — without
+ * it, `startStateServer` skips `bootstrapBuiltins` so merely enabling the
+ * plugin never silently seeds `.opc/` into a project.
+ */
+const INIT_MARKER = ".opc/.project-init";
+
+/**
+ * Has this project opted into OPC? True iff the `/opc init` marker exists.
+ * Uses `existsSync` (sync) intentionally — called once at server startup to
+ * gate the async bootstrap, and a stat is cheap relative to bundle copying.
+ */
+export function isOpcInitialized(root: string): boolean {
+  return existsSync(join(root, INIT_MARKER));
+}
+
 const MANIFEST_NAME = ".builtin-manifest.json";
 const MANIFEST_VERSION = 1;
 

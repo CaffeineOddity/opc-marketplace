@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { atomicWrite, withFileLock } from "@opc/memory-store";
 
-export const REFLECTION_LOGS_DIR = "opc-logs/reflection";
+export const REFLECTION_LOGS_DIR = ".opc/logs/reflection";
 
 export type StepId = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8";
 

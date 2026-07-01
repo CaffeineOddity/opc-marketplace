@@ -10,7 +10,7 @@
 L1  (pipeline scope)   flow-state.json → user_interventions[]
      ↓  pipeline_complete 触发
      ↓  distiller sub-agent 提炼
-L2  (project scope)    opc-memory/corrections/ → .md 文件
+L2  (project scope)    .opc/memory/corrections/ → .md 文件
      ↓  用户手动晋升 (opc_corrections action:promote)
 L3  (global scope)     ~/.opc/global-corrections.jsonl
 ```
@@ -64,12 +64,12 @@ L3  (global scope)     ~/.opc/global-corrections.jsonl
 
 ### 3.1 存储位置
 
-`<workspace>/opc-memory/corrections/`
+`<workspace>/.opc/memory/corrections/`
 
 ### 3.2 目录布局
 
 ```
-opc-memory/corrections/
+.opc/memory/corrections/
   <step-unit>/           # 如 intent-analysis
     <section>/            # 如 task-vs-chat
       <subsection>.md     # 如 ambiguous-question.md

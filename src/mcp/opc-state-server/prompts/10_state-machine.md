@@ -284,7 +284,7 @@ sessions.
 
 1. **One step per session at a time** — `current_step` is single-valued. No "executing P2 and P3 in parallel".
 2. **One pending-mutex at a time** — `pending_reflections.length ≤ 1` AND `pending_user_question` is single-slot. The two slots are independent (both can be active simultaneously, blocking the same write set).
-3. **Evidence is referenced, not inlined** — `flow-state.json` stores `*_evidence_ref` strings only; the artifact lives in `opc-logs/reflection/<session_id>/`. Restart wipes the ref; the artifact file is left on disk for forensic purposes.
+3. **Evidence is referenced, not inlined** — `flow-state.json` stores `*_evidence_ref` strings only; the artifact lives in `.opc/logs/reflection/<session_id>/`. Restart wipes the ref; the artifact file is left on disk for forensic purposes.
 4. **Heartbeat is implicit on every write** — Claude does NOT call a separate heartbeat tool for the session level. (Inner node heartbeat IS explicit — see §9.)
 5. **No silent expiry** — every expiry surfaces a `_warnings[]` entry on the next `opc_flow_query` with a code (`pending_reflection_expired`, `pending_question_expired`, `node_heartbeat_timeout`). Claude MUST relay these to the user; auto-suppression would hide divergence.
 6. **Restart-cascade is monotonic** — restarting from `task_analysis` wipes analysis + decomposition + brief evidence. There is no way to "restart from task_analysis but keep decomposition".

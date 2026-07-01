@@ -96,7 +96,7 @@ State-server behaviour:
 4. Write `state.json.phases[phase].nodes[]` + `blocked_by`.
 5. **Git commit anchor**:
    ```
-   git add opc-knowledge/
+   git add .opc/knowledge/
    git commit -m "opc: phase confirm <pipeline_id>/<sub>/<phase>" --allow-empty
    ```
    Commit hash is written to
@@ -178,8 +178,8 @@ flow:
   → read state.json.phases[phase].confirm_commit_ref
     └── missing → error "phase never confirmed"
   → for each output.knowledge path on this phase:
-      ① base    = git show <commit>:opc-knowledge/<path>
-      ② current = current opc-knowledge/<path>; current_version
+      ① base    = git show <commit>:.opc/knowledge/<path>
+      ② current = current .opc/knowledge/<path>; current_version
       ③ if base == current → skip (no rewrite needed)
       ④ else opc_knowledge_write({
             content: base,
@@ -197,7 +197,7 @@ next_phase_status: "pending" }`.
 
 Restrictions:
 
-- Only acts on `opc-knowledge/` `.md` files; does NOT touch `src/`.
+- Only acts on `.opc/knowledge/` `.md` files; does NOT touch `src/`.
 - Aborted pipelines cannot be reset (state machine closed).
 - Merge conflict during write (user edited the `.md` to overlap
   with base) → returned in `conflict_paths`; resolve via

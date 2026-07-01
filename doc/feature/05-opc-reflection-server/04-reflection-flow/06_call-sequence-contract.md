@@ -13,7 +13,7 @@
 |---|---|
 | **反思产物（artifact）** | reflection-server 每跑完一轮反思后**自己写盘**得到的 JSON 文件，含 `verdict / kept_objections / reasoning_trace / evidence_diff` 等完整内容 |
 | **`reflection_id`** | 一轮反思的唯一标识，人类可读形如 `rfl-P5-r1-<ulid>`。同时是 artifact 文件名的稳定锚 |
-| **`artifact_path`** | 反思产物在文件系统的物理路径，形如 `opc-logs/reflection/<session_id>/<reflection_id>.json` |
+| **`artifact_path`** | 反思产物在文件系统的物理路径，形如 `.opc/logs/reflection/<session_id>/<reflection_id>.json` |
 | **`pending_reflection`** | 已写盘但未在 `flow-state.json.reflection_log[]` 登记的反思记录——由 reflection-server 在 `opc_reflect_*_complete` 返回值中下发，等待 state-server 登记 |
 | **`pending_reflections[]`** | `flow-state.json` 中的待登记队列。**hard invariant：任何时刻最多 1 个元素**（详见 三 不变量） |
 | **`reflection-registry-guard`**（旧名 ack-guard）| state-server 写类工具的前置校验器——若 `pending_reflections[]` 非空且当前工具不是登记口，则 reject |
@@ -35,7 +35,7 @@
 
 | 谁写 | 写什么 | 写到哪 |
 |---|---|---|
-| reflection-server | 反思产物全文（artifact） | `opc-logs/reflection/<session_id>/<reflection_id>.json` |
+| reflection-server | 反思产物全文（artifact） | `.opc/logs/reflection/<session_id>/<reflection_id>.json` |
 | state-server | 反思登记指针 | `flow-state.json.reflection_log[]`（含 `{reflection_id, artifact_path}`）|
 
 **单一真相源约定**：
@@ -74,7 +74,7 @@
 
 [4] reflection-server: opc_reflect_<method>_complete(objections)
                        内部:
-                          1. 写盘 opc-logs/reflection/<session>/<reflection_id>.json
+                          1. 写盘 .opc/logs/reflection/<session>/<reflection_id>.json
                           2. 返回 pending_reflection + next_step_hint
                        ←  {
                             verdict, kept_objections, reasoning_trace,
@@ -113,7 +113,7 @@
 ```
 Round 1 反思:
   reflection-server 跑完 →
-    artifact:   opc-logs/reflection/<session>/rfl-P5-r1-01HXYZ.json
+    artifact:   .opc/logs/reflection/<session>/rfl-P5-r1-01HXYZ.json
     返回:        pending_reflection { reflection_id: "rfl-P5-r1-01HXYZ", ... }
   Claude → opc_flow_reflect({reflection_id: "rfl-P5-r1-01HXYZ"})
     state-server:
@@ -122,7 +122,7 @@ Round 1 反思:
 
 Round 2 反思:
   opc_reflect_plan 调用时，state-server 透传上一轮 artifact_path:
-    prior_reflections: [{round: 1, artifact_path: "opc-logs/.../rfl-P5-r1-01HXYZ.json"}]
+    prior_reflections: [{round: 1, artifact_path: ".opc/logs/.../rfl-P5-r1-01HXYZ.json"}]
   sub-agent 读 prior artifact → 在 Round 1 基础上继续反思
   reflection-server 写 artifact: rfl-P5-r2-01HXY8.json
   返回 pending_reflection { reflection_id: "rfl-P5-r2-01HXY8" }
@@ -164,7 +164,7 @@ Round 3:  (verdict=clean 也要登记)
 | 阶段 | 旧行为 | 新行为 |
 |---|---|---|
 | `expires_at` 到达 | `opc_flow_query` 自动从 `pending_reflections[]` 移除 + 标 incomplete | **保留 pending_reflections[] 项不变**，仅标 `status: expired_pending_decision` |
-| artifact 文件 | 立即孤儿化 | **保留 7 天**（`opc-logs/reflection/<session>/<reflection_id>.json` 不删） |
+| artifact 文件 | 立即孤儿化 | **保留 7 天**（`.opc/logs/reflection/<session>/<reflection_id>.json` 不删） |
 | 下一次 `opc_flow_query` | 不感知 | 检测到过期 pending → 返回 `flow_next: ask_user`（专用 question_id `uq-expired-<reflection_id>`） |
 | 用户答复入口 | — | 复用 `opc_flow_user_reply`，`resolution.disposition` ∈ `discard` / `resume` |
 | 7 天后 artifact 仍未处理 | — | **物理删除** artifact + 从 pending_reflections[] 移除 + 写 `flow-state.history` 一条 `event: reflection_artifact_purged` |
@@ -182,7 +182,7 @@ opc_flow_query() 检测到过期 pending → 返回:
       summary: "反思 rfl-P5-r2-01HXY8 在 30 分钟内未登记（可能因为上下文切换/token 耗尽）。artifact 还在磁盘上，请决定如何处理。",
       step_id: "node_selection",
       reflection_id: "rfl-P5-r2-01HXY8",
-      artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+      artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
       asked_at: "<原 expires_at>",
       artifact_purge_at: "<asked_at + 7d>",
       options: [
@@ -311,7 +311,7 @@ type NextStepHint = {
   },
   pending_reflection: {
     reflection_id: "rfl-P5-r2-01HXY8",
-    artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+    artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
     expires_at: "2026-06-09T11:00:00Z",
     must_be_registered_by: "opc_flow_reflect"
   }
@@ -333,7 +333,7 @@ type NextStepHint = {
 ```
 [创建] opc_reflect_*_complete 调用结束:
        1. 写盘 artifact:
-          path = opc-logs/reflection/<session_id>/<reflection_id>.json
+          path = .opc/logs/reflection/<session_id>/<reflection_id>.json
        2. 校验 pending_reflections.length == 0
           否则 reject (error: previous_pending_unregistered)
        3. 返回 pending_reflection {
@@ -398,7 +398,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
   error: "pending_reflection_unregistered",
   message: "存在未登记的反思记录，无法推进 phase_confirm",
   pending_reflection_id: "rfl-P5-r2-01HXY8",
-  pending_artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+  pending_artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
   pending_step_id: "node_selection",
   required_action: {
     tool: "opc_flow_reflect",
@@ -598,7 +598,7 @@ opc_flow_reflect({ reflection_id, ... }):
 
 > **驱动权 100% 归 state-server。reflection-server 只通过三种渠道与 state-server 协作：**
 > 1. **返回值数据**（含 `next_step_hint`）——告诉 Claude 该把这堆数据带给谁
-> 2. **写盘 artifact**——把反思内容物理落地到 `opc-logs/reflection/`
+> 2. **写盘 artifact**——把反思内容物理落地到 `.opc/logs/reflection/`
 > 3. **`pending_reflection` 登记契约**——让 state-server 写工具被动等待反思登记
 >
 > **用户回灌**走第四条渠道，但完全由 state-server 自己驱动（reflection-server 不涉入）：

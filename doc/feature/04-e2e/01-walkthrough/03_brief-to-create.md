@@ -105,7 +105,7 @@ Claude → opc_pipeline_create({...预填参数...})
 ```
 Claude 按 flow_next 调用:
 opc_knowledge_open(["user-auth"])
-  → opc-knowledge/ 下无 user-auth/
+  → .opc/knowledge/ 下无 user-auth/
   → 创建 user-auth/ 目录
   → 无 _refs 关联
   → 返回:

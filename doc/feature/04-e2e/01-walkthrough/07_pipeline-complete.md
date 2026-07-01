@@ -56,7 +56,7 @@ manifest.md：
 ## 第八步：知识库最终状态
 
 ```
-opc-knowledge/
+.opc/knowledge/
 ├── .opc-knowledge.json         ← _refs: {}（无跨 unit 依赖）
 ├── .opc-knowledge.idx          ← 搜索索引（派生数据）
 └── user-auth/

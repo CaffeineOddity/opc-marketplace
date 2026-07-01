@@ -88,14 +88,14 @@ opc_flow_correct({action:"phase_reset"})
 
 ### 3.2 已写盘的 Artifact
 
-phase_reset 不清除已写盘的 `opc-logs/reflection/<session_id>/<reflection_id>.json`。
+phase_reset 不清除已写盘的 `.opc/logs/reflection/<session_id>/<reflection_id>.json`。
 文件保留在磁盘上供审计，7 天后由日志清理策略移除。
 
 ## 四、Corrections 的跨回退持久性
 
 ### 4.1 不回滚原则
 
-corrections 存储在 `opc-memory/corrections/`，与 `flow-state.json` 物理隔离。
+corrections 存储在 `.opc/memory/corrections/`，与 `flow-state.json` 物理隔离。
 phase_reset 操作 flow-state.json 中的 phase/node 状态，
 不触及 corrections 文件。
 

@@ -22,7 +22,7 @@ Pipeline-end corrections distiller. The **only** agent authorised to write into
 - **唯一通路**: L1 (session interventions + reflection log) → L2 (project corrections).
   任何其他 agent / tool 直接写 corrections 均视为违规。
 - **零自由度**: 输出必须严格符合 `opc_corrections` schema。
-- **失败不阻塞 pipeline**: 失败写 `opc-logs/distiller/<pipeline-id>-error.json`,
+- **失败不阻塞 pipeline**: 失败写 `.opc/logs/distiller/<pipeline-id>-error.json`,
   pipeline 仍标 `complete`。
 - **可重跑**: 同一 pipeline_id 可重复触发，幂等合并。
 
@@ -98,7 +98,7 @@ For each kept candidate:
     },
     "source": "user" | "distiller" | "reflexion",
     "trigger": "intervention" | "rounds_exceeded" | "reflection_objection",
-    "linked_reflection_artifacts": ["opc-logs/reflection/..."],
+    "linked_reflection_artifacts": [".opc/logs/reflection/..."],
     "linked_interventions": [{"ts": "...", "intervention_id": "...", "trigger": "..."}]
   }
 }

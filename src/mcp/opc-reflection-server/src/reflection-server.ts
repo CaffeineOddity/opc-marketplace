@@ -527,7 +527,7 @@ export class ReflectionServer {
         dispatch_context,
       },
       notes:
-        "host must Task(subagent_type=opc-distiller) with the tools whitelist above; distiller commits via opc_corrections_upsert; on failure, log to opc-logs/distiller/ and continue",
+        "host must Task(subagent_type=opc-distiller) with the tools whitelist above; distiller commits via opc_corrections_upsert; on failure, log to .opc/logs/distiller/ and continue",
     };
   }
 

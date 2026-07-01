@@ -566,7 +566,7 @@ describe("PhaseServer.confirm", () => {
 });
 
 describe("M18.f validator artifact writer (phase_completion)", () => {
-  it("happy path: complete() writes opc-logs/validator/<session>/phase_completion-1.json with l1=pass", async () => {
+  it("happy path: complete() writes .opc/logs/validator/<session>/phase_completion-1.json with l1=pass", async () => {
     const { session_id, pipeline_id } = await seedSinglePipeline();
     await phase().start({
       session_id,
@@ -580,7 +580,7 @@ describe("M18.f validator artifact writer (phase_completion)", () => {
       sub_pipeline_id: "sub-1",
       phase: "01-discovery",
     });
-    const path = join(root, "opc-logs/validator", session_id, "phase_completion-1.json");
+    const path = join(root, ".opc/logs/validator", session_id, "phase_completion-1.json");
     const { readFile } = await import("node:fs/promises");
     const art = JSON.parse(await readFile(path, "utf8")) as {
       step: string;
@@ -624,7 +624,7 @@ describe("M18.f validator artifact writer (phase_completion)", () => {
       sub_pipeline_id: "sub-1",
       phase: "01-discovery",
     });
-    const path = join(root, "opc-logs/validator", session_id, "phase_completion-1.json");
+    const path = join(root, ".opc/logs/validator", session_id, "phase_completion-1.json");
     const { readFile } = await import("node:fs/promises");
     const art = JSON.parse(await readFile(path, "utf8")) as {
       validator_results: Record<string, string>;

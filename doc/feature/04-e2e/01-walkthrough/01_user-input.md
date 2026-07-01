@@ -16,7 +16,7 @@
 ## 前提：知识库初始状态
 
 ```
-opc-knowledge/
+.opc/knowledge/
 ├── .opc-knowledge.json → { "_refs": {} }   # 仅 _refs，无跨 unit 依赖
 └── .opc-knowledge.idx                      # 搜索索引（空，派生数据）
 ```

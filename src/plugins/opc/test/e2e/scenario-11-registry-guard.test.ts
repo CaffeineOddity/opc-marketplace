@@ -125,7 +125,7 @@ describe("scenario 11 — registry-guard reject (negative)", () => {
     // flow-server.ts L611).
     const flowState = await loadFlowState(app.root, session_id);
     const reflection_id = "rfl-P5-r1-test11";
-    const artifact_path = "opc-logs/reflection/test/rfl-P5-r1-test11.json";
+    const artifact_path = ".opc/logs/reflection/test/rfl-P5-r1-test11.json";
     app.flow.registerPendingReflection(flowState, {
       reflection_id,
       artifact_path,

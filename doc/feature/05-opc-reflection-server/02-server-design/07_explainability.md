@@ -248,7 +248,7 @@ opc_reflect_admin({
       { id: "corr-42", title: "P5 遗漏 config 节点", hotness: 8 }
     ]
     knowledge_accessed: [
-      { path: "opc-knowledge/deploy/ci-cd/001.md", version: 3 }
+      { path: ".opc/knowledge/deploy/ci-cd/001.md", version: 3 }
     ]
 
     // —— 输出 ——

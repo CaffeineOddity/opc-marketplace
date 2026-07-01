@@ -32,7 +32,7 @@ Claude 收到 opc_flow_query 返回后按方法论判断。四种意图：
 |------|------|
 | 提及项目中的具体文件、函数、模块名 | project_question |
 | 使用"我们"、"这里的"、"这个项目"等指代词 | project_question |
-| 引用 opc-knowledge/ 中的概念 | project_question |
+| 引用 .opc/knowledge/ 中的概念 | project_question |
 | 通用技术概念，无项目指代 | general_question |
 | 纯定义/解释类问题 | general_question |
 

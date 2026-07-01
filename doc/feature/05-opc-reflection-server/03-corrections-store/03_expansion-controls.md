@@ -66,7 +66,7 @@ similarity(A, B) = 0.4 × jaccard(A.keywords, B.keywords) + 0.6 × cosine(A.body
 
 ### 3.1 衰减机制
 
-每周日凌晨（UTC），对 `opc-memory/corrections/` 所有条目执行衰减：
+每周日凌晨（UTC），对 `.opc/memory/corrections/` 所有条目执行衰减：
 
 ```
 for each entry:

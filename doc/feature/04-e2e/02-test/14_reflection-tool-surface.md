@@ -82,10 +82,10 @@
             reflection-server:
               1. 跑 meta-validator V1-evidence-shape + V2-knowledge-ref + V5-objection-distinct
               2. 假设 V5 保留 1 条 objection → verdict = "objections_remain"
-              3. 写盘 opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json（含完整 branches + judge_result）
+              3. 写盘 .opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json（含完整 branches + judge_result）
               4. 写 flow-state.pending_reflections.push({
                    reflection_id: "rfl-P5-r1-01HXYF",
-                   artifact_path: "opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json",
+                   artifact_path: ".opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json",
                    step_id: "node_selection",
                    expires_at: "...",
                    must_be_registered_by: "opc_flow_reflect"
@@ -95,7 +95,7 @@
                 kept_objections: [{id:"obj-1", text:"...", evidence_ref:"..."}],
                 pending_reflection: {
                   reflection_id: "rfl-P5-r1-01HXYF",
-                  artifact_path: "opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json",
+                  artifact_path: ".opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXYF.json",
                   must_be_registered_by: "opc_flow_reflect"
                 },
                 next_step_hint: {
@@ -150,7 +150,7 @@
                 kept_objections: [{id:"obj-1", ...}],
                 pending_reflection: {
                   reflection_id: "rfl-P5-r1-01HXYH",
-                  artifact_path: "opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXYH.json",
+                  artifact_path: ".opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXYH.json",
                   must_be_registered_by: "opc_flow_reflect"
                 },
                 next_step_hint: {suggested_tool:"opc_flow_reflect", suggested_args:{reflection_id:"rfl-P5-r1-01HXYH"}},
@@ -183,7 +183,7 @@
 | # | 字段 / 行为 | 模式 A (5 步) | 模式 B (3 步 inline) | 必须等价 |
 |---|---|---|---|---|
 | 1 | `pending_reflection.reflection_id` 格式 | `rfl-<step_short>-r<N>-<ulid>` | 同 | ✓ |
-| 2 | `pending_reflection.artifact_path` 写盘路径模板 | `opc-logs/reflection/<sess>/<reflection_id>.json` | 同 | ✓ |
+| 2 | `pending_reflection.artifact_path` 写盘路径模板 | `.opc/logs/reflection/<sess>/<reflection_id>.json` | 同 | ✓ |
 | 3 | `pending_reflection.must_be_registered_by` | `"opc_flow_reflect"` | `"opc_flow_reflect"` | ✓ |
 | 4 | artifact JSON schema（method/branches/final_evidence/kept_objections 字段） | 完整 | 完整 | ✓ |
 | 5 | meta-validator 运行集合（V1/V2/V5） | 完整 | 完整 | ✓ |

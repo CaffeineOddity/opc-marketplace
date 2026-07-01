@@ -591,7 +591,11 @@ function collectKnowledgeOutputs(nodes: PhaseState["nodes"]): string[] {
 }
 
 function isKnowledgeArtifact(a: IoArtifact): boolean {
-  return a.type === "knowledge" || a.path.startsWith("opc-knowledge/");
+  return (
+    a.type === "knowledge" ||
+    a.path.startsWith("opc-knowledge/") ||
+    a.path.startsWith(".opc/knowledge/")
+  );
 }
 
 function toNodeDefinition(

@@ -57,7 +57,7 @@
 
 ## 二、指标 schema 与聚合
 
-所有 meta 指标按 `(method, step, project_id)` 三维聚合，写到 `opc-logs/reflection/<session_id>/meta-stats.jsonl`，`opc_reflect_admin({action:"query_stats"})` 直接读。
+所有 meta 指标按 `(method, step, project_id)` 三维聚合，写到 `.opc/logs/reflection/<session_id>/meta-stats.jsonl`，`opc_reflect_admin({action:"query_stats"})` 直接读。
 
 ### 单条 meta-event schema
 
@@ -91,7 +91,7 @@ type MetaEvent = {
 | 面板项 | 数据源 |
 |---|---|
 | 各方法 × step 的 FP 率热力图 | `fp_rate(method, step)` |
-| 反思总开销占 pipeline 比例（rounds × 平均时长） | `opc-logs/reflection/<sid>/<rid>.json.latency_ms` 聚合 |
+| 反思总开销占 pipeline 比例（rounds × 平均时长） | `.opc/logs/reflection/<sid>/<rid>.json.latency_ms` 聚合 |
 | `unlearn_method` 当前激活列表 | reflection-server in-memory + 持久化 `.opc/state/unlearn-state.json` |
 | 过期反思告警（24h 滚动） | `expired_pending_count_24h` 等（见 [02-server-design 七](../02-server-design/00_overview.md#七可观测性) `expiry_metrics`） |
 
@@ -146,7 +146,7 @@ reflection-server 启动时加载该文件；`opc_reflect_plan` 在选 method �
 
 ## 四、Meta-Reflection 报告（pipeline 级总结）
 
-`opc_pipeline_lifecycle({action:"complete"})` 触发 distiller 之外，同时跑一次 meta-reflection（[00_overview 四](00_overview.md#四meta-reflectionpipeline-级总结)），输出 `opc-logs/meta-reflection/<pipeline-id>.md`，结构：
+`opc_pipeline_lifecycle({action:"complete"})` 触发 distiller 之外，同时跑一次 meta-reflection（[00_overview 四](00_overview.md#四meta-reflectionpipeline-级总结)），输出 `.opc/logs/meta-reflection/<pipeline-id>.md`，结构：
 
 ```markdown
 # Meta-Reflection: <pipeline-id>

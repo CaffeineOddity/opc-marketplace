@@ -34,7 +34,7 @@
 
   "accumulated": {
     "intent": "task",
-    "intent_evidence_ref": "opc-logs/reflection/<pipeline_id>/P1.jsonl#L<line>",
+    "intent_evidence_ref": ".opc/logs/reflection/<pipeline_id>/P1.jsonl#L<line>",
     "analysis_result": {
       "description": "...",
       "tags": ["..."],
@@ -48,7 +48,7 @@
         {"path": "user-auth/session/api", "operation": "create"}
       ]
     },
-    "analysis_evidence_ref": "opc-logs/reflection/<pipeline_id>/P2.jsonl#L<line>",
+    "analysis_evidence_ref": ".opc/logs/reflection/<pipeline_id>/P2.jsonl#L<line>",
     "decomposition_result": null,
     "decomposition_evidence_ref": null,
     "brief_content": "...",
@@ -91,7 +91,7 @@
   "pending_reflections": [
     {
       "reflection_id": "rfl-P5-r2-01HXYZ",
-      "artifact_path": "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXYZ.json",
+      "artifact_path": ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXYZ.json",
       "step_id": "node_selection",
       "issued_by": "opc_reflect_complete({method:"critique"})",
       "issued_at": "2026-06-09T10:30:00Z",
@@ -121,8 +121,8 @@
       {"id": "obj-2", "text": "knowledge_plan 缺 audit unit", "evidence_ref": "..."}
     ],
     "context_artifacts": [
-      "opc-logs/reflection/sess-abc/rfl-P2-r1-01HXY7.json",
-      "opc-logs/reflection/sess-abc/rfl-P2-r2-01HXY8.json"
+      ".opc/logs/reflection/sess-abc/rfl-P2-r1-01HXY7.json",
+      ".opc/logs/reflection/sess-abc/rfl-P2-r2-01HXY8.json"
     ],
     "pipeline_pointer_ref": null
   },
@@ -141,8 +141,8 @@
         "notes": null
       },
       "linked_reflection_artifacts": [
-        "opc-logs/reflection/sess-abc/rfl-P2-r1-01HXY7.json",
-        "opc-logs/reflection/sess-abc/rfl-P2-r2-01HXY8.json"
+        ".opc/logs/reflection/sess-abc/rfl-P2-r1-01HXY7.json",
+        ".opc/logs/reflection/sess-abc/rfl-P2-r2-01HXY8.json"
       ],
       "at": "2026-06-09T10:46:00Z"
     }
@@ -180,7 +180,7 @@
 
 阶段/节点层工具不属于流程层，但每次调用都会更新 `current_pipeline_pointer` + `last_heartbeat_at`，确保 crash 后 `opc_flow_lifecycle({action:"recover"})` 能从精确位置恢复。
 
-> **evidence_ref vs confidence**：本 schema 不存 `confidence: number` 字段。所有 step 的「质量判定」由 reflection-server 的 evidence artifact + V1-V5 validator 决定，flow-state.json 仅保留指向 `opc-logs/reflection/<pipeline_id>/<step>.jsonl` 的引用（`*_evidence_ref`）。reflection_log[].evidence_diff 记录每轮反思后 artifact 的字段变化，供 `opc_reflect_admin({action:"explain"})` 还原 reasoning_trace。详见 [05-opc-reflection-server/02-server-design/00_overview.md 二 Evidence Schema](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
+> **evidence_ref vs confidence**：本 schema 不存 `confidence: number` 字段。所有 step 的「质量判定」由 reflection-server 的 evidence artifact + V1-V5 validator 决定，flow-state.json 仅保留指向 `.opc/logs/reflection/<pipeline_id>/<step>.jsonl` 的引用（`*_evidence_ref`）。reflection_log[].evidence_diff 记录每轮反思后 artifact 的字段变化，供 `opc_reflect_admin({action:"explain"})` 还原 reasoning_trace。详见 [05-opc-reflection-server/02-server-design/00_overview.md 二 Evidence Schema](../../05-opc-reflection-server/02-server-design/00_overview.md#二evidence-schema)。
 
 > **pending_reflections 说明**：本字段记录 reflection-server 已写盘但未登记的反思记录。`opc_reflect_*_complete` 内部写盘 artifact 后返回 `pending_reflection { reflection_id, artifact_path, ... }`，state-server 将其写入 `pending_reflections[]`。`opc_flow_reflect({reflection_id})` 成功登记后移除。受 reflection-registry-guard 保护的写工具调用时检测到 `pending_reflections` 非空则拒绝执行——**完整命名约定 / 不变量 / 清单 / 契约见** [05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md](../../05-opc-reflection-server/04-reflection-flow/06_call-sequence-contract.md)（特别注意 hard invariant：`pending_reflections.length ≤ 1`）。
 

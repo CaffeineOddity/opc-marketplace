@@ -181,7 +181,7 @@ execution_order: sub-1 → sub-2 → sub-3
 
 OPC 内部串行模型保证「**任何时刻只有一个 sub-pipeline 在跑**」，因此 **OPC 自身不会引发** sub-pipeline-1 的 knowledge 在 sub-pipeline-2 反思期间被改写的问题。但有一种 OPC 检测不到的情况：
 
-> **人类用户**在 sub-pipeline-2 的 P5/P6/P7 反思跑到一半时（critique sub-agent 还在思考），直接在 IDE 里手改了 sub-pipeline-1 落盘的 knowledge 文件（如 `opc-knowledge/units/auth-design/auth.md`）。反思 sub-agent 读到的 evidence 是旧版本，但 `opc_phase_confirm` 时 V2 validator 比对的是新文件 → evidence 失效，反思白跑。
+> **人类用户**在 sub-pipeline-2 的 P5/P6/P7 反思跑到一半时（critique sub-agent 还在思考），直接在 IDE 里手改了 sub-pipeline-1 落盘的 knowledge 文件（如 `.opc/knowledge/units/auth-design/auth.md`）。反思 sub-agent 读到的 evidence 是旧版本，但 `opc_phase_confirm` 时 V2 validator 比对的是新文件 → evidence 失效，反思白跑。
 
 这不是并发 bug，是**用户介入约定**问题。明确写进文档以防有人栽。
 
@@ -189,9 +189,9 @@ OPC 内部串行模型保证「**任何时刻只有一个 sub-pipeline 在跑**�
 
 | # | 约定 | 强度 |
 |---|---|---|
-| 1 | **反思进行中**（`pending_reflections.length > 0`），用户**禁止**手动改 `opc-knowledge/` 下任何已 completed 子管线的产物 | **约定（不强制锁）** |
+| 1 | **反思进行中**（`pending_reflections.length > 0`），用户**禁止**手动改 `.opc/knowledge/` 下任何已 completed 子管线的产物 | **约定（不强制锁）** |
 | 2 | 用户若需要修改 → 走 `opc_flow_lifecycle({action:"abort"})` → 改文件 → `opc_flow_lifecycle({action:"start"})` 重新跑；或走 `opc_flow_correct({action:"phase_reset"})` 把当前 phase 回到反思前的状态再改 | 推荐路径 |
-| 3 | `opc-knowledge/` 文件**应纳入 git**，反思 artifact `artifact_path` 记录的 evidence 引用文件 + 行号，便于事后 `git diff` 复盘是否被改 | hard（artifact schema 已有 `evidence_ref`） |
+| 3 | `.opc/knowledge/` 文件**应纳入 git**，反思 artifact `artifact_path` 记录的 evidence 引用文件 + 行号，便于事后 `git diff` 复盘是否被改 | hard（artifact schema 已有 `evidence_ref`） |
 | 4 | reflection-server 的 `meta-validator` 在 `opc_reflect_*_complete` 时**stat 一次** evidence 引用的文件 `mtime`；若 mtime > artifact 创建时的反思任务派发时间 → 在 reasoning_trace 末尾追加一行 `warning: evidence file mutated during reflection` | 软告警 |
 | 5 | `opc_phase_confirm` V2 validator 跑 `referential` 检查时若发现引用的文件已不存在（用户删了）→ reject `error: knowledge_referent_missing`，要求用户先 `opc_flow_correct({action:"phase_reset"})` 或恢复文件 | hard |
 

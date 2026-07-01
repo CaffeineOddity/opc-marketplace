@@ -15,7 +15,7 @@
 Claude → opc_flow_correct({action:"phase_reset", pipeline_id, sub_pipeline_id:"sub-1", phase:"04-implement-design"})
   → 读 state.json.phases["04-implement-design"].confirm_commit_ref
   → 对每个 output.knowledge 路径:
-      git show <ref>:opc-knowledge/...  →  base 内容
+      git show <ref>:.opc/knowledge/...  →  base 内容
       读当前 .md                          →  current_version (假设 v=5)
       opc_knowledge_write({content: base, base_version: 5}) → v=6
   → 04-implement-design → pending（所有 node 重置）

@@ -120,7 +120,7 @@ Body 结构不纳入 schema_version 管理——由 reader 按标题匹配解析
 ```
 opc_corrections({action:"migrate", target_version: N})
     │
-    ├── ① 扫描 opc-memory/corrections/ 所有 .md 文件
+    ├── ① 扫描 .opc/memory/corrections/ 所有 .md 文件
     ├── ② 过滤 schema_version < target_version 的文件
     ├── ③ 对每个文件按版本链逐级升级：
     │        v1 → v2: 添加 applies_when: [], deprecated_by: null

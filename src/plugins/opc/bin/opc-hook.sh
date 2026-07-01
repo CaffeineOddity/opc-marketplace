@@ -3,6 +3,10 @@
 #
 # OPC UserPromptSubmit hook (v1 quiet default per host-contract §2.6 / A2).
 #
+# Registration: NOT declared in plugin.json. Installed per-project by `/opc init`
+# into the project's .claude/settings.json (project-scoped, shareable via git),
+# so it only fires in projects that have opted into OPC — never globally.
+#
 # Inputs (env, set by Claude Code hook runtime):
 #   CLAUDE_USER_MESSAGE   — the raw user message text
 #   CLAUDE_PROJECT_DIR    — absolute path to the project (.opc/ root)

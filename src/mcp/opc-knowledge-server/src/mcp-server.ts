@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -165,9 +165,14 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
 }
 
 // When run directly as a bin (via the plugin's .mcp.json), start the server
-// against the project root (CLAUDE_PROJECT_DIR or cwd).
+// against the project's knowledge root: <project>/.opc/knowledge. Everything
+// the knowledge server writes (idx, refs, unit tree) lands inside .opc/, which
+// keeps the project root clean. CLAUDE_PROJECT_DIR is the project root; fall
+// back to cwd so the server is runnable standalone.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startKnowledgeServer({ root: process.env.CLAUDE_PROJECT_DIR ?? process.cwd() }).catch(
+  const projectRoot = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  const knowledgeRoot = join(projectRoot, ".opc", "knowledge");
+  startKnowledgeServer({ root: knowledgeRoot }).catch(
     (err) => {
       process.stderr.write(`opc-knowledge-server failed to start: ${err}\n`);
       process.exit(1);

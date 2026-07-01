@@ -1,22 +1,19 @@
 {
   "name": "opc",
   "version": "0.1.0",
-  "description": "OPC: UserPromptSubmit hook that nudges Claude to call opc_flow_query, plus the /opc-status slash command and opc-status CLI (read-only terminal health snapshot, M18.h).",
-  "depends": ["mcp"],
-  "mcp": "./.mcp.json",
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/opc-hook.sh"
-          }
-        ]
-      }
-    ]
-  },
-  "scenarios_dir": null,
-  "_scenarios_note": "scenarios now sourced from .opc/scenarios/, bootstrapped by opc-state-server on first run"
+  "description": "OPC: /opc-status + /opc init slash commands, opc-status CLI, and MCP server config (state, knowledge, reflection). The UserPromptSubmit hook is installed per-project by /opc init (writes .claude/settings.json) — not declared here, so enabling the plugin alone never fires the hook globally.",
+  "mcpServers": {
+    "opc-state-server": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-state-server/dist/server.js"]
+    },
+    "opc-knowledge-server": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-knowledge-server/dist/mcp-server.js"]
+    },
+    "opc-reflection-server": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-reflection-server/dist/mcp-server.js"]
+    }
+  }
 }

@@ -18,7 +18,7 @@
 ## 二、存储结构
 
 ```
-opc-knowledge/
+.opc/knowledge/
 ├── .opc-knowledge.json           ← 仅存储 _refs（跨 unit 依赖）
 ├── .opc-knowledge.idx            ← 搜索索引（派生数据，可重建）
 ├── user-auth/                    ← unit

@@ -64,7 +64,7 @@ covers the inverse rationale.
       {"id": "req-2", "text": "签发 JWT", "source_quote": "用 jwt 认证"}
     ],
     "dependencies": [
-      {"requires": "user-auth", "type": "knowledge_unit", "evidence": "existing unit in opc-knowledge/"},
+      {"requires": "user-auth", "type": "knowledge_unit", "evidence": "existing unit in .opc/knowledge/"},
       {"requires": "jsonwebtoken", "type": "library", "evidence": "implied by 'jwt 认证'"}
     ],
     "risks": [
@@ -121,7 +121,7 @@ Validator behaviour:
 | Field | V1–V5 hook |
 |---|---|
 | `coverage_check[]` | **V4 coverage** — every section in the 7-section template must have a row OR be explicitly marked `covered: false` with a `reason`. |
-| `coverage_check[].source_ref` | **V2 referential** — MUST resolve to an existing artifact under `opc-logs/reflection/<session_id>/`. No fabricated refs. |
+| `coverage_check[].source_ref` | **V2 referential** — MUST resolve to an existing artifact under `.opc/logs/reflection/<session_id>/`. No fabricated refs. |
 | `constraint_completeness.user_quotes_scanned[]` | **V3 evidence-presence** — each quote MUST be a verbatim substring of `state.user_message_history`. |
 | `missing_constraint_signals[]` non-empty | Soft warning only — Claude SHOULD short-confirm with user before `opc_pipeline_create`. NOT a hard fail. |
 
@@ -250,7 +250,7 @@ state.json.intent_analysis:
 ```
 
 `evidence_artifact_ref` resolves to
-`opc-logs/reflection/<session_id>/<reflection_id>.json`. The
+`.opc/logs/reflection/<session_id>/<reflection_id>.json`. The
 log keeps refs only — never inline copies of evidence.
 
 After `opc_pipeline_create`, both `_final` records become read-only.

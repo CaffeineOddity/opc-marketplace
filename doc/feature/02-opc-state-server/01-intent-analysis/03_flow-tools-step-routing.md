@@ -347,7 +347,7 @@
 ```
 opc_quick_dispatch({description, tags, knowledge_unit})
   → 扫描已安装 kit 的 plugin.json capabilities → tags 匹配最佳 agent
-  → 读 opc-knowledge/<unit>/ 结构 → 拼 knowledge_context（仅结构 + version，不读 .md 内容）
+  → 读 .opc/knowledge/<unit>/ 结构 → 拼 knowledge_context（仅结构 + version，不读 .md 内容）
   → 写 .opc/quick-history.jsonl 追加一条 {timestamp, description, agent, units}
   → 写 flow-state.json.status = completed（low 流程不创建 pipeline 直接终结）
   → 返回:

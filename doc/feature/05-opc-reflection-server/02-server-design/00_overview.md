@@ -67,7 +67,7 @@ type ReflectionResponse = {
   // —— 登记契约（仅 complete 类工具发出）——
   pending_reflection?: {
     reflection_id: string                 // "rfl-<step>-r<n>-<ulid>"
-    artifact_path: string                 // "opc-logs/reflection/<session_id>/<reflection_id>.json"
+    artifact_path: string                 // ".opc/logs/reflection/<session_id>/<reflection_id>.json"
     expires_at: ISO8601                   // 默认 now + 30min
     must_be_registered_by: 'opc_flow_reflect'  // 当前只支持 flow_reflect 登记
   }
@@ -108,7 +108,7 @@ type ReflectionResponse = {
   },
   pending_reflection: {
     reflection_id: "rfl-P5-r2-01HXY8",
-    artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+    artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
     expires_at: "2026-06-09T11:00:00Z",
     must_be_registered_by: "opc_flow_reflect"
   }
@@ -179,13 +179,13 @@ P6（节点执行）/ P7（阶段完成）在主矩阵（[07_three-server-seam-m
 | 由谁跑校验 | reflection-server 的 sub-agent + meta-validator | **state-manager 内部纯 TS 跑 V1–V5 + L1/L2** |
 | 是否注册 `reflection_id` | ✅ 是（`opc_flow_reflect` 登记）| ❌ 否（无 pending_reflection 产物） |
 | 是否受 reflection-registry-guard 保护 | ✅ 是 | ❌ 否（无 pending 元素需要 guard）|
-| Artifact 落盘路径 | `opc-logs/reflection/<session_id>/<reflection_id>.json` | **`opc-logs/validator/<session_id>/<step>-<n>.json`** |
+| Artifact 落盘路径 | `.opc/logs/reflection/<session_id>/<reflection_id>.json` | **`.opc/logs/validator/<session_id>/<step>-<n>.json`** |
 | 失败处理 | `verdict=objections_remain` → 二次反思 / ask_user | 直接 reject 当前调用（`opc_node_finish({status:"failed"})` / `opc_phase_complete` 拒绝），由 Claude 调 retry / reset |
 | 何时升级到 reflection 工具面 | — | Claude 主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion", method:"critique"\|"cove"})` 显式升级（典型场景：L2 通过但 evidence diff 异常 / quality_gate 多次自动跑失败） |
 
 **为什么这么设计**：V1–V5 是确定性 TS 函数，纯函数校验跨 MCP 服务调用是 overkill；P6/P7 走 reflection 工具面只会增加跨服务握手次数，且 Validator-only 路径没有 sub-agent 产物可登记。把这两步收敛到 state-manager 内部既能复用同一套 V1–V5 实现（与 P1–P5/P8 共享 [02-server-design 三](#三deterministic-validatorv1v5--三个工程兜底)），又能避免"为校验而握手"的反模式。
 
-**Validator artifact 简化 schema**（写到 `opc-logs/validator/`）：
+**Validator artifact 简化 schema**（写到 `.opc/logs/validator/`）：
 
 ```typescript
 type ValidatorArtifact = {
@@ -259,7 +259,7 @@ state-server 的 `FlowServer.reflectionUnavailable({session_id, step_id, reason,
 - **默认 `severity: "ask_user"`**：合成一个 `pending_user_question`（`question_id` 前缀 `uq-rs-unavailable-`，30min 过期）→ 下一个写类工具被 `pending-question-guard` 拦截 → 用户必须走 `opc_flow_user_reply` 或 `opc_flow_correct` 才能继续；`reflection_log` 记录 `verdict: "validator_only_fallback"`，`user_interventions[].trigger = "reflection_server_unavailable_acknowledged"`；如果当时已有别的 pending question，则保留旧 question（避免 clobber），仅落 reflection_log 即可。
 - **`severity: "warning_only"`**：仅写一条 `verdict: "validator_only_fallback"` 的 reflection_log，不阻塞——对应 [07_three-server-seam-matrix.md §3.4](../04-reflection-flow/07_three-server-seam-matrix.md#34-failure-degradation-chain) 列举的 P4 brief / P6 critique / P7 CoVe 三类豁免（不应阻断 `unblocked_nodes` 推进或 `opc_phase_complete`）。
 
-调用方在 transport 失败后应同时确保 state-server 的 V1-V5 + L1/L2 已经在内部执行并由 [validator-only artifact (M18.f)](../../../src/mcp/opc-state-server/src/validator-log.ts) 落盘到 `opc-logs/validator/<session>/<step>-<n>.json`；这些路径可直接作为 `context_artifacts` 一并带入，方便用户审计。
+调用方在 transport 失败后应同时确保 state-server 的 V1-V5 + L1/L2 已经在内部执行并由 [validator-only artifact (M18.f)](../../../src/mcp/opc-state-server/src/validator-log.ts) 落盘到 `.opc/logs/validator/<session>/<step>-<n>.json`；这些路径可直接作为 `context_artifacts` 一并带入，方便用户审计。
 
 ---
 
@@ -271,7 +271,7 @@ state-server 的 `FlowServer.reflectionUnavailable({session_id, step_id, reason,
 
 ```
 [创建] opc_reflect_complete({method}) 调用结束:
-       1. 写盘 artifact = opc-logs/reflection/<session_id>/<reflection_id>.json
+       1. 写盘 artifact = .opc/logs/reflection/<session_id>/<reflection_id>.json
        2. 校验 pending_reflections.length == 0（hard invariant）
           否则 reject (error: previous_pending_unregistered)
        3. 返回 pending_reflection {
@@ -314,7 +314,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
   error: "pending_reflection_unregistered",
   message: "存在未登记的反思记录，无法推进 phase_confirm",
   pending_reflection_id: "rfl-P5-r2-01HXY8",
-  pending_artifact_path: "opc-logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
+  pending_artifact_path: ".opc/logs/reflection/sess-abc/rfl-P5-r2-01HXY8.json",
   pending_step_id: "node_selection",
   required_action: {
     tool: "opc_flow_reflect",
@@ -332,7 +332,7 @@ opc_phase_confirm({...}) 被调用时存在未登记反思:
 
 ## 七、可观测性
 
-每次反思自动通过 `ReflectionServer.critiqueComplete()` 追加到 `opc-logs/reflection/<session_id>/telemetry.jsonl`（单文件按 session_id 聚合，`withFileLock` 原子写）：
+每次反思自动通过 `ReflectionServer.critiqueComplete()` 追加到 `.opc/logs/reflection/<session_id>/telemetry.jsonl`（单文件按 session_id 聚合，`withFileLock` 原子写）：
 
 ```json
 {

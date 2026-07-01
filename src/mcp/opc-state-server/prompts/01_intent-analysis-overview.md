@@ -41,7 +41,7 @@ question/chat branches.
 |---|---|
 | Names concrete file / function / module in this repo | `project_question` |
 | First-person plurals: "我们", "这里的", "这个项目" | `project_question` |
-| References `opc-knowledge/` concepts or repo terminology | `project_question` |
+| References `.opc/knowledge/` concepts or repo terminology | `project_question` |
 | Pure definition / concept question | `general_question` |
 | No project-specific anchor at all | `general_question` |
 

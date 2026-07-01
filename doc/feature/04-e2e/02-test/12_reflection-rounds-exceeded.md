@@ -69,9 +69,9 @@
                    reasoning_trace: "3 轮 debate 始终在 'scope 边界' 上分歧",
                    kept_objections: [{id:"obj-1", text:"scope 边界无法收敛", ...}],
                    context_artifacts: [
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r1-01HXYA.json",
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r2-01HXYB.json",
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r3-01HXYC.json"
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r1-01HXYA.json",
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r2-01HXYB.json",
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r3-01HXYC.json"
                    ],
                    asked_at: "2026-06-10T10:00:00Z",
                    expires_at: "2026-06-10T10:30:00Z",
@@ -141,9 +141,9 @@
                    user_reply: "<原话>",
                    resolution: {accumulated_patch, objections_resolved, objections_dismissed, notes},
                    linked_reflection_artifacts: [
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r1-01HXYA.json",
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r2-01HXYB.json",
-                     "opc-logs/reflection/sess-xyz/rfl-P2-r3-01HXYC.json"
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r1-01HXYA.json",
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r2-01HXYB.json",
+                     ".opc/logs/reflection/sess-xyz/rfl-P2-r3-01HXYC.json"
                    ],
                    at: "2026-06-10T10:05:00Z"
                  }

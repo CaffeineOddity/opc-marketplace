@@ -17,7 +17,7 @@
 ### 2.1 文件布局
 
 ```
-opc-logs/reflection/<session_id>/
+.opc/logs/reflection/<session_id>/
 ├── rfl-P5-r1-01HXY8.json       # 反思 artifact
 ├── rfl-P5-r2-01HXY9.json
 └── telemetry.jsonl              # 聚合 telemetry（本 session 所有反思事件）
@@ -127,7 +127,7 @@ async function appendTelemetry(
 ```
 opc_reflect_admin({action:"query_stats", method?, window?})
     │
-    ├── 扫描 opc-logs/reflection/*/telemetry.jsonl
+    ├── 扫描 .opc/logs/reflection/*/telemetry.jsonl
     │   按 window 过滤 ts 范围
     │
     ├── 内存聚合（TS 纯函数，O(events)）
@@ -282,7 +282,7 @@ type BudgetStats = {
 |---|---|---|
 | `telemetry.jsonl`（per session）| session 结束后 30 天 | cron 清理过期 session 目录 |
 | `query_stats` 快照 | 每次查询即时计算 | 不持久化（无状态） |
-| 聚合 dashboard 用 JSON | 可选：每日快照到 `opc-logs/reflection/daily-<date>.json` | 保留 90 天 |
+| 聚合 dashboard 用 JSON | 可选：每日快照到 `.opc/logs/reflection/daily-<date>.json` | 保留 90 天 |
 
 ## 五、告警阈值
 

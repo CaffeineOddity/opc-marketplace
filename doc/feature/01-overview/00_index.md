@@ -7,7 +7,7 @@
 ### 01 概览子文档（本目录配套）
 
 - [Marketplace 目录结构](01_marketplace-directory.md) — `opc-marketplace/` 完整树（src/{mcp,plugins,shared}/、dist/）
-- [用户项目目录结构](02_user-project.md) — `my-project/` 完整树（.opc/、opc-knowledge/、opc-memory/、opc-logs/）
+- [用户项目目录结构](02_user-project.md) — `my-project/` 完整树（.opc/、.opc/knowledge/、.opc/memory/、.opc/logs/）
 - [架构分层 + 时序 + 流程](03_architecture.md) — 4 层架构图、端到端时序图、决策分叉流程图、节点选择补充
 
 ### 02 opc-state-server — 任务跟进

@@ -759,7 +759,7 @@ describe("NodeServer.finish (M17.c discriminator facade)", () => {
 });
 
 describe("M18.f validator artifact writer (node_execution)", () => {
-  it("happy path writes opc-logs/validator/<session>/node_execution-1.json with all-pass results", async () => {
+  it("happy path writes .opc/logs/validator/<session>/node_execution-1.json with all-pass results", async () => {
     const { session_id, pipeline_id } = await seed();
     await node().start({
       session_id,
@@ -777,7 +777,7 @@ describe("M18.f validator artifact writer (node_execution)", () => {
       node_name: "x",
       evidence: { test_results: { passed: 3, failed: 0 } },
     });
-    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const path = join(root, ".opc/logs/validator", session_id, "node_execution-1.json");
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile(path, "utf8");
     const art = JSON.parse(raw) as {
@@ -818,7 +818,7 @@ describe("M18.f validator artifact writer (node_execution)", () => {
         knowledge_index_has: ["k-x"],
       }),
     ).rejects.toThrow(/L1: declared output\.artifact/);
-    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const path = join(root, ".opc/logs/validator", session_id, "node_execution-1.json");
     const { readFile } = await import("node:fs/promises");
     const art = JSON.parse(await readFile(path, "utf8")) as {
       validator_results: Record<string, string>;
@@ -848,7 +848,7 @@ describe("M18.f validator artifact writer (node_execution)", () => {
         evidence: { test_results: { passed: 1, failed: 2 } },
       }),
     ).rejects.toThrow(/L2: test_pass/);
-    const path = join(root, "opc-logs/validator", session_id, "node_execution-1.json");
+    const path = join(root, ".opc/logs/validator", session_id, "node_execution-1.json");
     const { readFile } = await import("node:fs/promises");
     const art = JSON.parse(await readFile(path, "utf8")) as {
       validator_results: Record<string, string>;
@@ -920,7 +920,7 @@ describe("M18.f validator artifact writer (node_execution)", () => {
       node_name: "b",
     });
     const { readdir } = await import("node:fs/promises");
-    const files = (await readdir(join(root, "opc-logs/validator", session_id))).sort();
+    const files = (await readdir(join(root, ".opc/logs/validator", session_id))).sort();
     expect(files).toContain("node_execution-1.json");
     expect(files).toContain("node_execution-2.json");
   });

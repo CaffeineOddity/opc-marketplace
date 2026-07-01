@@ -36,7 +36,7 @@ Claude → opc_reflect_execute({
        分支 C: 6 sub（拆 product → catalog+inventory）
     3. critic agent 对每分支评分，剪枝
     4. meta-validator: ToT 分支评分不全 > 0.9 (避免乐观偏差) ✓
-    5. 写盘 opc-logs/reflection/sess-abc/rfl-P3-r1-01H.json
+    5. 写盘 .opc/logs/reflection/sess-abc/rfl-P3-r1-01H.json
   → 返回 {
       verdict:"clean",
       best_path:"A",

@@ -24,7 +24,7 @@
  *
  * Asserts (per doc §"模式 A vs B 等价性"):
  *  #1: reflection_id format consistent across modes (`rf-` prefix)
- *  #2: artifact_path lives under opc-logs/reflection/<session>/
+ *  #2: artifact_path lives under .opc/logs/reflection/<session>/
  *  #3: must_be_registered_by == "opc_flow_reflect"
  *  #4: artifact JSON schema fields (method/verdict/kept_objections/round/...) identical
  *  #5: meta-validator runs same set in both modes (validator_results)
@@ -169,7 +169,7 @@ describe("scenario 14 — reflection tool surface", () => {
     expect(ccRes.verdict).toBe("objections_remain"); // 1 non-dismissed objection
     expect(ccRes.pending_reflection.reflection_id).toMatch(/^rf-/);
     expect(ccRes.pending_reflection.must_be_registered_by).toBe("opc_flow_reflect");
-    expect(ccRes.pending_reflection.artifact_path).toContain("opc-logs/reflection");
+    expect(ccRes.pending_reflection.artifact_path).toContain(".opc/logs/reflection");
     expect(ccRes.kept_objections).toHaveLength(1);
 
     // Verify artifact written to disk with expected schema.
@@ -267,7 +267,7 @@ describe("scenario 14 — reflection tool surface", () => {
     expect(ccRes.pending_reflection.reflection_id).toMatch(/^rf-/);
     expect(ccRes.pending_reflection.must_be_registered_by).toBe("opc_flow_reflect");
     // Equivalence #2: artifact_path lives in same root.
-    expect(ccRes.pending_reflection.artifact_path).toContain("opc-logs/reflection");
+    expect(ccRes.pending_reflection.artifact_path).toContain(".opc/logs/reflection");
 
     const artifactB: ArtifactShape = JSON.parse(
       await readFile(ccRes.pending_reflection.artifact_path, "utf8"),

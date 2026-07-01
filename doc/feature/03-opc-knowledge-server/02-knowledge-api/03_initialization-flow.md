@@ -14,7 +14,7 @@
 
 ② opc_flow_step_complete({step:"intent_analysis"}) 路由 task 分支 → 返回 task_analysis 指令 + prerequisites:[opc_knowledge_read({mode:"list"})]
   → Claude → opc_knowledge_read({mode:"list"})
-    → readdir 扫描 opc-knowledge/ 下所有 unit/section/subsection
+    → readdir 扫描 .opc/knowledge/ 下所有 unit/section/subsection
     → 返回已有 unit 列表 + 结构
 
 ③ Claude 按方法论做 7 步分析 + 自省 → opc_flow_step_complete({step:"task_analysis"})

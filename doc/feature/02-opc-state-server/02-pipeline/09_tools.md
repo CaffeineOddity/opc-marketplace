@@ -264,7 +264,7 @@ discriminator 分支:
   ③ 读 sub.paused_at = {at, node, phase}
   ④ 一致性探测（防止挂起期间用户改动 knowledge）:
      · 对该 sub 已 confirmed 的 phase 涉及的每个 output knowledge 路径:
-       - git show <phase.confirm_commit_ref>:opc-knowledge/<path>  → confirmed 内容
+       - git show <phase.confirm_commit_ref>:.opc/knowledge/<path>  → confirmed 内容
        - 读当前 .md → current
        - 若 confirmed != current → 列入 dirty_paths（提示但不阻断；下次
          opc_knowledge_write 时 base_version 探测器会进入 3-way diff-and-merge）

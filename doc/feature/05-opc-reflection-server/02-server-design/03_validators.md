@@ -135,7 +135,7 @@ V1 只检查字段存在且类型为 boolean。
 
 ```
 ① P2 knowledge_plan.units_to_open[] 中的 unit 路径:
-    在 workspace_root/opc-memory/knowledge/ 下目录存在
+    在 workspace_root/.opc/memory/knowledge/ 下目录存在
 
 ② P3 sub_pipelines[].dependencies[]:
     引用的 sub_pipeline.id 在 sub_pipelines[] 中存在
@@ -147,7 +147,7 @@ V1 只检查字段存在且类型为 boolean。
     引用的 node_name 在 flow_state 的节点清单中存在
 
 ⑤ P7 quality_gate_results[].evidence_ref:
-    引用的 P6 evidence artifact 文件在 opc-logs/ 下存在
+    引用的 P6 evidence artifact 文件在 .opc/logs/ 下存在
 
 ⑥ P4 brief_to_task_mapping[].task_requirement_id:
     引用的 requirement id 在 P2 task_analysis_evidence 中存在

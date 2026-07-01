@@ -129,7 +129,7 @@ opc_node_start 内部固定走此 mode 加载 input.knowledge。
   metadata?: {pipeline_id, node}
 
 行为:
-  → 检查 opc-knowledge/<unit>/<section>/<subsection>.md
+  → 检查 .opc/knowledge/<unit>/<section>/<subsection>.md
     ├── 不存在
     │   └── 创建 section 目录 + 文件，version: 1，merge_status: "clean"
     └── 已存在 → 读 current_version
@@ -193,7 +193,7 @@ discriminator 分支:
 ```
 参数: { action:"reindex", mode?: "full" | "incremental" } (默认 incremental)
 行为:
-  → full:        遍历 opc-knowledge/ 下所有 .md，全量重建 .opc-knowledge.idx
+  → full:        遍历 .opc/knowledge/ 下所有 .md，全量重建 .opc-knowledge.idx
   → incremental: 只重建调度队列 dirty_paths[] 中的条目（详见 § 2.9）
 返回: { indexed: number, mode, duration_ms }
 ```
@@ -242,7 +242,7 @@ write 调用 → │  ┌─────────────┐    ┌──
 | **跑在哪里** | knowledge-server 的**主进程**（与 stdio MCP 同进程），用 `setImmediate` / Node worker thread；**不在 sub-agent 上下文里跑** |
 | **触发** | `opc_knowledge_write` / `opc_knowledge_admin({action:"delete"})` 调用时把 path 推入 `dirty_paths: Set<string>` 后立刻返回 |
 | **debounce** | 默认 2s（`OPC_REINDEX_DEBOUNCE_MS` 可配）。短时间内多个 write 合并为一次 incremental reindex |
-| **失败处理** | reindex 抛错 → 不阻塞写；error 写 `opc-logs/knowledge-reindex.log`；下次 search 检测到 `.idx.broken` 标记 → 自动降级遍历 |
+| **失败处理** | reindex 抛错 → 不阻塞写；error 写 `.opc/logs/knowledge-reindex.log`；下次 search 检测到 `.idx.broken` 标记 → 自动降级遍历 |
 | **进程退出** | knowledge-server 进程退出前必须 flush 队列（注册 `process.on('beforeExit')` hook）；崩溃则 `.idx` 滞后，下次启动自检 → 自动 incremental reindex |
 | **并发写合并** | OPC 内部串行模型保证同一时刻只有一个 sub-agent 在跑 → 同 `subsection.md` 不会被并发写；队列只需 Set 去重 |
 
@@ -390,7 +390,7 @@ opc_knowledge_read({
 
 | base_version 可达性 | 处理 |
 |---|---|
-| `base_version` 在 git history 内可找到 | `git show <commit>:opc-knowledge/...` 读出 base 内容 |
+| `base_version` 在 git history 内可找到 | `git show <commit>:.opc/knowledge/...` 读出 base 内容 |
 | `base_version` 找不到（极少：sub-pipeline 挂起跨越多次 phase commit 后内容被 squash） | 降级为 2-way diff（ours vs theirs），重叠判定一律按 conflict 上抛 |
 
 ---

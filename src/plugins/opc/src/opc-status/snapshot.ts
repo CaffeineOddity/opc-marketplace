@@ -120,6 +120,21 @@ export interface SessionSnapshot {
   warnings: string[];
 }
 
+/**
+ * Empty-state snapshot — emitted when no session exists yet (the project has
+ * not started an OPC flow). Distinct from `SessionSnapshot` so the renderer
+ * can present a friendly "no sessions" view instead of erroring.
+ */
+export interface EmptySnapshot {
+  empty: true;
+  /** Why there is no session: "missing" = no .opc/sessions dir; "empty" = dir exists but no flow-state.json. */
+  reason: "missing" | "empty";
+  /** Absolute path of the sessions dir we looked at. */
+  sessions_dir: string;
+  /** Absolute project root the snapshot was loaded against. */
+  root: string;
+}
+
 export class SnapshotError extends Error {
   constructor(
     msg: string,
@@ -134,22 +149,35 @@ export class SnapshotError extends Error {
   }
 }
 
+/** Result of `pickNewestSession` when `.opc/sessions/` is absent or empty. */
+export interface NoSessionsResult {
+  /** "missing" = dir doesn't exist; "empty" = dir exists but no flow-state.json. */
+  reason: "missing" | "empty";
+  /** Absolute path of the sessions dir we looked at. */
+  dir: string;
+}
+
 /**
  * Auto-pick the newest session under `.opc/sessions/` (by mtime of the
  * flow-state.json file, falling back to dir mtime).
+ *
+ * Returns `{ reason, dir }` instead of throwing when the sessions dir is
+ * missing or empty — the caller renders a friendly empty state rather than
+ * erroring. A truly empty project (no flow started yet) is a normal state,
+ * not a failure.
  */
-export async function pickNewestSession(root: string): Promise<string> {
+export async function pickNewestSession(
+  root: string,
+): Promise<string | NoSessionsResult> {
   const dir = join(root, SESSIONS_SUBDIR);
   let entries: string[];
   try {
     entries = await readdir(dir);
   } catch (err) {
-    if (isENOENT(err))
-      throw new SnapshotError(`no sessions dir at ${dir}`, "NO_SESSIONS");
+    if (isENOENT(err)) return { reason: "missing", dir };
     throw err;
   }
-  if (entries.length === 0)
-    throw new SnapshotError(`no sessions under ${dir}`, "NO_SESSIONS");
+  if (entries.length === 0) return { reason: "empty", dir };
 
   const stamped: Array<{ id: string; mtime: number }> = [];
   for (const id of entries) {
@@ -161,18 +189,24 @@ export async function pickNewestSession(root: string): Promise<string> {
       // ignore sessions without flow-state.json
     }
   }
-  if (stamped.length === 0)
-    throw new SnapshotError(
-      `no flow-state.json under any session in ${dir}`,
-      "NO_SESSIONS",
-    );
+  if (stamped.length === 0) return { reason: "empty", dir };
   stamped.sort((a, b) => b.mtime - a.mtime);
   return stamped[0]!.id;
 }
 
-export async function loadSnapshot(opts: SnapshotOptions): Promise<SessionSnapshot> {
-  const sessionId =
-    opts.session_id ?? (await pickNewestSession(opts.root));
+export async function loadSnapshot(
+  opts: SnapshotOptions,
+): Promise<SessionSnapshot | EmptySnapshot> {
+  const picked = opts.session_id ?? (await pickNewestSession(opts.root));
+  if (typeof picked !== "string") {
+    return {
+      empty: true,
+      reason: picked.reason,
+      sessions_dir: picked.dir,
+      root: opts.root,
+    };
+  }
+  const sessionId = picked;
   const flowPath = join(opts.root, SESSIONS_SUBDIR, sessionId, FLOW_STATE_FILENAME);
 
   let flow: FlowState;

@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { atomicWrite, withFileLock } from "@opc/memory-store";
 
-export const VALIDATOR_LOGS_DIR = "opc-logs/validator";
+export const VALIDATOR_LOGS_DIR = ".opc/logs/validator";
 
 export type ValidatorStep = "node_execution" | "phase_completion";
 export type ValidatorOutcome = "pass" | "fail";

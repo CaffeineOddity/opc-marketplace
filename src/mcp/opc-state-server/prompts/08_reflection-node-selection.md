@@ -194,7 +194,7 @@ state.json.phases[<phase>]:
 ```
 
 `evidence_artifact_ref` resolves to
-`opc-logs/reflection/<session_id>/<reflection_id>.json` — the
+`.opc/logs/reflection/<session_id>/<reflection_id>.json` — the
 canonical artifact the validator scored. Inline copies inside
 `reflection_log[]` are forbidden (size + drift); always store
 ref + read on demand.

@@ -405,7 +405,7 @@ describe("ReflectionServer", () => {
     });
     expect(resp.verdict).toBe("clean");
     expect(resp.pending_reflection.must_be_registered_by).toBe("opc_flow_reflect");
-    expect(resp.pending_reflection.artifact_path).toContain("opc-logs/reflection/s1/");
+    expect(resp.pending_reflection.artifact_path).toContain(".opc/logs/reflection/s1/");
     const raw = await readFile(resp.pending_reflection.artifact_path, "utf8");
     expect(JSON.parse(raw).reflection_id).toBe(resp.pending_reflection.reflection_id);
   });
@@ -493,7 +493,7 @@ describe("ReflectionServer", () => {
     const resp = await srv.recordInterventions({
       session_id: "s1",
       pipeline_id: "pl-1",
-      rounds_exceeded_artifacts: ["opc-logs/reflection/p3-r3.json"],
+      rounds_exceeded_artifacts: [".opc/logs/reflection/p3-r3.json"],
       pipeline_metadata: { scope: "user-auth", phases_executed: 9 },
     });
     expect(resp.dispatched).toBe(true);
@@ -504,7 +504,7 @@ describe("ReflectionServer", () => {
     expect(resp.task_spec.tools).not.toContain("Write");
     expect(resp.task_spec.dispatch_context.pipeline_id).toBe("pl-1");
     expect(resp.task_spec.dispatch_context.l1_source.rounds_exceeded_artifacts).toEqual(
-      ["opc-logs/reflection/p3-r3.json"],
+      [".opc/logs/reflection/p3-r3.json"],
     );
     expect(resp.task_spec.dispatch_context.budget.max_new_corrections).toBe(8);
     expect(resp.task_spec.prompt).toContain("opc_flow_query");
@@ -1455,7 +1455,7 @@ describe("ReflectionServer M17.e discriminator facades", () => {
         action: "record_interventions",
         session_id: "s1",
         pipeline_id: "pl-1",
-        rounds_exceeded_artifacts: ["opc-logs/reflection/p3-r3.json"],
+        rounds_exceeded_artifacts: [".opc/logs/reflection/p3-r3.json"],
       });
       expect(resp.action).toBe("record_interventions");
       if (resp.action === "record_interventions") {
@@ -1561,7 +1561,7 @@ describe("CorrectionsServer", () => {
         : {}),
     });
 
-  it("create writes to opc-memory/corrections/{unit}/{section}/{sub}/", async () => {
+  it("create writes to .opc/memory/corrections/{unit}/{section}/{sub}/", async () => {
     const srv = newServer();
     const resp = await srv.upsert({
       batch: [
@@ -1583,7 +1583,7 @@ describe("CorrectionsServer", () => {
     expect(resp.written_ids).toHaveLength(1);
     const all = await listAllCorrections(root);
     expect(all).toHaveLength(1);
-    expect(all[0]?.path).toContain("opc-memory/corrections/decomposition/sub-pipeline/tight");
+    expect(all[0]?.path).toContain(".opc/memory/corrections/decomposition/sub-pipeline/tight");
   });
 
   it("query returns top-K matching by keyword overlap then hotness", async () => {

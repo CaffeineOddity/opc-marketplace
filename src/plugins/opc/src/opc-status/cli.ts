@@ -9,13 +9,13 @@
  *   --session newest session under .opc/sessions/<id>/
  *
  * Exit codes:
- *   0 — snapshot rendered
- *   1 — no sessions / session not found / flow-state unreadable
+ *   0 — snapshot rendered (incl. empty state when no session exists yet)
+ *   1 — session not found / flow-state unreadable
  *   2 — bad CLI usage
  */
 
 import { loadSnapshot, SnapshotError } from "./snapshot.js";
-import { renderSnapshot } from "./render.js";
+import { renderSnapshot, renderEmpty } from "./render.js";
 
 export interface ParsedArgs {
   root?: string;
@@ -114,6 +114,17 @@ export async function run(argv: string[], io: RunIO): Promise<void> {
     if (args.session_id !== undefined) opts.session_id = args.session_id;
     if (io.now !== undefined) opts.now = io.now;
     const snap = await loadSnapshot(opts);
+    if ("empty" in snap && snap.empty) {
+      // No session yet — a normal state, not an error. Render the friendly
+      // empty view and exit 0.
+      if (args.json) {
+        io.stdout(JSON.stringify(snap, null, 2) + "\n");
+      } else {
+        io.stdout(renderEmpty(snap) + "\n");
+      }
+      io.exit(0);
+      return;
+    }
     if (args.json) {
       io.stdout(JSON.stringify(snap, null, 2) + "\n");
     } else {

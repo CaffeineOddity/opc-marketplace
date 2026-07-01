@@ -18,12 +18,22 @@ src/mcp/package-lock.json
 src/hud/node_modules/
 src/hud/package-lock.json
 
-# OPC state - personal session data, don't commit
-.opc/state/**/*
+# OPC — runtime state lives under .opc/. Ignore its contents by default, then
+# re-include the team-shareable trees (knowledge, memory) so they can be
+# committed. /opc init writes the same pattern into each target project.
+#
+# Git quirk: to un-ignore a directory's contents you must un-ignore BOTH the
+# directory itself (`!.opc/knowledge/`) and its contents (`!.opc/knowledge/**`).
+.opc/**/*
+!.opc/knowledge/
+!.opc/knowledge/**
+!.opc/memory/
+!.opc/memory/**
+# Derived/regenerated artifacts inside the shareable trees stay ignored:
+.opc/knowledge/.opc-knowledge.idx
+.opc/knowledge/.opc-knowledge.idx.broken
+.opc/knowledge/.opc-knowledge.json
+
+# Local-only OPC publish bookkeeping (never commit).
 .opc/publish-local-counter
 .opc/publish-stage/
-
-# Keep these (optional but recommended):
-# .opc/memory/          - project decisions, useful for team
-# .opc/state/checkpoints/ - rollback points
-# .opc/logs/            - execution logs

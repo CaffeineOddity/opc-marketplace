@@ -15,7 +15,7 @@ sequenceDiagram
     autonumber
     actor A as Sub-Agent
     participant KS as knowledge-server
-    participant FS as opc-knowledge/<br/>(文件系统)
+    participant FS as .opc/knowledge/<br/>(文件系统)
     participant IDX as .opc-knowledge.idx
 
     Note over A,IDX: ① 加载已有知识
@@ -98,7 +98,7 @@ flowchart TD
 
 | 子文档 | 内容 |
 |------|------|
-| [01_concept-and-storage.md](01_concept-and-storage.md) | 三层概念模型 + opc-knowledge/ 目录布局 |
+| [01_concept-and-storage.md](01_concept-and-storage.md) | 三层概念模型 + .opc/knowledge/ 目录布局 |
 | [02_metadata-files.md](02_metadata-files.md) | `.md frontmatter` / `.opc-knowledge.json` / `.opc-knowledge.idx` |
 | [03_node-driven-and-versioning.md](03_node-driven-and-versioning.md) | node frontmatter 的 input/output 声明、min_version 校验、创建 vs 更新策略 |
 

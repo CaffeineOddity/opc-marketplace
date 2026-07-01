@@ -799,7 +799,7 @@ export class PipelineServer {
           if (phase.status !== "completed" || !phase.confirm_commit_ref) continue;
           for (const node of phase.nodes) {
             for (const artifact of node.output) {
-              if (!artifact.path.startsWith("opc-knowledge/")) continue;
+              if (!artifact.path.startsWith(".opc/knowledge/") && !artifact.path.startsWith("opc-knowledge/")) continue;
               const relPath = artifact.path;
               try {
                 const confirmed = execSync(

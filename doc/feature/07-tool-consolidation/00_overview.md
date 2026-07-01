@@ -206,7 +206,7 @@
 
 > 实际 24（比 G1 目标 30 还少 6）。预留 6 个空位给未来新增能力（如 `opc_session_register` 配合 06 章 C2 的 HTTP/SSE 模式）。
 >
-> **P6 / P7 走 Validator-only 不走 reflection 工具面**：上表 `reflection-server` 4 个工具（plan/execute/complete/admin）只覆盖 P1–P5 / P8 五个反思位点；P6（节点执行）/ P7（阶段完成）由 state-manager 内部跑 V1–V5 + L1/L2，不产生 `reflection_id`、不受 reflection-registry-guard 保护、artifact 写到 `opc-logs/validator/`。详见 [02-server-design 三·补](../05-opc-reflection-server/02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)。Claude 仍可主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion"})` 显式升级到反思工具面（按 method 走标准 5 步 / 3 步 inline）。
+> **P6 / P7 走 Validator-only 不走 reflection 工具面**：上表 `reflection-server` 4 个工具（plan/execute/complete/admin）只覆盖 P1–P5 / P8 五个反思位点；P6（节点执行）/ P7（阶段完成）由 state-manager 内部跑 V1–V5 + L1/L2，不产生 `reflection_id`、不受 reflection-registry-guard 保护、artifact 写到 `.opc/logs/validator/`。详见 [02-server-design 三·补](../05-opc-reflection-server/02-server-design/00_overview.md#三补-p6--p7-不走-reflection-工具面边界澄清)。Claude 仍可主动调 `opc_reflect_execute({step:"node_execution"\|"phase_completion"})` 显式升级到反思工具面（按 method 走标准 5 步 / 3 步 inline）。
 
 ---
 

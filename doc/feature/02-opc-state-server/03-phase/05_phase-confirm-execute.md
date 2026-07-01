@@ -19,7 +19,7 @@
   → 文件域冲突检查（artifacts + knowledge 路径重叠 → 降级串行）
   → 写入 state.json phases[].nodes[] + blocked_by
   → 记 git commit 锚点:
-      · git add opc-knowledge/
+      · git add .opc/knowledge/
       · git commit -m "opc: phase confirm <pipeline_id>/<sub>/<phase>" --allow-empty
       · 把 commit hash 写入 state.json.phases[phase].confirm_commit_ref
       · 该 commit 是 opc_flow_correct({action:"phase_reset"}) 的回退锚点（详见 06_phase-complete-reset.md § 三）

@@ -11,7 +11,7 @@ import {
 
 import { resolveAlias } from "@opc/tool-aliases";
 
-import { bootstrapBuiltins, formatUpgradeWarnings } from "./bootstrap.js";
+import { bootstrapBuiltins, formatUpgradeWarnings, isOpcInitialized } from "./bootstrap.js";
 
 import { FlowServer, type CorrectRequest, type LifecycleRequest, type QuickDispatchRequest, type QueryRequest, type ReflectRequest, type StepCompleteRequest, type UserReplyRequest } from "./flow-server.js";
 import type { FlowStep, Intent } from "./flow-state.js";
@@ -300,16 +300,21 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
   const root = resolve(opts.root);
   mkdirSync(root, { recursive: true });
 
-  // Bootstrap built-in phases/ and scenarios/ into <root>/.opc/ on first run.
-  // Subsequent runs perform three-way conflict detection against the previous
-  // bundle snapshot. Warnings are surfaced through opc_flow_query responses.
+  // Bootstrap built-in phases/ and scenarios/ into <root>/.opc/ ONLY when the
+  // project has opted in via `/opc init` (presence of the `.opc/` marker dir).
+  // Without this gate, merely enabling the plugin would silently seed `.opc/`
+  // into every project the user opens. Subsequent runs perform three-way
+  // conflict detection against the previous bundle snapshot; warnings are
+  // surfaced through opc_flow_query responses.
   let upgradeWarnings: string[] = [];
   try {
-    const bootstrap = await bootstrapBuiltins(root);
-    upgradeWarnings = formatUpgradeWarnings(bootstrap);
-    if (upgradeWarnings.length > 0) {
-      for (const w of upgradeWarnings) {
-        process.stderr.write(`[opc-state-server] ${w}\n`);
+    if (isOpcInitialized(root)) {
+      const bootstrap = await bootstrapBuiltins(root);
+      upgradeWarnings = formatUpgradeWarnings(bootstrap);
+      if (upgradeWarnings.length > 0) {
+        for (const w of upgradeWarnings) {
+          process.stderr.write(`[opc-state-server] ${w}\n`);
+        }
       }
     }
   } catch (err) {

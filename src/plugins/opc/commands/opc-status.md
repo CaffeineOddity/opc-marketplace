@@ -7,7 +7,7 @@ reads `.opc/sessions/<id>/flow-state.json` plus pipeline/sub-pipeline state in
 real time — it never writes anywhere.
 
 ```
-!`opc-status`
+!`node "${CLAUDE_PLUGIN_ROOT}/bin/opc-status.mjs" $ARGUMENTS`
 ```
 
 Pass `--json` if you want the machine-readable snapshot, or `--session <id>`

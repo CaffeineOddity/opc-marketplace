@@ -43,7 +43,7 @@ sequenceDiagram
 
         Note over C,U: ④ reflection-server 跑 meta-validator + 写盘 artifact + 发 pending_reflection
         C->>RS: opc_reflect_complete({method, objections})
-        RS->>RS: meta-validator + 写盘 artifact 到 opc-logs/reflection/
+        RS->>RS: meta-validator + 写盘 artifact 到 .opc/logs/reflection/
         RS-->>C: { verdict, kept_objections, next_step_hint,<br/>pending_reflection: {reflection_id, artifact_path} }
 
         Note over C,U: ⑤ state-server 登记并决定下一步
@@ -140,8 +140,8 @@ pipeline 结束时除了归档纠正，还跑一次 meta-reflection，**反思�
 | 用户介入与反思发现的重合率（反思是否「发现了用户会发现的事」） | 关键质量指标 |
 
 输出：
-- `opc-logs/meta-reflection/<pipeline-id>.md`
-- 写入 `opc-memory/lessons/` 三层结构
+- `.opc/logs/meta-reflection/<pipeline-id>.md`
+- 写入 `.opc/memory/lessons/` 三层结构
 - pipeline manifest 末尾追加「反思开销 / 新增教训 / 方法健康度变化」
 
 ---

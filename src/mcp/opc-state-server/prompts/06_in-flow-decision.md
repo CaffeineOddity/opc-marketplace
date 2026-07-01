@@ -164,7 +164,7 @@ inserted sub.
     "phase": "05-implement",
     "node": "backend-endpoint-2"
   },
-  "dirty_paths": ["opc-knowledge/logging/middleware.md"],
+  "dirty_paths": [".opc/knowledge/logging/middleware.md"],
   "flow_next": {
     "tool": "opc_node_start",
     "args": { "pipeline_id": "...", "sub_pipeline_id": "sub-2", "node_name": "backend-endpoint-2" }

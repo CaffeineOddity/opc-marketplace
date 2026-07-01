@@ -5,7 +5,7 @@
 
 ## 一、问题定义
 
-新项目或新用户首次 pipeline 时，`opc-memory/corrections/` 为空。
+新项目或新用户首次 pipeline 时，`.opc/memory/corrections/` 为空。
 没有历史教训可注入，M2 Reflexion 在首个 pipeline 的 P2 步骤无教训可检索。
 Seed corrections 解决此问题——预置一组从社区与维护者经验中提炼的通用纠正，
 在第 1 个 pipeline 就能提供反思参考。
@@ -126,7 +126,7 @@ seed 的 hotness=3 意味着它在早期 pipeline 中有足够的优先级被注
 ### 4.2 deleted_seeds 集合
 
 ```
-opc-memory/corrections/.deleted-seeds.json
+.opc/memory/corrections/.deleted-seeds.json
 ["seed-path-1", "seed-path-2"]
 ```
 

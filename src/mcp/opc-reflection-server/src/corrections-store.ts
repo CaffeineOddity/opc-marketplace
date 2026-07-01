@@ -5,7 +5,7 @@ import { atomicWrite, withFileLock } from "@opc/memory-store";
 
 import type { StepId } from "./store.js";
 
-export const CORRECTIONS_DIR = "opc-memory/corrections";
+export const CORRECTIONS_DIR = ".opc/memory/corrections";
 const CORRECTIONS_INDEX_FILENAME = "corrections-index.json";
 
 export type CorrectionSource = "user" | "distiller" | "reflexion" | "seed";

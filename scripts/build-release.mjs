@@ -124,7 +124,8 @@ async function bundleMcp(server, mcpRoot) {
 
 /** Build the opc plugin: metadata + opc-status CLI.
  *  Scenarios are now bootstrapped by opc-state-server; this plugin only
- *  wires the hook + slash command. */
+ *  wires the opc-status/opc-init slash commands + hook script (the hook is
+ *  registered per-project by /opc init, not in plugin.json). */
 async function buildOrchestratorPlugin() {
   const srcPlugin = join(SRC, "plugins", "opc");
   const outPlugin = join(DIST, "plugins", "opc");
@@ -226,11 +227,11 @@ function versionedManifest(version) {
         name: "opc",
         source: "./plugins/opc",
         description:
-          "OPC — UserPromptSubmit hook, /opc-status slash command, opc-status CLI, and MCP server config (state, knowledge, reflection)",
+          "OPC — /opc-status + /opc init slash commands, opc-status CLI, opc-hook script (project-scoped via /opc init), and MCP server config (state, knowledge, reflection)",
         version: "0.1.0",
         author: { name: "caffeine" },
         category: "infrastructure",
-        keywords: ["opc", "mcp", "hook", "status", "cli"],
+        keywords: ["opc", "mcp", "hook", "status", "init", "cli"],
       },
     ],
   };

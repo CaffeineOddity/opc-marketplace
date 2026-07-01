@@ -26,7 +26,7 @@
               · opc_reflect_plan 选 critique
               · Task spawn critic agent
               · meta-validator 保留 1 条 objection: "backend-endpoint 与 auth 节点文件域冲突"
-              · 写盘 opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json
+              · 写盘 .opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json
             ← {
                 verdict: "objections_remain",
                 kept_objections: [{id:"obj-1", text:"backend-endpoint 冲突", evidence_ref:"..."}],
@@ -37,7 +37,7 @@
                 },
                 pending_reflection: {
                   reflection_id: "rfl-P5-r1-01HXY8",
-                  artifact_path: "opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json",
+                  artifact_path: ".opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json",
                   expires_at: "...",
                   must_be_registered_by: "opc_flow_reflect"
                 }
@@ -60,7 +60,7 @@
           code: "PENDING_REFLECTION",
           message: "存在未登记的反思记录，无法调用 opc_phase_confirm",
           pending_reflection_id: "rfl-P5-r1-01HXY8",
-          pending_artifact_path: "opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json",
+          pending_artifact_path: ".opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json",
           pending_step_id: "node_selection",
           required_action: {
             tool: "opc_flow_reflect",
@@ -100,7 +100,7 @@
 | 2 | 步骤 [04] reject 返回的 `code` 字段必须为 `"PENDING_REFLECTION"`（uppercase enum，client SDK 用于 catch）| 错误响应 body |
 | 3 | 步骤 [04] reject 返回的 `required_action.tool` 必须为 `"opc_flow_reflect"` | 错误响应 body |
 | 4 | 步骤 [04] reject 返回的 `required_action.args.reflection_id` 必须等于步骤 [02] 收到的 `pending_reflection.reflection_id` | 错误响应 body |
-| 5 | 步骤 [04] reject 时 **artifact 文件未被删除**，可以 stat 到 `opc-logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json` | 文件系统 |
+| 5 | 步骤 [04] reject 时 **artifact 文件未被删除**，可以 stat 到 `.opc/logs/reflection/sess-xyz/rfl-P5-r1-01HXY8.json` | 文件系统 |
 | 6 | 步骤 [04] reject 时 **state.json.phases[].selected_nodes 未被写入** | state.json |
 | 7 | 步骤 [04] reject 时 **flow-state.history 追加一条 `event: "guard_reject"` + `tool: "opc_phase_confirm"` + `reason: "pending_reflection_unregistered"`** | flow-state.json |
 | 8 | 步骤 [05] 补登记后 `flow-state.pending_reflections.length == 0` | flow-state.json |

@@ -5,7 +5,7 @@
  * than going through the state-server, so we exercise the snapshot loader and
  * renderer in isolation. The shape mirrors what the live servers persist
  * (flow-state.json, pipelines/<pid>/pipeline-plan.json,
- * pipelines/<pid>/sub-pipelines/<sub>/state.json, opc-logs/validator/<sid>/*).
+ * pipelines/<pid>/sub-pipelines/<sub>/state.json, .opc/logs/validator/<sid>/*).
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -18,10 +18,11 @@ import {
   loadSnapshot,
   pickNewestSession,
   renderSnapshot,
+  renderEmpty,
   parseArgs,
   run,
-  SnapshotError,
   type SessionSnapshot,
+  type EmptySnapshot,
 } from "../src/opc-status/index.js";
 
 let root: string;
@@ -131,7 +132,7 @@ async function writeFixture(fx: SessionFixture): Promise<string> {
   }
 
   if (fx.validator_artifacts) {
-    const valDir = join(root, "opc-logs/validator", sid);
+    const valDir = join(root, ".opc/logs/validator", sid);
     await mkdir(valDir, { recursive: true });
     for (const a of fx.validator_artifacts) {
       await writeFile(
@@ -236,12 +237,16 @@ describe("opc-status: parseArgs", () => {
 });
 
 describe("opc-status: pickNewestSession", () => {
-  it("throws NO_SESSIONS when .opc/sessions/ missing", async () => {
-    await expect(pickNewestSession(root)).rejects.toBeInstanceOf(SnapshotError);
+  it("returns {missing} when .opc/sessions/ absent (no error)", async () => {
+    await expect(pickNewestSession(root)).resolves.toMatchObject({
+      reason: "missing",
+    });
   });
-  it("throws NO_SESSIONS when sessions exist but no flow-state.json", async () => {
+  it("returns {empty} when sessions exist but no flow-state.json", async () => {
     await mkdir(join(root, ".opc/sessions/empty-sess"), { recursive: true });
-    await expect(pickNewestSession(root)).rejects.toMatchObject({ code: "NO_SESSIONS" });
+    await expect(pickNewestSession(root)).resolves.toMatchObject({
+      reason: "empty",
+    });
   });
   it("returns the only session id", async () => {
     await writeFixture({ session_id: "s-only" });
@@ -547,11 +552,31 @@ describe("opc-status: CLI run() — text vs JSON output", () => {
     expect(ctx.code).toBe(0);
   });
 
-  it("exits 1 when no sessions exist", async () => {
+  it("renders empty state and exits 0 when no sessions exist", async () => {
     const ctx = fakeIO();
     await run([], ctx.io);
-    expect(ctx.code).toBe(1);
-    expect(ctx.err).toContain("opc-status:");
+    expect(ctx.code).toBe(0);
+    expect(ctx.err).toBe("");
+    expect(ctx.out).toContain("尚无会话");
+    expect(ctx.out).toContain("opc_flow_lifecycle");
+  });
+
+  it("emits empty JSON snapshot with --json when no sessions exist", async () => {
+    const ctx = fakeIO();
+    await run(["--json"], ctx.io);
+    expect(ctx.code).toBe(0);
+    const parsed: EmptySnapshot = JSON.parse(ctx.out);
+    expect(parsed.empty).toBe(true);
+    expect(parsed.reason).toBe("missing");
+  });
+
+  it("renders empty state when sessions dir exists but is empty", async () => {
+    await mkdir(join(root, ".opc/sessions"), { recursive: true });
+    const ctx = fakeIO();
+    await run([], ctx.io);
+    expect(ctx.code).toBe(0);
+    expect(ctx.out).toContain("尚无会话");
+    expect(ctx.out).toContain("为空");
   });
 
   it("exits 2 on unknown flag", async () => {

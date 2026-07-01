@@ -9,7 +9,7 @@
 | 层 | 位置 | 内容 | 生命周期 |
 |---|---|---|---|
 | L1 | `<workspace>/.opc/state/flow-state.json` 的 `user_interventions[]` | 单次 pipeline 的原始介入流水（带时间戳、原文、阶段、节点、`trigger` 类型）。两类 trigger：`ask_user_rounds_exceeded`（state-server 反思 rounds 耗尽主动询问 → A3 回灌）+ `user_initiated`（用户主动 revise/restart/replan/phase_reset） | pipeline 结束随快照保留 |
-| L2 | `<workspace>/opc-memory/corrections/<unit>/<section>/<sub>.md` | 项目级提炼后的纠正库（三层模型） | 项目持久 |
+| L2 | `<workspace>/.opc/memory/corrections/<unit>/<section>/<sub>.md` | 项目级提炼后的纠正库（三层模型） | 项目持久 |
 | L3 | `~/.opc/global-corrections.jsonl` | 跨项目通用教训（脱敏） | 全局持久 |
 
 **流向**：L1（每次 pipeline）→ distiller sub-agent 提炼 → L2（项目库）→ 用户标记「通用」时晋升 → L3。
@@ -20,10 +20,10 @@
 
 ## 二、复用知识三层模型
 
-corrections 库目录布局与 opc-knowledge/ 完全一致：
+corrections 库目录布局与 .opc/knowledge/ 完全一致：
 
 ```
-opc-memory/
+.opc/memory/
   corrections/
     intent-analysis/                    # unit
       task-vs-chat/                     # section
@@ -202,7 +202,7 @@ flowchart TD
     Distill --> Sim{相似条目?}
     Sim -->|有| Merge[L2 合并 + hotness++]
     Sim -->|无| New[L2 新建]
-    Merge --> L2([opc-memory/corrections/])
+    Merge --> L2([.opc/memory/corrections/])
     New --> L2
     L2 -->|用户手动晋升<br/>opc_corrections action:promote| L3([~/.opc/global-corrections.jsonl])
     L3 -->|新项目冷启动| Seed[seed 注入新 workspace]

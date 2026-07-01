@@ -6,7 +6,7 @@ import { atomicWrite, withFileLock } from "@opc/memory-store";
 import { pickMethods } from "./methods.js";
 import type { ReflectionMethod, StepId } from "./store.js";
 
-export const ON_DEMAND_LOGS_DIR = "opc-logs/on-demand";
+export const ON_DEMAND_LOGS_DIR = ".opc/logs/on-demand";
 
 export interface OnDemandRequest {
   session_id: string;

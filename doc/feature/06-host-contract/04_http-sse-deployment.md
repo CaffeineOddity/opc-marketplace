@@ -190,10 +190,10 @@ reaper 标记 orphan_candidate → `opc_flow_query` 提示 →
 
 ```
 abandoned session:
-    ① flow-state.json 快照归档到 opc-logs/archived-sessions/
+    ① flow-state.json 快照归档到 .opc/logs/archived-sessions/
     ② 从活跃 session 列表移除
-    ③ opc-logs/reflection/ 下的 artifact 保留 7 天
-    ④ opc-memory/corrections/ 不受影响（项目级持久化）
+    ③ .opc/logs/reflection/ 下的 artifact 保留 7 天
+    ④ .opc/memory/corrections/ 不受影响（项目级持久化）
 ```
 
 ## 七、v1 限制

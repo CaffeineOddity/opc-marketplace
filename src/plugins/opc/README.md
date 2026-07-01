@@ -1,30 +1,43 @@
 # opc
 
-Minimal Claude Code plugin that wires a `UserPromptSubmit` hook to nudge Claude
-toward calling `mcp__opc-state__opc_flow_query` before reasoning about any
-request, plus a small library of scenario recipes Claude consults on demand.
-
-The plugin is intentionally tiny — all real logic lives in the three MCP
+Minimal Claude Code plugin that ships the `/opc init` and `/opc-status` slash
+commands, the `opc-hook.sh` script, and MCP server config for the three OPC
 servers (`opc-state-server`, `opc-knowledge-server`, `opc-reflection-server`).
+
+The plugin is intentionally tiny — all real logic lives in the MCP servers.
 This package:
 
-1. Injects a one-line notice on qualifying user messages via `UserPromptSubmit` hook.
-2. Ships the `/opc-status` slash command and `opc-status` CLI.
+1. **`/opc init`** — the explicit per-project onboarding step. It creates the
+   `.opc/` scaffold + a `.project-init` marker (which gates the state-server's
+   bootstrap of `.opc/phases/` + `.opc/scenarios/`) and installs the
+   `UserPromptSubmit` hook into the project's `.claude/settings.json`.
+2. **`/opc-status`** — read-only terminal health snapshot of the active flow.
 
-Scenarios now live in `.opc/scenarios/` (bootstrapped by opc-state-server on first run).
+> Enabling the plugin alone does **not** create `.opc/` or fire the hook in a
+> project. Both are gated behind `/opc init`, so an enabled plugin never
+> silently affects every project you open. Run `/opc init` once in any project
+> where you want OPC active.
+
+Scenarios live in `.opc/scenarios/` (bootstrapped by opc-state-server, but only
+after `/opc init` has created the `.opc/` marker).
 
 ## Layout
 
 ```
 src/plugins/opc/
-├── .claude-plugin/plugin.json   ← hook registration + MCP config
-├── bin/opc-hook.sh              ← the hook script (quiet default)
+├── .claude-plugin/plugin.json   ← MCP config only (no global hook — see /opc init)
+├── bin/opc-init.mjs             ← /opc init implementation
+├── bin/opc-hook.sh              ← UserPromptSubmit hook script (project-scoped via /opc init)
+├── bin/opc-status.mjs           ← /opc-status shim → dist/opc-status/cli.js
+├── commands/opc-init.md         ← /opc init slash command
 ├── commands/opc-status.md       ← /opc-status slash command
 ├── src/opc-status/              ← opc-status CLI source (bundled at build time)
-└── test/                        ← vitest harness shelling out to the script
+└── test/                        ← vitest harness
 ```
 
 ## Hook intensity
+
+The hook installed by `/opc init` reads `OPC_HOOK_INTENSITY` (default `quiet`):
 
 | `OPC_HOOK_INTENSITY` | Behaviour |
 |---|---|

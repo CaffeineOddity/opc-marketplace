@@ -9,72 +9,43 @@
 my-project/                              # 用户工程目录（claude 执行目录）
 │
 ├── .claude/
-│   ├── settings.json
+│   ├── settings.json                    #   /opc init 写入 UserPromptSubmit hook（项目级）
 │   └── permissions.json
 │
-├── .opc/                                # 运行时状态（gitignore）
-│   ├── sessions/                        #   流程状态机的会话存储
+├── .opc/                                # OPC 全部运行时 + 可共享数据（见 .gitignore 例外）
+│   ├── .project-init                    #   /opc init 标记；state-server bootstrap 门控于此
+│   ├── .builtin-manifest.json           #   内置 phases/scenarios 的 bundle 快照（三路比对祖先）
+│   ├── phases/                          #   内置阶段定义（bootstrap 进来，可项目级覆盖）
+│   ├── scenarios/                       #   内置场景配方
+│   ├── sessions/                        #   流程状态机会话存储（gitignore）
 │   │   └── sess-abc/
 │   │       └── flow-state.json          #     当前流程步骤 + 反思日志 + 累积分析结果
-│   ├── pipelines/
-│   │   ├── pipeline-xxx/                # 单管线 = 1 条子管线
-│   │   │   ├── pipeline-plan.json       # 管线编排计划（始终存在）
-│   │   │   ├── manifest.md
-│   │   │   └── sub-pipelines/
-│   │   │       └── sub-1/  (state.json + brief.md + phases/)
-│   │   │
-│   │   └── pipeline-ecommerce-xxx/      # 拆分管线 = N 条子管线
-│   │       ├── pipeline-plan.json
-│   │       ├── manifest.md
-│   │       └── sub-pipelines/
-│   │           ├── sub-1/  (state.json + brief.md + phases/)
-│   │           ├── sub-2/
-│   │           └── sub-3/
-│   └── .project-init
-│
-├── opc-nodes/                           # [已废弃 v2] 覆盖内置节点（同 phases/ 目录结构）
-│   └── （v2 起：用户直接编辑 .opc/phases/<phase>/nodes/，无需独立 overlay 目录）
-│
-├── opc-knowledge/                       # 项目知识库（git 跟踪）
-│   ├── .opc-knowledge.json              #   _refs（跨 unit 依赖）
-│   ├── .opc-knowledge.idx               #   搜索索引（派生数据，可重建）
-│   ├── user-auth/                       # ← unit
-│   │   ├── login/                       # ← section
-│   │   │   ├── api.md                   # ← subsection
-│   │   │   ├── ui.md
-│   │   │   └── architecture.md
-│   │   ├── register/
-│   │   │   ├── api.md
-│   │   │   └── ui.md
-│   │   └── session/
-│   │       ├── api.md
-│   │       ├── model.md
-│   │       └── architecture.md
-│   ├── authorization/
-│   │   └── role-management/
-│   │       ├── api.md
-│   │       └── model.md
-│   └── subscription/
-│       └── ...
-│
-├── opc-memory/                          # 项目持久记忆（git 跟踪）
-│   ├── architecture.md
-│   ├── api-contracts.md
-│   ├── coding-conventions.md
-│   ├── design-system.md
-│   └── decisions.md
-│
-├── opc-logs/                            # 运行日志（gitignore）
-│   ├── phases/
-│   ├── agent-runs/
-│   ├── failures/
-│   └── telemetry/
+│   ├── pipelines/                       #   管线编排（随会话存于 sessions/<sid>/pipelines/）
+│   ├── knowledge/                       #   项目知识库（git 跟踪；/opc init 在 .gitignore 放行）
+│   │   ├── .opc-knowledge.json          #     _refs（跨 unit 依赖，git 跟踪）
+│   │   ├── .opc-knowledge.idx           #     搜索索引（派生，gitignore）
+│   │   ├── user-auth/                   #     ← unit
+│   │   │   └── login/                   #       ← section
+│   │   │       └── api.md               #         ← subsection
+│   │   └── ...
+│   ├── memory/                          #   项目持久记忆 + corrections（git 跟踪）
+│   │   ├── corrections/                 #     反思蒸馏出的 L2 纠正
+│   │   └── ...
+│   ├── logs/                            #   运行日志（gitignore）
+│   │   ├── reflection/                  #     反思产物 + telemetry
+│   │   ├── validator/                   #     validator 产物
+│   │   ├── on-demand/                   #     按需反思日志
+│   │   └── distiller/                   #     distiller 失败日志
+│   └── state/                           #   unlearn 等内部状态（gitignore）
 │
 ├── src/                                 # 项目实际代码
 ├── tests/
 ├── package.json
 └── ...
 ```
+
+> 跨项目共享的全局纠正存于 `~/.opc/global-corrections.jsonl`（家目录，由
+> `OPC_GLOBAL_CORRECTIONS_ROOT` 可覆盖），不在任何单个项目内。
 
 ---
 

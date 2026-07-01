@@ -26,7 +26,7 @@ distiller sub-agent 启动
     ├── ④ opc_corrections({action:"query"}) 查相似条目
     │       ├── 相似度 > SIM_THRESH → 合并 (hotness+1)
     │       └── 不相似 → 新建 L2 条目
-    ├── ⑤ 写 L2（opc-memory/corrections/）
+    ├── ⑤ 写 L2（.opc/memory/corrections/）
     └── ⑥ 返回 distiller manifest
             │
             ▼ （用户手动操作，可选）
@@ -61,7 +61,7 @@ distiller sub-agent 启动
   "field_changes": { "<field>": "<value>" },
   "resolved_by": "flow_correct | lifecycle | user_reply | skip",
   "recorded_at": "<ISO 8601>",
-  "linked_reflection_artifacts": ["opc-logs/reflection/..."],
+  "linked_reflection_artifacts": [".opc/logs/reflection/..."],
   "linked_corrections": ["corr-<ulid>"]
 }
 ```
@@ -205,7 +205,7 @@ distiller 完成后返回 manifest：
 distiller 按三层模型自动创建目录：
 
 ```
-opc-memory/corrections/
+.opc/memory/corrections/
   <unit>/               # distiller 自动创建
     <section>/           # distiller 自动创建
       <subsection>.md    # distiller 写入

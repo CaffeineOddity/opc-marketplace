@@ -8,7 +8,7 @@
 
 - **唯一通路**：L1 → L2 的转化只允许 distiller 干。任何其他 server / tool 直接往 `.opc/corrections/` 写入都视为违规。
 - **零自由度**：distiller 输出必须严格符合 schema；任何"自由叙述"字段都不收。
-- **失败不阻塞 pipeline**：distiller 失败 → 写 `opc-logs/distiller/<pipeline-id>-error.json` + 在 manifest 末尾追加 `distiller_status: "failed"`，pipeline 仍标 `complete`。
+- **失败不阻塞 pipeline**：distiller 失败 → 写 `.opc/logs/distiller/<pipeline-id>-error.json` + 在 manifest 末尾追加 `distiller_status: "failed"`，pipeline 仍标 `complete`。
 - **可重跑**：同一 pipeline_id 的 distill 可重复触发，每次基于当前 L2 状态做幂等合并。
 
 ---
@@ -50,7 +50,7 @@ distiller spawn 时 reflection-server 通过 `dispatch_context` 注入：
     "user_interventions_path": ".opc/sessions/sess-12345-1717840000/flow-state.json#user_interventions",
     "reflection_log_path": ".opc/sessions/sess-12345-1717840000/flow-state.json#reflection_log",
     "rounds_exceeded_artifacts": [
-      "opc-logs/reflection/p3-decomposition-r3-2026-06-10.json"
+      ".opc/logs/reflection/p3-decomposition-r3-2026-06-10.json"
     ]
   },
   "pipeline_metadata": {
@@ -90,7 +90,7 @@ distiller 在结束前调一次 `opc_corrections({action:"record", batch:[...]})
     "rationale": "<≤ 500 chars 解释 why——用户原话或反思摘要>",
     "source": "user" | "distiller" | "reflexion",
     "trigger": "intervention" | "rounds_exceeded" | "reflection_objection",
-    "linked_reflection_artifacts": ["opc-logs/reflection/..."],
+    "linked_reflection_artifacts": [".opc/logs/reflection/..."],
     "linked_interventions": [{"ts": "...", "text": "..."}],
     "hotness": 1,
     "frozen": false,
@@ -235,12 +235,12 @@ distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期
 
 | 失败模式 | 行为 |
 |---|---|
-| Task spawn 失败（agent type not found） | reflection-server 重试 1 次；仍失败 → 写 `opc-logs/distiller/<pipeline-id>-spawn-error.json`，pipeline manifest 追加 `distiller_status: "spawn_failed"`，不阻塞 |
+| Task spawn 失败（agent type not found） | reflection-server 重试 1 次；仍失败 → 写 `.opc/logs/distiller/<pipeline-id>-spawn-error.json`，pipeline manifest 追加 `distiller_status: "spawn_failed"`，不阻塞 |
 | distiller 运行超 budget.max_runtime_sec | reflection-server 通过 Task 超时 kill；distiller 已提交的 partial batch 保留；manifest 标 `distiller_status: "timeout"` 并附 partial stats |
 | `opc_corrections({action:"record"})` 失败（schema 校验） | distiller 收到 reject → 在自己返回里标 `errors: [...]`，已成功条目保留；reflection-server 不重跑 |
-| distiller 返回 JSON 不合规 | reflection-server 标 `distiller_status: "malformed_output"`，把原始返回存证 `opc-logs/distiller/<pipeline-id>-raw.txt` |
+| distiller 返回 JSON 不合规 | reflection-server 标 `distiller_status: "malformed_output"`，把原始返回存证 `.opc/logs/distiller/<pipeline-id>-raw.txt` |
 
-**可观测指标**（写入 `opc-logs/distiller/metrics.jsonl`，每次 distill 一行）：
+**可观测指标**（写入 `.opc/logs/distiller/metrics.jsonl`，每次 distill 一行）：
 
 ```json
 {
@@ -266,7 +266,7 @@ distiller **不**做衰减——衰减由 reflection-server 后台 reaper 周期
 | 层级 | 写入路径 | distiller 行为 |
 |---|---|---|
 | L1 | `.opc/sessions/<id>/flow-state.json#user_interventions[]` | **只读** |
-| L1 | `opc-logs/reflection/*.json`（rounds_exceeded artifact） | **只读** |
+| L1 | `.opc/logs/reflection/*.json`（rounds_exceeded artifact） | **只读** |
 | L2 | `.opc/corrections/<step>/<corr-id>.md` | **唯一写入者**（通过 `opc_corrections({action:"record"})`） |
 | L3 | `~/.opc/global-corrections.jsonl` | **不写**（仅用户通过 `opc_corrections({action:"promote"})` 显式提升） |
 

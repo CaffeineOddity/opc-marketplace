@@ -83,8 +83,8 @@ auto_advance = (
 行为:
   → 查 state.json.phases[phase].confirm_commit_ref
     ├── 有 → 对该 phase 涉及的每个 output.knowledge 路径:
-    │        ① 读 git show <commit>:opc-knowledge/<path>  →  base 内容
-    │        ② 读当前 opc-knowledge/<path>                →  current 内容、current_version
+    │        ① 读 git show <commit>:.opc/knowledge/<path>  →  base 内容
+    │        ② 读当前 .opc/knowledge/<path>                →  current 内容、current_version
     │        ③ 若 base == current → 跳过（无需回退）
     │        ④ 否则 opc_knowledge_write({
     │              content: base,
@@ -106,7 +106,7 @@ auto_advance = (
 }
 
 限制:
-  - 仅对 opc-knowledge/ 下的 .md 操作，不碰 src/
+  - 仅对 .opc/knowledge/ 下的 .md 操作，不碰 src/
   - 管线 aborted 后不可 reset（confirm_commit_ref 仍可读，但状态机已关闭）
   - 若 reset 期间某 path 触发 merge conflict（用户手工改了 .md 与 base 重叠）→
     返回 conflict_paths，让 Claude 走 suggested_actions（同 § 2.10）
@@ -114,11 +114,11 @@ auto_advance = (
 
 > **为什么走 git 而不是文件快照**：
 > 1. version 永远向前，`base_version` 探测器始终工作（详见 [../../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md § 2.10](../../03-opc-knowledge-server/02-knowledge-api/02_core-tools.md#210-版本冲突与-3-way-diff-and-merge-契约)）
-> 2. 历史可审计（`git log opc-knowledge/<path>`）
+> 2. 历史可审计（`git log .opc/knowledge/<path>`）
 > 3. 不需要自建 `.opc-knowledge-history/` 副本目录
 > 4. reset 的"撤销"也走 git（恢复 reset 前的 commit），无特殊路径
 >
-> phase confirm 时由 `opc_phase_confirm` 把 knowledge 当时的内容 `git add opc-knowledge/ && git commit -m "phase confirm: <phase>"`，把 commit hash 记入 `state.json.phases[phase].confirm_commit_ref`，作为 reset 锚点。详见 [05_phase-confirm-execute.md](05_phase-confirm-execute.md)。
+> phase confirm 时由 `opc_phase_confirm` 把 knowledge 当时的内容 `git add .opc/knowledge/ && git commit -m "phase confirm: <phase>"`，把 commit hash 记入 `state.json.phases[phase].confirm_commit_ref`，作为 reset 锚点。详见 [05_phase-confirm-execute.md](05_phase-confirm-execute.md)。
 
 ---
 

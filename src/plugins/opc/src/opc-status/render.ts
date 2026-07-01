@@ -16,6 +16,7 @@ import type {
   PhaseSnapshot,
   NodeSnapshot,
   PipelineSnapshot,
+  EmptySnapshot,
 } from "./snapshot.js";
 
 const SYM = {
@@ -35,8 +36,7 @@ function sym(status: string): string {
 export function renderSnapshot(s: SessionSnapshot): string {
   const lines: string[] = [];
 
-  lines.push(`会话: ${s.session_id}`);
-  lines.push(
+  lines.push(`会话: ${s.session_id}`);  lines.push(
     `状态: ${s.status}  当前步: ${s.current_step}${
       s.current_step_round != null ? ` (round ${s.current_step_round})` : ""
     }`,
@@ -185,4 +185,24 @@ function renderNode(n: NodeSnapshot): string {
 
 function padName(name: string): string {
   return name.length >= 18 ? name : name + " ".repeat(18 - name.length);
+}
+
+/**
+ * Friendly empty-state view when no OPC session exists yet (the project has
+ * not started a flow). Points the user at `opc_flow_lifecycle({action:"start"})`
+ * rather than presenting "no sessions" as an error.
+ */
+export function renderEmpty(s: EmptySnapshot): string {
+  const lines: string[] = [];
+  lines.push("OPC: 尚无会话");
+  const where =
+    s.reason === "missing"
+      ? `未找到会话目录 ${s.sessions_dir}`
+      : `会话目录为空 ${s.sessions_dir}`;
+  lines.push(`  ${where}`);
+  lines.push("");
+  lines.push("下一步:");
+  lines.push("  · 调用 mcp__opc-state-server__opc_flow_lifecycle({ action: \"start\" }) 创建首个会话");
+  lines.push("  · 之后再次运行 /opc-status 查看流程健康快照");
+  return lines.join("\n");
 }
