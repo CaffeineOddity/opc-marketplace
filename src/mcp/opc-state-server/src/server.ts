@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -9,6 +9,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { isOptedIn, optInGuidance } from "@opc/opt-in";
 import { resolveAlias } from "@opc/tool-aliases";
 
 import { FlowServer, type CorrectRequest, type LifecycleRequest, type QuickDispatchRequest, type QueryRequest, type ReflectRequest, type StepCompleteRequest, type UserReplyRequest } from "./flow-server.js";
@@ -296,7 +297,24 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
   );
 
   const root = resolve(opts.root);
-  mkdirSync(root, { recursive: true });
+
+  // Opt-in gate: only a project that ran `/opc init` (marker present) is an OPC
+  // project. Enabling the plugin alone must never write `.opc/` into a project.
+  // The state server only READS `.opc/` — but in a non-OPC project there is
+  // nothing to read, so we skip mkdir + server construction entirely and guide
+  // callers to /opc init on tool calls. The MCP server still connects so the
+  // tool list stays valid (no connection errors in non-OPC projects).
+  //
+  // `root` is the project root (passed by the bin entry as CLAUDE_PROJECT_DIR);
+  // the marker lives at `<root>/.opc/.project-init`.
+  const optedIn = await isOptedIn(root);
+  if (optedIn) {
+    mkdirSync(join(root, ".opc"), { recursive: true });
+  } else {
+    process.stderr.write(
+      "opc-state-server: project not opted in (no .opc/.project-init); run /opc init. Server idle.\n",
+    );
+  }
 
   // NOTE: built-in phases/scenarios are seeded into <root>/.opc/ by `/opc init`
   // (opc-init.mjs), not at server startup. The server only READS .opc/ — it never
@@ -339,6 +357,14 @@ export async function startStateServer(opts: StateServerOptions): Promise<void> 
 
     const toolName = resolved.tool;
     const action = args.action as string | undefined;
+
+    // Not opted in → never touch .opc/; guide the caller to /opc init.
+    if (!optedIn) {
+      return {
+        content: [{ type: "text", text: JSON.stringify(optInGuidance()) }],
+        isError: true,
+      };
+    }
 
     try {
       const result = await dispatchTool(toolName, args, action, flow, pipeline, phase, node, claudePid);

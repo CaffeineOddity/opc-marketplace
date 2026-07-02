@@ -20,6 +20,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opc/memory-store": "workspace:*",
+    "@opc/opt-in": "workspace:*",
     "@opc/tool-aliases": "workspace:*"
   }
 }

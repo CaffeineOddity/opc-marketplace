@@ -29,6 +29,9 @@ importers:
       '@opc/memory-store':
         specifier: workspace:*
         version: link:../../shared/memory-store
+      '@opc/opt-in':
+        specifier: workspace:*
+        version: link:../../shared/opt-in
       '@opc/tool-aliases':
         specifier: workspace:*
         version: link:../../shared/tool-aliases
@@ -41,6 +44,9 @@ importers:
       '@opc/memory-store':
         specifier: workspace:*
         version: link:../../shared/memory-store
+      '@opc/opt-in':
+        specifier: workspace:*
+        version: link:../../shared/opt-in
       '@opc/tool-aliases':
         specifier: workspace:*
         version: link:../../shared/tool-aliases
@@ -50,6 +56,9 @@ importers:
       '@opc/memory-store':
         specifier: workspace:*
         version: link:../../shared/memory-store
+      '@opc/opt-in':
+        specifier: workspace:*
+        version: link:../../shared/opt-in
       '@opc/tool-aliases':
         specifier: workspace:*
         version: link:../../shared/tool-aliases
@@ -71,6 +80,8 @@ importers:
         version: link:../../mcp/opc-state-server
 
   src/shared/memory-store: {}
+
+  src/shared/opt-in: {}
 
   src/shared/tool-aliases: {}
 

@@ -9,6 +9,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { isOptedIn, optInGuidance } from "@opc/opt-in";
 import { resolveAlias } from "@opc/tool-aliases";
 
 import { KnowledgeServer, type AdminRequest, type OpenRequest, type ReadRequest, type WriteRequest } from "./server.js";
@@ -97,25 +98,44 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
   );
 
   const root = resolve(opts.root);
-  mkdirSync(root, { recursive: true });
 
-  const knowledge = new KnowledgeServer({ root });
+  // Opt-in gate: only a project that ran `/opc init` (marker present) is an OPC
+  // project. Enabling the plugin alone must never write `.opc/` into a project,
+  // never build a search index, never run startupSelfCheck. The server still
+  // connects (tool list stays valid in non-OPC projects); tool *calls* surface
+  // run-/opc-init guidance via `optInGuidance()` when not opted in.
+  //
+  // `root` here is `<project>/.opc/knowledge`; the marker lives at
+  // `<project>/.opc/.project-init`, i.e. two levels up from root.
+  const projectRoot = join(root, "..", "..");
+  const optedIn = await isOptedIn(projectRoot);
 
-  // K1: heal broken/stale index before accepting requests
-  const healResult = await knowledge.startupSelfCheck();
-  if (healResult.reindexed) {
+  let knowledge: KnowledgeServer | null = null;
+  if (optedIn) {
+    mkdirSync(root, { recursive: true });
+
+    knowledge = new KnowledgeServer({ root });
+
+    // K1: heal broken/stale index before accepting requests
+    const healResult = await knowledge.startupSelfCheck();
+    if (healResult.reindexed) {
+      process.stderr.write(
+        `opc-knowledge-server: startup reindex (${healResult.reason})\n`,
+      );
+    }
+
+    // K2: watch for cross-process .md file changes
+    knowledge.worker.startFileWatcher();
+  } else {
     process.stderr.write(
-      `opc-knowledge-server: startup reindex (${healResult.reason})\n`,
+      "opc-knowledge-server: project not opted in (no .opc/.project-init); run /opc init. Server idle.\n",
     );
   }
 
-  // K2: watch for cross-process .md file changes
-  knowledge.worker.startFileWatcher();
-
-  // K3: graceful shutdown — flush reindex queue before exit
+  // K3: graceful shutdown — flush reindex queue before exit (only if active)
   const gracefulShutdown = async (signal: string) => {
     process.stderr.write(`opc-knowledge-server: ${signal} received, flushing...\n`);
-    await knowledge.shutdown();
+    if (knowledge) await knowledge.shutdown();
     process.stderr.write("opc-knowledge-server: shutdown complete\n");
     process.exit(0);
   };
@@ -145,8 +165,17 @@ export async function startKnowledgeServer(opts: KnowledgeMcpOptions): Promise<v
 
     const toolName = resolved.tool;
 
+    // Not opted in → never touch .opc/; guide the caller to /opc init.
+    if (!knowledge) {
+      return {
+        content: [{ type: "text", text: JSON.stringify(optInGuidance()) }],
+        isError: true,
+      };
+    }
+    const active = knowledge;
+
     try {
-      const result = await dispatchKnowledge(toolName, args, knowledge);
+      const result = await dispatchKnowledge(toolName, args, active);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

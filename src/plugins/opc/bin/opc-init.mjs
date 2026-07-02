@@ -26,14 +26,20 @@
 //   bundle-new file  → copy to user dir
 //   bundle-removed   → leave user copy untouched (never delete)
 //
-// Hooks installed (both project-scoped, shareable via git):
-//   - UserPromptSubmit → ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh  (per-message nudge)
-//   - SessionStart     → ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-check.sh (once-per-session staleness check)
+// Hooks installed (all project-scoped, shareable via git):
+//   - UserPromptSubmit → ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh   (per-message nudge)
+//   - SessionStart     → ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-check.sh  (once-per-session staleness check)
+//   - UserPromptSubmit / PreToolUse / PostToolUse / Stop
+//                     → ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-trace.sh  (session tracing for opc-marketplace tuning)
+//
+// opc-trace.sh writes JSONL logs under .opc/logs/<session>/ (NOT git-tracked —
+// covered by the existing `.opc/**/*` ignore). It records every user input,
+// tool call (input + output), and assistant stop, newest-first.
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, copyFile, chmod, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, basename } from "node:path";
 
 const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
 const opcDir = join(root, ".opc");
@@ -59,9 +65,11 @@ const MANIFEST_VERSION = 1;
 const projectBin = join(opcDir, "bin");
 const HOOK_COMMAND = "${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh";
 const CHECK_COMMAND = "${CLAUDE_PROJECT_DIR}/.opc/bin/opc-check.sh";
+const TRACE_COMMAND = "${CLAUDE_PROJECT_DIR}/.opc/bin/opc-trace.sh";
 const HOOK_FILES = [
   { src: join(pluginBin, "opc-hook.sh"), dest: join(projectBin, "opc-hook.sh") },
   { src: join(pluginBin, "opc-check.sh"), dest: join(projectBin, "opc-check.sh") },
+  { src: join(pluginBin, "opc-trace.sh"), dest: join(projectBin, "opc-trace.sh") },
 ];
 
 // Gitignore lines /opc init ensures are present. `.opc/**/*` ignores everything
@@ -349,6 +357,14 @@ async function installProjectHook() {
   const targets = [
     { event: "UserPromptSubmit", command: HOOK_COMMAND },
     { event: "SessionStart", command: CHECK_COMMAND },
+    // opc-trace.sh is registered on all four events so the full input/output +
+    // tool-call stream is captured for opc-marketplace tuning. Logs land under
+    // .opc/logs/<session>/ (git-ignored). UserPromptSubmit carries BOTH the
+    // nudge hook (opc-hook.sh) and the trace hook (opc-trace.sh).
+    { event: "UserPromptSubmit", command: TRACE_COMMAND },
+    { event: "PreToolUse", command: TRACE_COMMAND },
+    { event: "PostToolUse", command: TRACE_COMMAND },
+    { event: "Stop", command: TRACE_COMMAND },
   ];
 
   // The exact basename an OPC hook script must end with for each event. Any
@@ -357,46 +373,86 @@ async function installProjectHook() {
   // entry and gets pruned. This keeps the hook list from accumulating one entry
   // per historical command form (e.g. ${CLAUDE_PLUGIN_ROOT}/bin/opc-hook.sh,
   // an absolute /Users/.../bin/opc-hook.sh, ${CLAUDE_PROJECT_DIR}/.opc/bin/...).
-  // Non-OPC hooks (any other command) are left untouched.
+  // Non-OPC hooks (any other command) are left untouched. opc-trace.sh is a
+  // single script reused across four events, so its basename prunes stale trace
+  // entries on every one of those events.
+  //
+  // IMPORTANT: UserPromptSubmit carries BOTH opc-hook.sh (nudge) AND opc-trace.sh
+  // (tracing). isOpcHookEntry must therefore recognise BOTH as canonical for
+  // that event — otherwise the second target's prune step would delete the first
+  // target's freshly-added entry. The "stale" form we're pruning is an OPC hook
+  // pointing at a NON-canonical path (e.g. ${CLAUDE_PLUGIN_ROOT}/...), so we
+  // only prune an entry when its basename is OPC-managed AND its command is not
+  // exactly one of the canonical commands we're about to (re)install.
   const hookBasenameByEvent = {
-    UserPromptSubmit: "opc-hook.sh",
-    SessionStart: "opc-check.sh",
+    UserPromptSubmit: ["opc-hook.sh", "opc-trace.sh"],
+    SessionStart: ["opc-check.sh"],
+    PreToolUse: ["opc-trace.sh"],
+    PostToolUse: ["opc-trace.sh"],
+    Stop: ["opc-trace.sh"],
   };
-  const isOpcHookEntry = (event, entry) => {
+  // Canonical commands per event — entries matching one of these are KEPT (they
+  // are the current form); only OPC-basename entries NOT matching are pruned.
+  const canonicalCommandsByEvent = targets.reduce((acc, t) => {
+    (acc[t.event] ??= []).push(t.command);
+    return acc;
+  }, {});
+  const isStaleOpcHookEntry = (event, entry) => {
     const want = hookBasenameByEvent[event];
     if (!want) return false;
-    return Array.isArray(entry?.hooks) && entry.hooks.some(
-      (h) => typeof h?.command === "string" && h.command.endsWith("/" + want),
+    if (!Array.isArray(entry?.hooks)) return false;
+    // An entry is stale iff at least one of its hooks has an OPC basename that
+    // is NOT one of this event's canonical commands. Entries whose hooks are all
+    // canonical (or have no OPC basename at all) are kept.
+    return entry.hooks.some(
+      (h) =>
+        typeof h?.command === "string" &&
+        want.some((w) => h.command.endsWith("/" + w)) &&
+        !(canonicalCommandsByEvent[event] ?? []).includes(h.command),
     );
   };
 
+  // Process each event ONCE (not once per target), so the prune+ensure pair
+  // for UserPromptSubmit — which has two canonical commands — runs a single
+  // time instead of twice (the second pass would otherwise find the first
+  // target's entry "already present" and double-log).
+  const eventsInOrder = [];
+  for (const { event } of targets) {
+    if (!eventsInOrder.includes(event)) eventsInOrder.push(event);
+  }
+
   let changedAny = false;
-  for (const { event, command } of targets) {
+  for (const event of eventsInOrder) {
     const list = (hooks[event] ??= []);
+    const canonicals = canonicalCommandsByEvent[event];
 
     // 1. Drop stale OPC hook entries from prior /opc init versions. Keep only
-    //    entries that are NOT OPC-managed for this event.
-    const kept = list.filter((entry) => !isOpcHookEntry(event, entry));
+    //    entries that are NOT stale-OPC for this event. Canonical commands are
+    //    preserved even if they share an OPC basename (UserPromptSubmit has two).
+    const kept = list.filter((entry) => !isStaleOpcHookEntry(event, entry));
     if (kept.length !== list.length) {
       changedAny = true;
       log(`✓ pruned stale ${event} OPC hook(s) from ${rel(settingsPath)}`);
     }
 
-    // 2. Ensure the current canonical command is present exactly once.
-    const hasCurrent = kept.some(
-      (entry) =>
-        Array.isArray(entry?.hooks) &&
-        entry.hooks.some((h) => h?.command === command),
-    );
-    if (hasCurrent) {
-      log(`• ${event} hook already present in ${rel(settingsPath)}`);
-    } else {
-      kept.push({
-        matcher: "",
-        hooks: [{ type: "command", command }],
-      });
-      changedAny = true;
-      log(`✓ added ${event} hook to ${rel(settingsPath)}`);
+    // 2. Ensure every canonical command for this event is present exactly once.
+    //    (UserPromptSubmit has two canonical commands: opc-hook.sh + opc-trace.sh.)
+    for (const command of canonicals) {
+      const hasCurrent = kept.some(
+        (entry) =>
+          Array.isArray(entry?.hooks) &&
+          entry.hooks.some((h) => h?.command === command),
+      );
+      if (hasCurrent) {
+        log(`• ${event} hook already present in ${rel(settingsPath)} (${basename(command)})`);
+      } else {
+        kept.push({
+          matcher: "",
+          hooks: [{ type: "command", command }],
+        });
+        changedAny = true;
+        log(`✓ added ${event} hook to ${rel(settingsPath)} (${basename(command)})`);
+      }
     }
 
     if (kept.length > 0) {

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@opc/memory-store": "workspace:*",
+    "@opc/opt-in": "workspace:*",
     "@opc/tool-aliases": "workspace:*"
   },
   "devDependencies": {

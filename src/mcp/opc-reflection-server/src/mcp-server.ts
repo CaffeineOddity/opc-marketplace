@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -9,6 +9,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { isOptedIn, optInGuidance } from "@opc/opt-in";
 import { resolveAlias } from "@opc/tool-aliases";
 
 import {
@@ -155,7 +156,24 @@ export async function startReflectionServer(opts: ReflectionMcpOptions): Promise
   );
 
   const root = resolve(opts.root);
-  mkdirSync(root, { recursive: true });
+
+  // Opt-in gate: only a project that ran `/opc init` (marker present) is an OPC
+  // project. Enabling the plugin alone must never write `.opc/` into a project.
+  // The reflection server writes to `.opc/memory`, `.opc/logs`, etc. — so in a
+  // non-OPC project we skip mkdir + server construction entirely and guide
+  // callers to /opc init on tool calls. The MCP server still connects so the
+  // tool list stays valid (no connection errors in non-OPC projects).
+  //
+  // `root` is the project root (passed by the bin entry as CLAUDE_PROJECT_DIR);
+  // the marker lives at `<root>/.opc/.project-init`.
+  const optedIn = await isOptedIn(root);
+  if (!optedIn) {
+    process.stderr.write(
+      "opc-reflection-server: project not opted in (no .opc/.project-init); run /opc init. Server idle.\n",
+    );
+  } else {
+    mkdirSync(join(root, ".opc"), { recursive: true });
+  }
 
   const reflection = new ReflectionServer({ root });
   const corrections = new CorrectionsServer({ root });
@@ -182,6 +200,14 @@ export async function startReflectionServer(opts: ReflectionMcpOptions): Promise
     }
 
     const toolName = resolved.tool;
+
+    // Not opted in → never touch .opc/; guide the caller to /opc init.
+    if (!optedIn) {
+      return {
+        content: [{ type: "text", text: JSON.stringify(optInGuidance()) }],
+        isError: true,
+      };
+    }
 
     try {
       const result = await dispatchReflection(toolName, args, reflection, corrections);
