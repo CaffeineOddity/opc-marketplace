@@ -105,9 +105,9 @@ fi
 build_publish_args() {
   # Echoes the publish.mjs args for the build step, honoring --up / --release.
   if [[ "$RELEASE" == "true" ]]; then
-    echo tarball "${UP_ARG[@]}"
+    echo tarball "${UP_ARG[@]+"${UP_ARG[@]}"}"
   else
-    echo local --no-register "${UP_ARG[@]}"
+    echo local --no-register "${UP_ARG[@]+"${UP_ARG[@]}"}"
   fi
 }
 

@@ -33,3 +33,14 @@ src/hud/package-lock.json
 .opc/knowledge/.opc-knowledge.idx
 .opc/knowledge/.opc-knowledge.idx.broken
 .opc/knowledge/.opc-knowledge.json
+
+# --- OPC (managed by /opc init) ---
+.opc/**/*
+!.opc/knowledge/
+!.opc/knowledge/**
+!.opc/memory/
+!.opc/memory/**
+.opc/knowledge/.opc-knowledge.idx
+.opc/knowledge/.opc-knowledge.idx.broken
+.opc/knowledge/.opc-knowledge.json
+# --- end OPC ---
