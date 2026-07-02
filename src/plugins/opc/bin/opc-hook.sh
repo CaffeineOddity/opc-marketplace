@@ -7,6 +7,13 @@
 # into the project's .claude/settings.json (project-scoped, shareable via git),
 # so it only fires in projects that have opted into OPC — never globally.
 #
+# This file is the SOURCE inside the installed plugin. `/opc init` COPIES it to
+# <project>/.opc/bin/opc-hook.sh and the project's settings.json points at that
+# copy via ${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh (the host expands
+# ${CLAUDE_PROJECT_DIR} in project-scoped settings, but NOT ${CLAUDE_PLUGIN_ROOT}).
+# After a plugin upgrade the copy may drift from the source; the SessionStart
+# opc-check.sh detects that and nudges the user to re-run `/opc init`.
+#
 # Inputs (env, set by Claude Code hook runtime):
 #   CLAUDE_USER_MESSAGE   — the raw user message text
 #   CLAUDE_PROJECT_DIR    — absolute path to the project (.opc/ root)

@@ -100,17 +100,6 @@ async function bundleMcp(server, mcpRoot) {
     await cp(srcRes, destRes, { recursive: true });
   }
 
-  // Copy built-in phases/ and scenarios/ — bootstrapped into .opc/ on first run.
-  for (const dir of ["phases", "scenarios"]) {
-    const srcDir2 = join(srcDir, dir);
-    const destDir2 = join(outDir, dir);
-    try {
-      await cp(srcDir2, destDir2, { recursive: true });
-    } catch {
-      // Directory may not exist; skip quietly.
-    }
-  }
-
   // Write a minimal package.json so node treats the bundle as ESM.
   const pkg = {
     name: `@opc/${server.name}-release`,
@@ -122,10 +111,11 @@ async function bundleMcp(server, mcpRoot) {
   await writeFile(join(outDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
 }
 
-/** Build the opc plugin: metadata + opc-status CLI.
- *  Scenarios are now bootstrapped by opc-state-server; this plugin only
- *  wires the opc-status/opc-init slash commands + hook script (the hook is
- *  registered per-project by /opc init, not in plugin.json). */
+/** Build the opc plugin: metadata + opc-status CLI + built-in resources.
+ *  phases/ and scenarios/ ship INSIDE the plugin dir and are seeded into
+ *  <project>/.opc/ by `/opc init` (opc-init.mjs) — the opc-state-server only
+ *  reads .opc/, never bootstraps. The hook script is registered per-project by
+ *  /opc init, not in plugin.json. */
 async function buildOrchestratorPlugin() {
   const srcPlugin = join(SRC, "plugins", "opc");
   const outPlugin = join(DIST, "plugins", "opc");
@@ -135,8 +125,19 @@ async function buildOrchestratorPlugin() {
     recursive: true,
   });
 
-  // Hook script + opc-status shim.
+  // Hook script + opc-status/opc-init shims.
   await cp(join(srcPlugin, "bin"), join(outPlugin, "bin"), { recursive: true });
+
+  // Built-in phases/ + scenarios/ — the bundle opc-init.mjs seeds .opc/ from.
+  for (const dir of ["phases", "scenarios"]) {
+    const srcDir = join(srcPlugin, dir);
+    const destDir = join(outPlugin, dir);
+    try {
+      await cp(srcDir, destDir, { recursive: true });
+    } catch {
+      // Directory may not exist yet; skip quietly.
+    }
+  }
 
   // Slash command.
   await cp(join(srcPlugin, "commands"), join(outPlugin, "commands"), { recursive: true });
