@@ -85,9 +85,25 @@ describe("FlowServer.lifecycle", () => {
     expect(b.state.owner.pid).toBe(9999);
   });
 
-  it("query on missing session throws SessionNotFoundError", async () => {
-    const fs = fresh();
-    await expect(fs.query({ session_id: "missing" })).rejects.toBeInstanceOf(SessionNotFoundError);
+  it("query on missing session lazy-creates it (stdio, ppid-derived id)", async () => {
+    const fs = new FlowServer({
+      root,
+      now: fixedNow,
+      pid: () => 1234,
+      uuid: fixedUuid,
+      transport: "stdio",
+      ppid: () => 4242,
+    });
+    // A non-existent, non-canonical session_id is ignored in favour of
+    // auto-derivation: the server builds sess-<ppid>-<ts> and creates it.
+    const q = await fs.query({ session_id: "missing" });
+    expect(q.state.status).toBe("in_progress");
+    expect(q.state.current_step).toBe("intent_analysis");
+    expect(q.state.session_id).toBe("sess-4242-1781049600");
+    expect(q.state.owner.pid).toBe(4242);
+    // Idempotent: a second query with the derived id loads the same state.
+    const q2 = await fs.query({ session_id: q.state.session_id });
+    expect(q2.state.session_id).toBe(q.state.session_id);
   });
 });
 

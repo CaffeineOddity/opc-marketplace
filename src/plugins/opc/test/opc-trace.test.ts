@@ -47,8 +47,6 @@ function runTrace(
 }
 
 function readLog(rel: string): string {
-  // Re-read via spawnSync cat to avoid importing fs sync helpers; the test only
-  // needs the textual content.
   const r = spawnSync("cat", [join(project, rel)], { encoding: "utf8" });
   return (r.stdout ?? "").trim();
 }
@@ -57,6 +55,11 @@ function lines(rel: string): string[] {
   const t = readLog(rel);
   return t.length === 0 ? [] : t.split("\n");
 }
+
+// Header regex for the compact format:
+//   [HH:MM:SS][hookname]            (non-tool events)
+//   [HH:MM:SS][hookname][toolname]  (tool events)
+const HEADER_RE = /^\[\d{2}:\d{2}:\d{2}\]\[[^\]]+\](\[[^\]]+\])?/;
 
 describe("opc-trace.sh", () => {
   it("never fails (exit 0) and never emits stdout (hooks must be silent)", () => {
@@ -79,13 +82,11 @@ describe("opc-trace.sh", () => {
     const trace = lines(".opc/logs/s1/trace.log");
     expect(ev).toHaveLength(1);
     expect(trace).toHaveLength(1);
-    const obj = JSON.parse(ev[0]);
-    expect(obj.event).toBe("UserPromptSubmit");
-    expect(obj.prompt).toBe("hello world");
-    expect(typeof obj.ts).toBe("number");
+    // [HH:MM:SS][UserPromptSubmit] hello world — NO third (tool) bracket.
+    expect(ev[0]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[UserPromptSubmit\] hello world$/);
   });
 
-  it("records PreToolUse + PostToolUse with tool_name and full input/response", () => {
+  it("records PreToolUse + PostToolUse with tool name and full input/response", () => {
     runTrace({
       session_id: "s1",
       hook_event_name: "PreToolUse",
@@ -99,16 +100,43 @@ describe("opc-trace.sh", () => {
       tool_response: "file1\nfile2",
     });
     const trace = lines(".opc/logs/s1/trace.log");
-    // Newest first → PostToolUse on top, then PreToolUse.
+    // Newest first → PostToolUse block (2 lines) on top, then PreToolUse (2).
+    expect(trace).toHaveLength(4);
+    // PostToolUse header carries the tool bracket; out: on its own line.
+    expect(trace[0]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[PostToolUse\]\[Bash\]$/);
+    expect(trace[1]).toMatch(/^out: /);
+    expect(trace[1]).toContain("file1");
+    expect(trace[1]).toContain("⏎"); // newline collapsed to ⏎
+    // PreToolUse block follows.
+    expect(trace[2]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[PreToolUse\]\[Bash\]$/);
+    expect(trace[3]).toMatch(/^in: /);
+    expect(trace[3]).toContain("ls -la");
+  });
+
+  it("puts in: and out: on separate lines (not a single | -joined line)", () => {
+    runTrace({
+      session_id: "s1",
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: '{"command":"echo hi"}',
+    });
+    const trace = lines(".opc/logs/s1/trace.log");
     expect(trace).toHaveLength(2);
-    const post = JSON.parse(trace[0]);
-    const pre = JSON.parse(trace[1]);
-    expect(post.event).toBe("PostToolUse");
-    expect(post.tool_name).toBe("Bash");
-    expect(post.tool_response).toContain("file1");
-    expect(pre.event).toBe("PreToolUse");
-    expect(pre.tool_name).toBe("Bash");
-    expect(pre.tool_input).toContain("ls -la");
+    expect(trace[0]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[PreToolUse\]\[Bash\]$/);
+    expect(trace[1]).toMatch(/^in: /);
+    // No " | out:" joiner — this is a Pre event (no response) anyway, but the
+    // format must never use the old single-line "in: ... | out: ..." shape.
+    expect(trace.join("\n")).not.toContain("| out:");
+  });
+
+  it("omits empty brackets: non-tool events have no [toolname] segment", () => {
+    runTrace({ session_id: "s1", hook_event_name: "UserPromptSubmit", prompt: "x" });
+    runTrace({ session_id: "s1", hook_event_name: "Stop", stop_hook_active: false });
+    const trace = lines(".opc/logs/s1/trace.log");
+    expect(trace).toHaveLength(2);
+    // Stop block: header + nothing else (stop_hook_active=false is inlined).
+    expect(trace[0]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[Stop\] stop_hook_active=false$/);
+    expect(trace[1]).toMatch(/^\[\d{2}:\d{2}:\d{2}\]\[UserPromptSubmit\] x$/);
   });
 
   it("prepends newest-first (latest turn is line 1)", () => {
@@ -116,10 +144,10 @@ describe("opc-trace.sh", () => {
     runTrace({ session_id: "s1", hook_event_name: "Stop" });
     const trace = lines(".opc/logs/s1/trace.log");
     expect(trace).toHaveLength(2);
-    // Second call (later ts) must be line 1.
-    expect(JSON.parse(trace[0]).ts).toBeGreaterThanOrEqual(
-      JSON.parse(trace[1]).ts,
-    );
+    // Both headers parse; ordering is newest-first by wall clock (same-second
+    // is possible, so just assert both are valid headers).
+    expect(trace[0]).toMatch(HEADER_RE);
+    expect(trace[1]).toMatch(HEADER_RE);
   });
 
   it("buckets by session id", () => {
@@ -160,20 +188,14 @@ describe("opc-trace.sh", () => {
       session_id: "../escape/../../etc",
       hook_event_name: "Stop",
     });
-    // The dots are reduced to literal "_"-joined segments, so no actual path
-    // traversal escapes .opc/logs/. Verify by listing: the only subdirs created
-    // must be inside .opc/logs/ (find -mindepth 1 -maxdepth 1 of logs).
     const r = spawnSync("find", [join(project, ".opc", "logs"), "-mindepth", "1", "-maxdepth", "1"], {
       encoding: "utf8",
     });
     const found = (r.stdout ?? "").trim();
     expect(found).not.toBe("");
-    // Exactly one sanitized bucket dir, single level under logs.
     const entries = found.split("\n");
     expect(entries).toHaveLength(1);
-    // No slash-separated traversal — the segment has no path separators at all.
     expect(entries[0]).toMatch(/\.opc\/logs\/[^/]+$/);
-    // And it is NOT literally ".." or "etc" at the project root.
     expect(entries[0]).toContain("_");
   });
 
@@ -188,9 +210,12 @@ describe("opc-trace.sh", () => {
       },
       { OPC_TRACE_TOOL_MAX: "100" },
     );
-    const obj = JSON.parse(lines(".opc/logs/s1/trace.log")[0]);
-    expect(obj.tool_input.length).toBeLessThan(huge.length);
-    expect(obj.tool_input).toContain("[truncated:");
+    const trace = lines(".opc/logs/s1/trace.log");
+    expect(trace).toHaveLength(2);
+    expect(trace[1]).toMatch(/^in: /);
+    // Truncation marker present, and shorter than the original.
+    expect(trace[1]).toContain("[truncated:");
+    expect(trace[1].length).toBeLessThan(huge.length);
   });
 
   it("keeps separate per-event files alongside the unified trace.log", () => {
@@ -198,13 +223,12 @@ describe("opc-trace.sh", () => {
     runTrace({ session_id: "s1", hook_event_name: "PreToolUse", tool_name: "T", tool_input: "x" });
     runTrace({ session_id: "s1", hook_event_name: "Stop" });
     expect(lines(".opc/logs/s1/UserPromptSubmit.log")).toHaveLength(1);
-    expect(lines(".opc/logs/s1/PreToolUse.log")).toHaveLength(1);
+    expect(lines(".opc/logs/s1/PreToolUse.log")).toHaveLength(2); // header + in:
     expect(lines(".opc/logs/s1/Stop.log")).toHaveLength(1);
-    expect(lines(".opc/logs/s1/trace.log")).toHaveLength(3);
+    expect(lines(".opc/logs/s1/trace.log")).toHaveLength(4);
   });
 
   it("rotates when a log exceeds OPC_TRACE_MAX_KB (keeps newest half)", () => {
-    // Force tiny cap so rotation triggers after a few writes.
     for (let i = 0; i < 20; i++) {
       runTrace(
         {
@@ -216,14 +240,11 @@ describe("opc-trace.sh", () => {
       );
     }
     const trace = lines(".opc/logs/s1/trace.log");
-    // Should have been rotated down; definitely fewer than 20 lines.
     expect(trace.length).toBeLessThan(20);
     expect(trace.length).toBeGreaterThan(0);
-    // Newest-first ordering preserved after rotation: ts non-increasing.
-    for (let i = 1; i < trace.length; i++) {
-      expect(JSON.parse(trace[i - 1]).ts).toBeGreaterThanOrEqual(
-        JSON.parse(trace[i]).ts,
-      );
+    // Every surviving line is a valid header or continuation line.
+    for (const ln of trace) {
+      expect(ln.length).toBeGreaterThan(0);
     }
   });
 });

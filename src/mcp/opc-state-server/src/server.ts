@@ -30,14 +30,14 @@ const TOOL_DEFS = [
   {
     name: "opc_flow_query",
     description:
-      "Query the current OPC flow state. Returns active status, current step, and suggested next actions. This is the entry point for all OPC interactions.",
+      "Query the current OPC flow state. Returns active status, current step, and suggested next actions. This is the entry point for all OPC interactions. Call with NO arguments in stdio mode: the server derives the session id from the Claude Code process (process.ppid) and auto-creates it on first call if it does not exist yet.",
     inputSchema: {
       type: "object",
       properties: {
-        session_id: { type: "string" },
+        session_id: { type: "string", description: "Optional. Omit to let the server derive sess-<pid>-<ts> for the current Claude Code process (recommended in stdio mode)." },
         claude_pid: { type: "number" },
       },
-      required: ["session_id"],
+      required: [],
     } as const,
   },
   {
@@ -431,10 +431,15 @@ async function dispatchTool(
   switch (toolName) {
     // -- flow tools --
     case "opc_flow_query": {
-      const sessionId = s("session_id") || deriveSessionIdFromDate(claudePid, new Date());
+      // session_id optional: omit → server derives sess-<pid>-<ts> (lazy-create).
+      // When supplied, pass through verbatim (ensureSession honours canonical
+      // shape, else auto-derives). Note: in stdio mode `claudePid` is the
+      // state-server's own pid (server.ts:324 uses serverPid fallback) — the
+      // real Claude Code pid is process.ppid, resolved inside flow.query.
+      const sessionId = s("session_id");
       const claudePidArg = n("claude_pid");
       return flow.query({
-        session_id: sessionId,
+        ...(sessionId ? { session_id: sessionId } : {}),
         ...(claudePidArg != null ? { claude_pid: claudePidArg } : {}),
       } as QueryRequest);
     }

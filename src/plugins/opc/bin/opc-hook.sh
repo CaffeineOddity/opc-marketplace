@@ -66,6 +66,11 @@ fi
 # 3. loud — always inject (after slash check)
 if [ "$INTENSITY" = "loud" ]; then emit; fi
 
+# 3.b opt-in — if this project has run /opc init (marker present), treat OPC as
+# "on" for every non-slash message: nudge toward opc_flow_query without forcing
+# the global loud mode. This is the "after opc-init, always enter the flow" rule.
+if [ -f "${PROJECT_DIR}/.opc/.project-init" ]; then emit; fi
+
 # 4. quiet — keyword OR active flow
 # 4.a keyword check (case-insensitive for ASCII; CN keywords are literal-match)
 extra_kw="${OPC_HOOK_KEYWORDS:-}"

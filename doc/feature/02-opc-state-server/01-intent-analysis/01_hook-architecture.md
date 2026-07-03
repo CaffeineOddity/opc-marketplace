@@ -7,30 +7,38 @@
 
 ## 一、触发机制
 
-opc 插件通过 `UserPromptSubmit` hook 注入一行**事实查询**指令——hook 不做语义判断，只让 Claude 知道"先查流程状态再决策"。所有判断逻辑由 Claude 完成，所有事实查询由 `opc_flow_query` 工具完成（含 pid 存活校验）。
+opc 插件**不**在 `plugin.json` 里声明 hook——hook 是 `/opc init` 按项目装进 `<project>/.claude/settings.json` 的（指向 `<project>/.opc/bin/opc-hook.sh` 本地副本），所以只在显式 opt-in 过的项目里触发，从不在全局生效。hook 的唯一职责是把每一条非 slash 消息引导进 `opc_flow_query`；**在已 init 的项目里它对消息内容不做关键词/语义过滤**——意图分流的判断全部由 `opc_flow_query` 返回的 `suggested_actions` + Claude 完成，所有事实查询由 `opc_flow_query` 完成（含 pid 存活校验）。
+
+`plugin.json` 只声明 MCP servers（state / knowledge / reflection）：
 
 ```json
 // src/plugins/opc/.claude-plugin/plugin.json
 {
   "name": "opc",
-  "depends": ["mcp"],
+  "mcpServers": {
+    "opc-state-server":     { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-state-server/dist/server.js"] },
+    "opc-knowledge-server": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-knowledge-server/dist/mcp-server.js"] },
+    "opc-reflection-server":{ "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/opc-reflection-server/dist/mcp-server.js"] }
+  }
+}
+```
+
+hook 注册（由 `/opc init` 写入 `<project>/.claude/settings.json`）：
+
+```json
+{
   "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [{
-          "type": "command",
-          "command": "echo 'OPC: 先调 mcp__opc-state__opc_flow_query() 了解当前流程状态，再按返回的 suggested_actions 决定下一步（启动/延续/纠正/补充/回退/放弃/暂停/无关）。'"
-        }]
-      }
-    ]
+    "UserPromptSubmit": [{
+      "matcher": "",
+      "hooks": [{ "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh" }]
+    }]
   }
 }
 ```
 
 ### 1.1 设计原则
 
-- **Hook 极简化**：永远只输出一行提示，不读文件、不拼快照、不做判断
+- **Hook 引导化**：在已 init 项目里对每条非 slash 消息无条件注入一行引导，不读文件、不拼快照、不做意图判断
 - **事实查询统一入口**：`opc_flow_query` 是流程状态的唯一事实源，返回快照 + methodology + suggested_actions
 - **决策权归 Claude**：query 提供候选清单，最终走哪条路由由 LLM 判断
 - **工具内部强制校验**：`opc_flow_lifecycle({action:"start"})` / `opc_flow_*` 都内置 pid + status 校验，即使 Claude 误判也能被工具拒绝
@@ -128,31 +136,50 @@ src/mcp/opc-state-server/
 ```
 
 ```
-src/plugins/opc/                    ← 极简插件
-├── .claude-plugin/plugin.json     ←   仅 UserPromptSubmit hook 配置
-├── bin/opc-hook.sh                ←   hook 脚本（可选，简单场景直接用内联 echo）
+src/plugins/opc/                    ← 插件
+├── .claude-plugin/plugin.json     ←   仅 MCP servers 声明（hook 不在此注册）
+├── bin/opc-hook.sh                ←   hook 脚本源；/opc init 复制到 <project>/.opc/bin/ 本地副本
 └── scenarios/                     ←   场景配方（add-feature.md / fix-bug.md / ...）
 ```
 
 ---
 
-## 高级形态：Hook 脚本
+## hook 脚本行为
 
-简单场景直接用 `plugin.json` 里的内联 echo（见上文）。如需在大型仓库或多 session 环境给 Claude 更多上下文（如展示 quick-history 最近记录），可改用 `bin/opc-hook.sh`：
+hook 脚本（`bin/opc-hook.sh`）是 `/opc init` 复制到 `<project>/.opc/bin/` 的本地副本，`settings.json` 通过 `${CLAUDE_PROJECT_DIR}/.opc/bin/opc-hook.sh` 指向它。它在已 init 项目里对每条非 slash 消息**无条件注入**引导提示，决策树如下：
 
-```bash
-#!/bin/bash
-# src/plugins/opc/bin/opc-hook.sh
-# 极简版：仅做 slash 命令过滤 + 输出标准提示
-
-# 用户 message 以 / 开头视为 slash 命令，跳过注入（避免干扰 /opc-status 等）
-if echo "${CLAUDE_USER_MESSAGE:-}" | head -c 1 | grep -q '^/'; then
-  exit 0
-fi
-
-cat <<'EOF'
-OPC: 先调 mcp__opc-state__opc_flow_query() 了解当前流程状态，再按返回的 suggested_actions 决定下一步（启动/延续/纠正/补充/回退/放弃/暂停/无关）。
-EOF
+```
+1. OPC_HOOK_INTENSITY=off          → 静默（用户可整体关掉）
+2. 消息以 / 开头（slash 命令）       → 静默（避免干扰 /opc-status 等）
+3. OPC_HOOK_INTENSITY=loud         → 注入
+4. 项目存在 .opc/.project-init 标记  → 注入（已 opt-in，无条件进 opc_flow_query）
+5. 否则（未 init 项目，仅旧式 quiet 回退）：
+     · 消息命中触发关键词（实现/修复/重构/...） → 注入
+     · .opc/sessions/ 下有 in_progress 流程      → 注入
+     · 都不满足                                   → 静默
 ```
 
-设计原则：**hook 永远不做语义判断，最多做工程过滤**（如 slash 前缀、超长消息截断）。所有事实查询和状态判断都由 `opc_flow_query` 工具 + Claude 完成。
+**第 4 步是已 init 项目的实际路径**——命中它即注入，跳过第 5 步的关键词扫描。第 5 步的关键词/活跃流程检查是给「装了 hook 副本但尚未 `/opc init`、或想保留轻量触发」场景的回退通道，对正常 init 项目不生效。
+
+```bash
+# src/plugins/opc/bin/opc-hook.sh （节选）
+readonly INTENSITY="${OPC_HOOK_INTENSITY:-quiet}"
+
+# off → 静默；slash 前缀 → 静默（所有强度都适用）
+[ "$INTENSITY" = off ] && silent
+case "$MSG" in /*) silent ;; esac
+
+# loud → 无条件注入
+[ "$INTENSITY" = loud ] && emit
+
+# 已 /opc init 的项目：对每条非 slash 消息无条件引导进 opc_flow_query
+[ -f "${PROJECT_DIR}/.opc/.project-init" ] && emit
+
+# 未 init 回退：关键词 OR 活跃流程
+printf '%s' "$scan_buf" | grep -iqE "$combined" && emit
+grep -lE '"status"[[:space:]]*:[[:space:]]*"in_progress"' \
+     "${sessions_dir}"/*/flow-state.json 2>/dev/null | grep -q . && emit
+silent
+```
+
+设计原则：**hook 永远不做意图判断**——已 init 项目连关键词过滤都不做，只做工程过滤（slash 前缀、`off` 开关、超长消息截断）。意图分流的判断全部由 `opc_flow_query` 返回的 `suggested_actions` + Claude 完成。

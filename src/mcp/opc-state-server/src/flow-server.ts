@@ -15,6 +15,7 @@ import {
   loadFlowState,
   newFlowState,
   saveFlowState,
+  SessionNotFoundError,
 } from "./flow-state.js";
 import { deriveSessionId, parseSessionId } from "./session-id.js";
 import {
@@ -72,7 +73,15 @@ export type FlowNext =
   | { tool: "aborted" };
 
 export interface QueryRequest {
-  session_id: string;
+  /**
+   * Optional. When omitted, the server derives `sess-<pid>-<ts>` from the
+   * resolved Claude Code pid (stdio: process.ppid; http/sse: claude_pid) and
+   * the current second — and lazy-creates the session on first query if it
+   * does not yet exist on disk. Pass an explicit id only to target a specific
+   * session; a non-existent canonical-shaped id is created, anything else is
+   * ignored in favour of auto-derivation.
+   */
+  session_id?: string;
   /**
    * Spec §06-host-contract §2.3 (C2): HTTP/SSE callers MAY pass the Claude
    * Code pid here. In stdio mode this MUST be omitted — the server uses
@@ -328,7 +337,28 @@ export class FlowServer {
         "opc_flow_query: claude_pid must not be passed in stdio mode (spec §06-host-contract §2.3)",
       );
     }
-    const state = await loadFlowState(this.root, req.session_id);
+    // Spec §06-host-contract §2.3 (C2): resolve pid the same way as
+    // lifecycle.start. In stdio mode the server uses process.ppid; in http/sse
+    // an explicit claude_pid is authoritative (or server pid as fallback).
+    let pid: number;
+    if (req.claude_pid !== undefined) {
+      pid = req.claude_pid;
+    } else if (this.transport === "stdio") {
+      pid = this.ppid();
+    } else {
+      pid = this.pid();
+    }
+    // Lazy-create: if the session does not yet exist on disk (the common case
+    // for a freshly-started Claude Code process that has never called
+    // opc_flow_lifecycle), `ensureSession` derives sess-<pid>-<ts> and creates
+    // it. An explicit session_id that exists is loaded as-is; an explicit but
+    // non-existent one is honoured only if it parses as the canonical shape,
+    // otherwise auto-derived. Idempotent: a second query loads the saved state.
+    const { state } = await this.ensureSession({
+      pid,
+      ...(req.session_id !== undefined ? { session_id: req.session_id } : {}),
+      origin: "opc_flow_query",
+    });
     this.cleanupExpired(state);
     await saveFlowState(this.root, state, this.now());
     // Spec §06-host-contract §2.2 (C1 配套): in stdio mode, surface orphan
@@ -768,30 +798,70 @@ export class FlowServer {
       });
       pid = resolved.pid;
     }
+    const { state, created } = await this.ensureSession({
+      pid,
+      ...(req.session_id !== undefined ? { session_id: req.session_id } : {}),
+      ...(req.initial_message !== undefined ? { initialMessage: req.initial_message } : {}),
+      origin: "opc_flow_lifecycle",
+    });
+    if (created) {
+      state.history.push(this.entry("start", "opc_flow_lifecycle", req, { session_id: state.session_id }));
+    }
+    return { state, next: this.computeNext(state) };
+  }
+
+  /**
+   * Spec §06-host-contract §2.1 (C1) + lazy-create (this change):
+   * Resolve pid → derive session_id → load-or-create a FlowState.
+   *
+   * - If a session_id is supplied and already exists on disk, return it as-is
+   *   (created=false) — used by `query` to load an existing session, and by
+   *   `lifecycle.start` to honour an explicit caller id.
+   * - Otherwise derive session_id from (pid, ts) per §2.1 (same second is
+   *   idempotent; pid recycling yields a fresh id), `newFlowState` + save.
+   *   Caller-provided session_id is honoured only when it parses as the
+   *   `sess-<pid>-<ts>` shape; otherwise auto-derive.
+   *
+   * `origin` is the tool name, stamped into the create history entry by the
+   * caller (start vs query differ in provenance).
+   */
+  private async ensureSession(args: {
+    pid: number;
+    session_id?: string;
+    initialMessage?: string;
+    origin: string;
+  }): Promise<{ state: FlowState; created: boolean }> {
+    // Honour a caller-provided session_id that already exists on disk.
+    if (args.session_id) {
+      try {
+        const existing = await loadFlowState(this.root, args.session_id);
+        return { state: existing, created: false };
+      } catch (err) {
+        if (!(err instanceof SessionNotFoundError)) throw err;
+        // fall through to create with the caller's id (validated below)
+      }
+    }
     const startedAt = this.now();
     const startedAtUnixTs = Math.floor(startedAt.getTime() / 1000);
-    // Spec §06-host-contract §2.1 (C1): derive session_id from (pid, ts) so the
-    // same Claude Code process resuming on the same second is idempotent, while
-    // pid recycling after restart yields a fresh id. Honour caller-provided
-    // session_id only when it parses as the same shape; otherwise auto-derive.
+    // §2.1: derive from (pid, ts). Honour caller id only if it parses as the
+    // canonical shape; otherwise auto-derive so the (pid, ts) invariant holds.
     let session_id: string;
-    if (req.session_id) {
-      session_id = req.session_id;
+    if (args.session_id && parseSessionId(args.session_id)) {
+      session_id = args.session_id;
     } else {
-      session_id = deriveSessionId({ pid, started_at_unix_ts: startedAtUnixTs });
+      session_id = deriveSessionId({ pid: args.pid, started_at_unix_ts: startedAtUnixTs });
     }
     const parsed = parseSessionId(session_id);
     const state = newFlowState({
       session_id,
-      pid,
+      pid: args.pid,
       now: startedAt,
-      ...(req.initial_message ? { initialMessage: req.initial_message } : {}),
+      ...(args.initialMessage ? { initialMessage: args.initialMessage } : {}),
       started_at_unix_ts: parsed?.started_at_unix_ts ?? startedAtUnixTs,
       transport: this.transport,
     });
-    state.history.push(this.entry("start", "opc_flow_lifecycle", req, { session_id }));
     await saveFlowState(this.root, state, startedAt);
-    return { state, next: this.computeNext(state) };
+    return { state, created: true };
   }
 
   private async lifecycleAbort(

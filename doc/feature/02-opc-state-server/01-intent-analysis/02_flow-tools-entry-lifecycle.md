@@ -99,7 +99,7 @@
 
 #### `respond_outside_flow` 语义说明
 
-**触发场景**：管线正在执行（`active=true`），但用户随手问了一个与当前任务无关的问题（闲聊、问当前进度、问知识库内容、问时间等）。Hook 每次都注入"先调 `opc_flow_query`"，所以即便这种问题也会进入 `opc_flow_query`，需要一条明确的"什么都不做"出口。
+**触发场景**：管线正在执行（`active=true`），但用户随手问了一个与当前任务无关的问题（闲聊、问当前进度、问知识库内容、问时间等）。已 `/opc init` 项目里 hook 对每条非 slash 消息都注入"先调 `opc_flow_query`"，所以即便这种问题也会进入 `opc_flow_query`，需要一条明确的"什么都不做"出口。
 
 **Claude 行为**：
 - **不调任何 `opc_flow_*` / `opc_pipeline_*` 推进类工具**（不写 flow-state.json，不改 pipeline 状态）
@@ -121,7 +121,7 @@
 - 关联度低（题外话/打断/无关问答） → 走 `respond_outside_flow`
 - 完全无法判断 → 走"暂停等待"，不动状态，反问用户
 
-> **设计原则**：宁可让 Claude 在题外话时多花一次 `opc_flow_query` 调用，也不在 Hook 里做意图判断。`respond_outside_flow` 是 Hook 极简化的必要补丁。
+> **设计原则**：宁可让 Claude 在题外话时多花一次 `opc_flow_query` 调用，也不在 Hook 里做意图判断。`respond_outside_flow` 是 hook 引导化（无条件注入）的必要补丁。
 
 **形态 C：有孤儿流程（owner.pid 已死）**
 

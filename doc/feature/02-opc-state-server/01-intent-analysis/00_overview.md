@@ -1,6 +1,6 @@
 # 意图识别与任务分析
 
-用户`输入消息`后, UserPromptSubmit hook 注入一条极简指令，引导 Claude 调用 `opc_flow_query` 查询流程状态。后续每一步都由 MCP 工具返回的 `next` 字段驱动，pipeline 文档作为**方法论参考**按需读取。
+用户`输入消息`后, UserPromptSubmit hook 注入一条提示，引导 Claude 调用 `opc_flow_query` 查询流程状态。**在已 `/opc init` 的项目里，hook 对每一条非 slash 消息无条件注入**（不做关键词/语义判断），把消息引导进 `opc_flow_query` 生命周期；意图分流（task / question / chat）由 `opc_flow_query` 返回的 `suggested_actions` + Claude 判断，而不是 hook 提前过滤。后续每一步都由 MCP 工具返回的 `next` 字段驱动，pipeline 文档作为**方法论参考**按需读取。
 
 本文档已按主题拆分为多个子文档，本文是**聚合索引**，按阅读顺序指向各子文档。
 
@@ -21,7 +21,7 @@ sequenceDiagram
     participant K as knowledge-server
 
     U->>H: 自然语言<br/>"实现用户认证系统"
-    H->>C: 注入极简指令<br/>"先调 opc_flow_query"
+    H->>C: 注入引导提示<br/>"先调 opc_flow_query"
 
     C->>F: opc_flow_query()
     F-->>C: active=false<br/>+ suggested_actions<br/>+ methodology.docs
@@ -151,7 +151,7 @@ flowchart TD
 
 **核心架构原则**：
 
-- **Hook 极简化**：永远只输出一行提示，不读文件、不拼快照、不做判断
+- **Hook 引导化**：在已 `/opc init` 项目里对每条非 slash 消息无条件注入一行引导，不读文件、不拼快照、不做意图判断
 - **事实查询统一入口**：`opc_flow_query` 是流程状态的唯一事实源，含 pid 存活校验
 - **决策权归 Claude**：query 提供候选清单，最终走哪条路由由 LLM 判断
 - **工具内部强制校验**：所有 `opc_flow_*` 都内置 pid + status 校验
