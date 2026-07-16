@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync, existsSync } from "node:fs";
 
 import { loadFlowState, saveFlowState } from "./flow-state.js";
 import { loadPipelinePlan, savePipelinePlan } from "./pipeline-plan.js";
@@ -241,7 +242,7 @@ export class NodeServer {
       input_knowledge: req.input_knowledge ?? [],
       dispatch_instruction: {
         subagent_type: node.agent,
-        node_body: req.node_definition?.body ?? null,
+        node_body: req.node_definition?.body ?? loadNodeBody(node.node_file_path),
         dispatch_context: {
           node: node.name,
           phase: req.phase,
@@ -575,7 +576,7 @@ export class NodeServer {
   }
 }
 
-function materializeNode(def: NodeDefinition): NodeState {
+export function materializeNode(def: NodeDefinition): NodeState {
   const node: NodeState = {
     name: def.name,
     status: "pending",
@@ -605,6 +606,35 @@ function hydrateFromDefinition(node: NodeState, def: NodeDefinition): void {
   if (def.mode && !node.mode) node.mode = def.mode;
   if (typeof def.timeout_minutes === "number") node.timeout_minutes = def.timeout_minutes;
   if (typeof def.max_retries === "number") node.max_retries = def.max_retries;
+}
+
+/**
+ * Read the markdown body (everything after the `---` frontmatter) of a node
+ * definition file. Returns null when the path is absent or the file cannot be
+ * read/parsed. Used as a fallback so opc_node_start always returns a usable
+ * node_body even when the caller did not pass node_definition.body.
+ */
+function loadNodeBody(filePath?: string): string | null {
+  if (!filePath) return null;
+  try {
+    if (!existsSync(filePath)) return null;
+    const raw = readFileSync(filePath, "utf8");
+    const lines = raw.split(/\r?\n/);
+    if (lines[0] !== "---") return raw;
+    let end = -1;
+    for (let i = 1; i < lines.length; i += 1) {
+      if (lines[i] === "---") {
+        end = i;
+        break;
+      }
+    }
+    if (end === -1) return raw;
+    const body = lines.slice(end + 1);
+    if (body[0] === "") body.shift();
+    return body.join("\n");
+  } catch {
+    return null;
+  }
 }
 
 async function runNodeValidatorsAndLog(

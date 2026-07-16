@@ -14,6 +14,7 @@ const src = (p: string) => fileURLToPath(new URL(`./src/${p}`, import.meta.url))
 export default defineConfig({
   resolve: {
     alias: {
+      "@opc/opt-in": src("shared/opt-in/src/index.ts"),
       "@opc/memory-store": src("shared/memory-store/src/index.ts"),
       "@opc/tool-aliases": src("shared/tool-aliases/src/index.ts"),
       "@opc/state-server": src("mcp/opc-state-server/src/index.ts"),

@@ -12,6 +12,7 @@ import {
   loadStateJson,
   saveStateJson,
   type IoArtifact,
+  type NodeDefinition,
   type NodeState,
   type PhaseState,
   type StateJson,
@@ -24,6 +25,8 @@ import {
   type ResolvedPlan,
 } from "./node-resolver.js";
 import { writeValidatorArtifact, type ValidatorResults } from "./validator-log.js";
+import { loadPhaseNodesFromDisk } from "./node-loader.js";
+import { materializeNode } from "./node-server.js";
 
 export interface PhaseServerOptions {
   root: string;
@@ -138,6 +141,7 @@ export class PhaseServer {
 
     const phase = state.phases.find((p) => p.phase === req.phase);
     if (!phase) throw new PhaseValidationError(`phase ${req.phase} not found in state.json`, { required_action: "verify the phase name against state.json phases array and phase_plan.selected" });
+    this.materializeNodesFromDisk(phase, req.phase);
     phase.status = "in_progress";
     if (sub.status === "pending") sub.status = "in_progress";
     state.status = "in_progress";
@@ -577,6 +581,29 @@ export class PhaseServer {
       }
     }
     void this.uuid;
+  }
+
+  /**
+   * Populate `phase.nodes` from disk-backed node definitions when it is empty.
+   *
+   * `state-json.ts` newStateJson initialises every phase with `nodes: []`, and
+   * nothing in the pipeline_create path reads `.opc/phases/<phase>/nodes/*.md`.
+   * Without this, phase_confirm runs the resolver on an empty node set, gets
+   * empty groups, and the flow short-circuits straight to opc_phase_complete
+   * ("phase has no nodes to execute") — the node bodies never run.
+   *
+   * On phase_start, if the phase has no nodes yet we read the node md files
+   * from disk, materialise each into a NodeState, and attach them. Pre-existing
+   * nodes (e.g. injected by tests or a future explicit plan) are preserved
+   * untouched.
+   */
+  materializeNodesFromDisk(phase: PhaseState, phaseName: string): void {
+    if (phase.nodes.length > 0) return;
+    const defs = loadPhaseNodesFromDisk(this.root, phaseName);
+    for (const { definition } of defs) {
+      definition.phase = phaseName;
+      phase.nodes.push(materializeNode(definition));
+    }
   }
 }
 

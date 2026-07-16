@@ -171,6 +171,14 @@ export type {
   ResolvedPlan,
   ResolvedNodeStatus,
 } from "./node-resolver.js";
+
+export {
+  loadPhaseNodesFromDisk,
+  parseNodeMd,
+  NodeLoaderError,
+} from "./node-loader.js";
+export type { ParsedNodeMd } from "./node-loader.js";
+export { materializeNode } from "./node-server.js";
 export type {
   NodeDefinition,
   NodeMode,

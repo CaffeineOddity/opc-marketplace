@@ -262,6 +262,9 @@ const TOOL_DEFS = [
         pipeline_id: { type: "string" },
         sub_pipeline_id: { type: "string" },
         node_name: { type: "string" },
+        phase: { type: "string" },
+        dispatch_instruction: { type: "object" },
+        node_definition: { type: "object" },
       },
       required: ["session_id", "pipeline_id", "sub_pipeline_id", "node_name"],
     } as const,
@@ -448,11 +451,15 @@ async function dispatchTool(
       if (action === "start") {
         const sessionId = s("session_id") || deriveSessionIdFromDate(claudePid, new Date());
         const initialMessage = s("initial_message");
+        // §06-host-contract §2.3: do NOT forward claude_pid to flow.lifecycle.
+        // In stdio, claudePid was resolved from process.ppid; re-forwarding it
+        // would trip the transport guard inside lifecycleStart(). FlowServer
+        // resolves the pid itself from this.ppid (stdio) / explicit (http).
+        // claudePid is only used above for session_id derivation.
         return flow.lifecycle({
           action: "start",
           session_id: sessionId,
           ...(initialMessage ? { initial_message: initialMessage } : {}),
-          claude_pid: claudePid,
         } as LifecycleRequest);
       }
       if (action === "abort") {
@@ -464,10 +471,11 @@ async function dispatchTool(
         } as LifecycleRequest);
       }
       if (action === "recover") {
+        // Same as start: do NOT forward claude_pid — FlowServer resolves the
+        // pid internally from this.ppid. session_id already encodes the pid.
         return flow.lifecycle({
           action: "recover",
           session_id: s("session_id"),
-          claude_pid: claudePid,
         } as LifecycleRequest);
       }
       throw new Error(`opc_flow_lifecycle: unknown action=${action}`);
@@ -643,7 +651,9 @@ async function dispatchTool(
         pipeline_id: s("pipeline_id"),
         sub_pipeline_id: s("sub_pipeline_id"),
         node_name: s("node_name"),
+        ...(s("phase") ? { phase: s("phase") } : {}),
         ...(s("dispatch_instruction") ? { dispatch_instruction: s("dispatch_instruction") } : {}),
+        ...(s("node_definition") ? { node_definition: s("node_definition") } : {}),
       } as NodeStartRequest);
 
     case "opc_node_finish": {
