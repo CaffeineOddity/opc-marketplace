@@ -686,7 +686,11 @@ async function runNodeValidatorsAndLog(
 }
 
 function validateL1(node: NodeState, req: NodeCompleteRequest): void {
-  const declaredArtifacts = (node.node_output ?? []).flatMap((o) => o.artifacts);
+  // Skip empty artifact strings (artifact-only outputs from node-loader carry
+  // knowledge:""; the reverse — a knowledge-only output — carries artifacts:[]).
+  const declaredArtifacts = (node.node_output ?? [])
+    .flatMap((o) => o.artifacts)
+    .filter((p): p is string => typeof p === "string" && p !== "");
   const existingArtifacts = new Set([
     ...(req.artifacts_exist ?? []),
     ...((req.evidence?.artifacts_written ?? []) as string[]),
@@ -698,7 +702,12 @@ function validateL1(node: NodeState, req: NodeCompleteRequest): void {
       );
     }
   }
-  const declaredKnowledge = (node.node_output ?? []).map((o) => o.knowledge);
+  // Skip empty knowledge strings: an artifact-only output carries
+  // `knowledge: ""` (see node-loader toOutputSpecs), which is not a real
+  // knowledge path and must not be demanded from the index.
+  const declaredKnowledge = (node.node_output ?? [])
+    .map((o) => o.knowledge)
+    .filter((p): p is string => typeof p === "string" && p !== "");
   const indexedKnowledge = new Set([
     ...(req.knowledge_index_has ?? []),
     ...((req.evidence?.knowledge_written ?? []).map((w) => w.path) as string[]),
