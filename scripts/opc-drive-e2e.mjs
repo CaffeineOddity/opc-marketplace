@@ -7,6 +7,7 @@
 // produced. Goal: ~/Downloads/opc-test contains a runnable Todo App.
 
 import { spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   readFileSync,
@@ -225,6 +226,119 @@ function writeArtifact(relPath, content) {
   writeFileSync(abs, content);
   return p;
 }
+
+// ---- real evidence derivation ----------------------------------------------
+// The whole point of this driver: feed the OPC pipeline REAL evidence derived
+// from actually executing the produced Todo App, not a hardcoded
+// {passed:1,failed:0}/lint{0,0}/build:true mock. These helpers run vitest and
+// `node --check` against ROOT and parse the results.
+
+// Recursively collect all .js files under a dir (excluding node_modules).
+function listJsFiles(dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (e === "node_modules" || e === ".opc" || e === ".git" || e === ".claude") continue;
+    const fp = join(dir, e);
+    const s = statSync(fp);
+    if (s.isDirectory()) out.push(...listJsFiles(fp));
+    else if (e.endsWith(".js")) out.push(fp);
+  }
+  return out;
+}
+
+// Syntax/typecheck proxy: `node --check` every src/*.js. Returns the count of
+// files that failed to parse. ESM files need --input-type handling; node --check
+// works on .js with "type":"module" in the nearest package.json (root has it).
+function runTypeCheck() {
+  const files = listJsFiles(join(ROOT, "src"));
+  let failed = 0;
+  for (const f of files) {
+    // Use execSync so each check is synchronous and isolated.
+    try {
+      execSync(`node --check "${f}"`, { stdio: "ignore", cwd: ROOT });
+    } catch {
+      failed++;
+    }
+  }
+  return { files: files.length, failed };
+}
+
+// Run the vitest suite and parse the JSON reporter. Returns real counts.
+function runTestSuite() {
+  try {
+    const out = execSync("npx vitest run --reporter=json", {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+      encoding: "utf8",
+    });
+    // vitest json reporter emits a single JSON object (possibly with leading
+    // non-JSON lines from warnings); extract the last balanced JSON object.
+    const start = out.indexOf("{");
+    if (start < 0) return { passed: 0, failed: 0, skipped: 0, ran: false };
+    const j = JSON.parse(out.slice(start));
+    return {
+      passed: j.numPassedTests ?? 0,
+      failed: j.numFailedTests ?? 0,
+      skipped: (j.numPendingTests ?? 0) + (j.numTodoTests ?? 0),
+      ran: true,
+    };
+  } catch {
+    return { passed: 0, failed: 0, skipped: 0, ran: false };
+  }
+}
+
+// Build evidence with REAL test/typecheck results when the node declares L2
+// gates that consume them; otherwise benign defaults (no L2 gate → not used).
+function buildRealEvidence({ nodeName, summary, knowledge_written, artifacts_written }) {
+  // Only the implement/testing nodes carry L2 gates [test_pass, lint_pass,
+  // build_pass, type_check_pass]. For all other nodes the gates are non-technical
+  // (falsifiable/moscow_classified/...) which validateL2 ignores, so defaults are
+  // harmless — but we still run nothing for them to keep the run fast.
+  const GATED = new Set([
+    "tdd-implementation",
+    "refactor",
+    "backend-endpoint",
+    "frontend-component",
+    "auth-integration",
+    "integration-test",
+  ]);
+  if (!GATED.has(nodeName)) {
+    return {
+      summary,
+      knowledge_written,
+      artifacts_written,
+      test_results: { passed: 0, failed: 0, skipped: 0 },
+      lint_results: { errors: 0, warnings: 0 },
+      build_passed: true,
+      type_check_passed: true,
+    };
+  }
+
+  const tests = runTestSuite();
+  const tc = runTypeCheck();
+  // Lint: this project ships no eslint config, so "lint" ≈ "no syntax errors".
+  // A failed `node --check` counts as a lint error.
+  const lintErrors = tc.failed;
+  console.log(`  >> ${nodeName} REAL evidence: tests=${tests.passed}p/${tests.failed}f/${tests.skipped}s (ran=${tests.ran}) typecheck=${tc.failed}/${tc.files} failed`);
+
+  return {
+    summary,
+    knowledge_written,
+    artifacts_written,
+    test_results: tests,
+    lint_results: { errors: lintErrors, warnings: 0 },
+    build_passed: tests.ran && tc.failed === 0,
+    type_check_passed: tc.failed === 0,
+  };
+}
+
 
 // ---- per-node execution -----------------------------------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -475,16 +589,13 @@ async function executeNode({ state, know, sid, pid, sub, phase, nodeName }) {
     }
   }
 
-  // Derive REAL evidence.
-  const evidence = {
+  // Derive REAL evidence from executing the produced Todo App.
+  const evidence = buildRealEvidence({
+    nodeName,
     summary: produced.summary ?? `${nodeName} executed`,
     knowledge_written,
     artifacts_written,
-    test_results: { passed: 1, failed: 0, skipped: 0 },
-    lint_results: { errors: 0, warnings: 0 },
-    build_passed: true,
-    type_check_passed: true,
-  };
+  });
   console.log(`  >> ${nodeName} evidence: know=[${knowledge_written.map((w) => `${w.path}@v${w.version}`).join(",")}] arts=[${artifacts_written.join(",")}]`);
 
   const nf = state.U(
